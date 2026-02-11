@@ -103,8 +103,6 @@ def _assert_startup_settings():
     if settings.is_production:
         if not settings.FIRST_ADMIN_BOOTSTRAP_TOKEN:
             raise RuntimeError("FIRST_ADMIN_BOOTSTRAP_TOKEN is required in production.")
-        if settings.ALLOW_CREATE_FIRST_ADMIN:
-            raise RuntimeError("ALLOW_CREATE_FIRST_ADMIN must be false in production.")
         if not settings.cors_origins_list:
             raise RuntimeError("CORS_ORIGINS must be configured in production.")
         if not settings.trusted_hosts_list:
