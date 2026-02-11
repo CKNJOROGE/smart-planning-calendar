@@ -31,7 +31,7 @@ function Shell({ onLogout }) {
       <aside className={`app-sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
         <div>
           <div className="sidebar-head">
-            <div className="sidebar-brand">Smart Planning Calendar</div>
+            <div className="sidebar-brand">SHR PLANNING CALENDAR</div>
             <button
               className="btn sidebar-toggle-btn"
               type="button"

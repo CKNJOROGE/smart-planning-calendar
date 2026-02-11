@@ -53,7 +53,7 @@ export default function Login({ onLoggedIn }) {
       <div className="auth-orb auth-orb-b" />
       <div className="auth-shell">
         <div className="auth-showcase">
-          <div className="auth-showcase-tag">Smart Planning Calendar</div>
+          <div className="auth-showcase-tag">SHR PLANNING CALENDAR</div>
           <h1 className="auth-showcase-title">Plan smarter. Approve faster.</h1>
           <p className="auth-showcase-copy">
             Track availability, manage leave approvals, and keep your team aligned in one calendar.

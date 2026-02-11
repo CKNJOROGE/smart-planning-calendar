@@ -491,7 +491,7 @@ export default function CalendarPage() {
     <>
       <div className="topbar calendar-topbar">
         <div>
-          <h2 className="brand-title">Smart Planning Calendar</h2>
+          <h2 className="brand-title">SHR PLANNING CALENDAR</h2>
           <div className="brand-sub">
             Logged in as <b>{user ? user.name : "..."}</b> ({user ? user.role : "..."}) •{" "}
             {live ? <b>Live updates</b> : <span className="muted">Reconnecting…</span>}
