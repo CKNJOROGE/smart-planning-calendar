@@ -79,7 +79,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "same-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        response.headers["Cross-Origin-Resource-Policy"] = "same-site"
+        # Frontend is hosted on a different site (vercel.app), so uploaded media
+        # must be embeddable cross-site to render in <img> and file viewers.
+        if request.url.path.startswith("/avatars/") or request.url.path.startswith("/files/"):
+            response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+        else:
+            response.headers["Cross-Origin-Resource-Policy"] = "same-site"
         return response
 
 app.add_middleware(
