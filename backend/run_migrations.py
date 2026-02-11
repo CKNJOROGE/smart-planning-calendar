@@ -1,9 +1,13 @@
 from pathlib import Path
 
-from app.db import engine
+from app.db import engine, Base
+from app import models  # noqa: F401
 
 
 def main() -> None:
+    # Ensure base tables exist for brand-new databases before incremental SQL migrations.
+    Base.metadata.create_all(bind=engine)
+
     migrations_dir = Path(__file__).parent / "migrations"
     sql_files = sorted(migrations_dir.glob("*.sql"))
 
