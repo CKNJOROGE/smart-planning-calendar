@@ -2,6 +2,7 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV RUN_MIGRATIONS_ON_START=false
 
 WORKDIR /app
 
@@ -20,4 +21,4 @@ COPY .env.example ./.env.example
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python run_migrations.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "if [ \"$RUN_MIGRATIONS_ON_START\" = \"true\" ]; then python run_migrations.py; fi; uvicorn app.main:app --host 0.0.0.0 --port 8000"]

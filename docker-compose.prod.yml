@@ -21,9 +21,16 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env
+    environment:
+      RUN_MIGRATIONS_ON_START: ${RUN_MIGRATIONS_ON_START:-false}
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
     volumes:
       - uploads:/app/uploads
     expose:
@@ -35,7 +42,8 @@ services:
       dockerfile: deploy/nginx/Dockerfile
     restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "80:80"
 

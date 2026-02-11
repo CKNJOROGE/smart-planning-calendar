@@ -16,6 +16,7 @@ from .db import Base, engine, get_db
 from .models import User, Event, CompanyDocument
 from .schemas import (
     TokenResponse,
+    FirstAdminCreate,
     UserOut,
     UserProfileOut,
     UserProfileUpdate,
@@ -87,7 +88,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts_list or ["*"])
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=settings.trusted_hosts_list or ["localhost", "127.0.0.1"],
+)
 
 
 def _assert_startup_settings():
@@ -101,6 +105,8 @@ def _assert_startup_settings():
             raise RuntimeError("ALLOW_CREATE_FIRST_ADMIN must be false in production.")
         if not settings.cors_origins_list:
             raise RuntimeError("CORS_ORIGINS must be configured in production.")
+        if not settings.trusted_hosts_list:
+            raise RuntimeError("TRUSTED_HOSTS must be configured in production.")
 
 
 @app.on_event("startup")
@@ -108,6 +114,11 @@ def startup():
     _assert_startup_settings()
     if settings.ENABLE_AUTO_SCHEMA_CREATE:
         Base.metadata.create_all(bind=engine)
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
 
 
 # -------------------------
@@ -220,6 +231,7 @@ async def _upload_profile_document(
 # -------------------------
 @app.post("/admin/create-first-admin", response_model=UserOut)
 def create_first_admin(
+    payload: FirstAdminCreate,
     db: Session = Depends(get_db),
     bootstrap_token: Optional[str] = Header(default=None, alias="X-Bootstrap-Token"),
 ):
@@ -231,11 +243,19 @@ def create_first_admin(
     existing_admin = db.query(User).filter(User.role == "admin").first()
     if existing_admin:
         raise HTTPException(status_code=400, detail="Admin already exists")
+    if db.query(User).filter(User.email == payload.email.lower()).first():
+        raise HTTPException(status_code=400, detail="Email already exists")
+
+    admin_name = (payload.name or "").strip()
+    if not admin_name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    if len(payload.password or "") < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
 
     admin = User(
-        name="Admin",
-        email="admin@company.com",
-        password_hash=hash_password("Admin123!"),
+        name=admin_name,
+        email=payload.email.lower(),
+        password_hash=hash_password(payload.password),
         role="admin",
         hire_date=date.today(),
     )

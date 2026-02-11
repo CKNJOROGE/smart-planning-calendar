@@ -20,6 +20,7 @@ Copy-Item backend/.env.example backend/.env
 
 Then edit:
 - `.env` for Postgres credentials.
+  - set `RUN_MIGRATIONS_ON_START=true` only when you intentionally want migrations to run during backend startup
 - `backend/.env` for production values:
   - `APP_ENV=production`
   - `DATABASE_URL=postgresql+psycopg2://<user>:<pass>@db:5432/<db>`
@@ -50,7 +51,10 @@ docker compose --env-file .env -f docker-compose.prod.yml up -d backend
 Create admin:
 
 ```powershell
-curl -X POST http://localhost/api/admin/create-first-admin -H "X-Bootstrap-Token: <one_time_token>"
+curl -X POST http://localhost/api/admin/create-first-admin `
+  -H "Content-Type: application/json" `
+  -H "X-Bootstrap-Token: <one_time_token>" `
+  -d "{\"name\":\"Platform Admin\",\"email\":\"admin@yourcompany.com\",\"password\":\"<strong_password_min_12_chars>\"}"
 ```
 
 Then set `ALLOW_CREATE_FIRST_ADMIN=false` and restart backend again.
@@ -59,6 +63,7 @@ Then set `ALLOW_CREATE_FIRST_ADMIN=false` and restart backend again.
 
 - Frontend: `http://localhost/`
 - API via nginx: `http://localhost/api/me` (with token)
+- Health: `http://localhost/api/healthz`
 - WebSocket: `ws://localhost/ws?token=<jwt>`
 
 ## Notes
