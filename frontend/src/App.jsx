@@ -57,7 +57,7 @@ function Shell({ onLogout }) {
                 <span className="sidebar-link-text">Users</span>
               </NavLink>
             )}
-            {user?.role === "admin" && (
+            {(user?.role === "admin" || user?.role === "supervisor") && (
               <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/approvals">
                 <span className="sidebar-link-text">Approvals</span>
               </NavLink>

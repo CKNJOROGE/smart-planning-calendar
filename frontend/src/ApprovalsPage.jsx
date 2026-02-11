@@ -37,7 +37,7 @@ export default function ApprovalsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  if (current && current.role !== "admin") return <Navigate to="/" replace />;
+  if (current && current.role !== "admin" && current.role !== "supervisor") return <Navigate to="/" replace />;
 
   async function approve(id) {
     try {

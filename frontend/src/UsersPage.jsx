@@ -97,7 +97,7 @@ export default function UsersPage() {
           <div>
             <div style={{ fontWeight: 900, fontSize: 18 }}>Users</div>
             <div className="muted" style={{ marginTop: 2 }}>
-              Create accounts for employees (no approvals). Everyone can still see calendar entries.
+              Create accounts for employees, supervisors, and admins.
             </div>
           </div>
 
@@ -214,6 +214,7 @@ export default function UsersPage() {
                     onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
                   >
                     <option value="employee">employee</option>
+                    <option value="supervisor">supervisor</option>
                     <option value="admin">admin</option>
                   </select>
                 </div>

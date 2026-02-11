@@ -34,7 +34,7 @@ from .schemas import (
     CompanyDocumentOut,
 )
 from .security import verify_password, create_access_token, hash_password
-from .deps import get_current_user, require_admin
+from .deps import get_current_user, require_admin, require_leave_approver
 from .config import settings
 
 from .ws_manager import ConnectionManager
@@ -226,6 +226,17 @@ def _is_admin_user(db: Session, user_id: Optional[int]) -> bool:
     return bool(u and u.role == "admin")
 
 
+def _is_supervisor_user(db: Session, user_id: Optional[int]) -> bool:
+    if user_id is None:
+        return False
+    u = db.query(User).filter(User.id == user_id).first()
+    return bool(u and u.role == "supervisor")
+
+
+def _is_valid_role(role: Optional[str]) -> bool:
+    return (role or "").strip().lower() in {"employee", "admin", "supervisor"}
+
+
 async def _upload_profile_document(
     request: Request,
     db: Session,
@@ -359,12 +370,14 @@ def create_user(
 ):
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
+    if not _is_valid_role(payload.role):
+        raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, admin")
 
     u = User(
         name=payload.name,
         email=payload.email,
         password_hash=hash_password(payload.password),
-        role=payload.role,
+        role=payload.role.lower(),
         avatar_url=payload.avatar_url,
         phone=payload.phone,
         department=payload.department,
@@ -525,6 +538,11 @@ def admin_update_user_profile(
         if exists:
             raise HTTPException(status_code=400, detail="Email already exists")
         incoming["email"] = email
+    if "role" in incoming:
+        role = (incoming["role"] or "").strip().lower()
+        if not _is_valid_role(role):
+            raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, admin")
+        incoming["role"] = role
 
     first_approver_id = incoming.get("first_approver_id", u.first_approver_id)
     second_approver_id = incoming.get("second_approver_id", u.second_approver_id)
@@ -533,8 +551,8 @@ def admin_update_user_profile(
         u.require_two_step_leave_approval,
     )
 
-    if first_approver_id is not None and not _is_admin_user(db, first_approver_id):
-        raise HTTPException(status_code=400, detail="first_approver_id must be an admin user")
+    if first_approver_id is not None and not _is_supervisor_user(db, first_approver_id):
+        raise HTTPException(status_code=400, detail="first_approver_id must be a supervisor user")
     if second_approver_id is not None and not _is_admin_user(db, second_approver_id):
         raise HTTPException(status_code=400, detail="second_approver_id must be an admin user")
 
@@ -544,7 +562,7 @@ def admin_update_user_profile(
     if requires_two_step and (first_approver_id is None or second_approver_id is None):
         raise HTTPException(
             status_code=400,
-            detail="Two-step leave approval requires both first_approver_id and second_approver_id",
+            detail="Two-step leave approval requires both first_approver_id (supervisor) and second_approver_id (admin)",
         )
 
     for k, v in incoming.items():
@@ -735,7 +753,7 @@ async def create_leave_request(
 async def approve_leave_request(
     event_id: int,
     db: Session = Depends(get_db),
-    approver: User = Depends(require_admin),
+    approver: User = Depends(require_leave_approver),
 ):
     e = db.query(Event).filter(Event.id == event_id, Event.type == "Leave").first()
     if not e:
@@ -758,9 +776,17 @@ async def approve_leave_request(
                 status_code=400,
                 detail="Leave owner has invalid approval setup: missing first/second approver",
             )
+        if not _is_supervisor_user(db, first_approver_id):
+            raise HTTPException(status_code=400, detail="Leave owner has invalid approval setup: first approver must be supervisor")
+        if not _is_admin_user(db, second_approver_id):
+            raise HTTPException(status_code=400, detail="Leave owner has invalid approval setup: second approver must be admin")
 
         if approver.id not in {first_approver_id, second_approver_id}:
             raise HTTPException(status_code=403, detail="You are not assigned to approve this leave")
+        if approver.id == first_approver_id and approver.role != "supervisor":
+            raise HTTPException(status_code=403, detail="First approval must be done by the assigned supervisor")
+        if approver.id == second_approver_id and approver.role != "admin":
+            raise HTTPException(status_code=403, detail="Second approval must be done by the assigned admin")
 
         # Approval order: first approver must approve before second approver.
         if approver.id == second_approver_id and e.first_approved_by_id is None:
@@ -791,6 +817,8 @@ async def approve_leave_request(
             # Keep pending until both approvals are completed.
             e.status = "pending"
     else:
+        if approver.role != "admin":
+            raise HTTPException(status_code=403, detail="Only admin can approve single-step leave")
         e.status = "approved"
         e.approved_by_id = approver.id
         e.approved_at = datetime.utcnow()
@@ -815,7 +843,7 @@ async def reject_leave_request(
     event_id: int,
     payload: LeaveRejectRequest,
     db: Session = Depends(get_db),
-    approver: User = Depends(require_admin),
+    approver: User = Depends(require_leave_approver),
 ):
     e = db.query(Event).filter(Event.id == event_id, Event.type == "Leave").first()
     if not e:
@@ -832,11 +860,17 @@ async def reject_leave_request(
         allowed = {owner.first_approver_id, owner.second_approver_id}
         if approver.id not in allowed:
             raise HTTPException(status_code=403, detail="You are not assigned to reject this leave")
+        if approver.id == owner.first_approver_id and approver.role != "supervisor":
+            raise HTTPException(status_code=403, detail="First approver must be supervisor")
+        if approver.id == owner.second_approver_id and approver.role != "admin":
+            raise HTTPException(status_code=403, detail="Second approver must be admin")
+    elif approver.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can reject single-step leave")
 
     e.status = "rejected"
     e.approved_by_id = approver.id
     e.approved_at = datetime.utcnow()
-    e.rejection_reason = (payload.reason or "").strip() or "Rejected by admin"
+    e.rejection_reason = (payload.reason or "").strip() or "Rejected by approver"
     e.updated_at = datetime.utcnow()
 
     db.commit()
@@ -867,9 +901,17 @@ def list_leave_requests(
         q = q.filter(Event.start_ts < end)
 
     if current.role != "admin":
-        q = q.filter(Event.user_id == current.id)
-        if user_id is not None and user_id != current.id:
-            raise HTTPException(status_code=403, detail="Not allowed")
+        if current.role == "supervisor":
+            q = q.filter(
+                Event.user.has(User.first_approver_id == current.id)
+                | Event.user.has(User.second_approver_id == current.id)
+            )
+            if user_id is not None:
+                raise HTTPException(status_code=403, detail="user_id filter is admin only")
+        else:
+            q = q.filter(Event.user_id == current.id)
+            if user_id is not None and user_id != current.id:
+                raise HTTPException(status_code=403, detail="Not allowed")
     elif user_id is not None:
         q = q.filter(Event.user_id == user_id)
 

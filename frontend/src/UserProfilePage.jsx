@@ -22,6 +22,7 @@ export default function UserProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploadingDocs, setUploadingDocs] = useState({});
   const [adminUsers, setAdminUsers] = useState([]);
+  const [supervisorUsers, setSupervisorUsers] = useState([]);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const { showToast } = useToast();
@@ -35,6 +36,7 @@ export default function UserProfilePage() {
       setProfile(p);
       const allUsers = await listUsers();
       setAdminUsers(allUsers.filter((x) => x.role === "admin"));
+      setSupervisorUsers(allUsers.filter((x) => x.role === "supervisor"));
     })().catch((e) => setErr(String(e.message || e)));
   }, [userId]);
 
@@ -131,6 +133,7 @@ export default function UserProfilePage() {
                 onChange={(e) => setProfile((p) => ({ ...p, role: e.target.value }))}
               >
                 <option value="employee">employee</option>
+                <option value="supervisor">supervisor</option>
                 <option value="admin">admin</option>
               </select>
             </div>
@@ -256,8 +259,8 @@ export default function UserProfilePage() {
                 }
                 style={{ width: 230 }}
               >
-                <option value="">First approver</option>
-                {adminUsers.map((a) => (
+                <option value="">First approver (supervisor)</option>
+                {supervisorUsers.map((a) => (
                   <option key={a.id} value={a.id}>{a.name} (ID {a.id})</option>
                 ))}
               </select>
@@ -271,14 +274,14 @@ export default function UserProfilePage() {
                 }
                 style={{ width: 230 }}
               >
-                <option value="">Second approver</option>
+                <option value="">Second approver (admin)</option>
                 {adminUsers.map((a) => (
                   <option key={a.id} value={a.id}>{a.name} (ID {a.id})</option>
                 ))}
               </select>
             </div>
             <div className="helper">
-              Example: supervisor as first approver, manager as second approver.
+              Two-step order is fixed: supervisor first, admin second.
             </div>
           </div>
         </div>
