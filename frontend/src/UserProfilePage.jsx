@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
-import { me, listUsers, adminGetUserProfile, adminUpdateUserProfile, adminUploadUserDocument } from "./api";
+import { me, listUsers, adminGetUserProfile, adminUpdateUserProfile, adminUploadUserDocument, openProtectedFile } from "./api";
 import { useToast } from "./ToastProvider";
 
 const PROFILE_DOCUMENTS = [
@@ -203,9 +203,19 @@ export default function UserProfilePage() {
                 <div className="doc-upload-meta">
                   <div className="doc-upload-label">{doc.label}</div>
                   {profile[doc.field] ? (
-                    <a href={profile[doc.field]} target="_blank" rel="noreferrer" className="doc-upload-link">
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() =>
+                        openProtectedFile(profile[doc.field]).catch((e) => {
+                          const text = String(e.message || e);
+                          setErr(text);
+                          showToast(text, "error");
+                        })
+                      }
+                    >
                       View current file
-                    </a>
+                    </button>
                   ) : (
                     <div className="helper">No file uploaded</div>
                   )}

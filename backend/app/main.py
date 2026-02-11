@@ -6,10 +6,12 @@ from uuid import uuid4
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Request, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from jose import jwt
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
@@ -67,7 +69,7 @@ LIBRARY_CATEGORIES = {
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+app.mount("/avatars", StaticFiles(directory=str(AVATARS_DIR)), name="avatars")
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -119,6 +121,53 @@ def startup():
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+
+@app.get("/files/documents/{file_name}")
+def get_profile_document_file(
+    file_name: str,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    profile_fields = [getattr(User, f) for f in PROFILE_DOCUMENT_FIELDS.values()]
+    like_filters = [
+        field.like(f"%/uploads/documents/{file_name}") | field.like(f"%/files/documents/{file_name}")
+        for field in profile_fields
+    ]
+    owner = db.query(User).filter(or_(*like_filters)).first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="File not found")
+    if current.role != "admin" and current.id != owner.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    path = DOCUMENTS_DIR / file_name
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path)
+
+
+@app.get("/files/library/{file_name}")
+def get_library_document_file(
+    file_name: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    exists = (
+        db.query(CompanyDocument)
+        .filter(
+            CompanyDocument.file_url.like(f"%/uploads/library/{file_name}")
+            | CompanyDocument.file_url.like(f"%/files/library/{file_name}")
+        )
+        .first()
+        is not None
+    )
+    if not exists:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    path = LIBRARY_DIR / file_name
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path)
 
 
 # -------------------------
@@ -210,16 +259,24 @@ async def _upload_profile_document(
     destination.write_bytes(content)
 
     base_url = str(request.base_url).rstrip("/")
-    new_url = f"{base_url}/uploads/documents/{filename}"
+    new_url = f"{base_url}/files/documents/{filename}"
     old_url = getattr(user, field_name) or ""
     setattr(user, field_name, new_url)
 
-    old_prefix = f"{base_url}/uploads/documents/"
-    if old_url.startswith(old_prefix):
+    old_prefixes = [
+        f"{base_url}/uploads/documents/",
+        f"{base_url}/files/documents/",
+        "/uploads/documents/",
+        "/files/documents/",
+    ]
+    for old_prefix in old_prefixes:
+        if not old_url.startswith(old_prefix):
+            continue
         old_name = old_url[len(old_prefix):]
         old_file = DOCUMENTS_DIR / old_name
         if old_file.exists() and old_file.is_file():
             old_file.unlink()
+        break
 
     db.commit()
     db.refresh(user)
@@ -392,14 +449,23 @@ async def upload_my_avatar(
     destination.write_bytes(content)
 
     old_avatar = current.avatar_url or ""
-    current.avatar_url = f"{str(request.base_url).rstrip('/')}/uploads/avatars/{filename}"
+    base_url = str(request.base_url).rstrip("/")
+    current.avatar_url = f"{base_url}/avatars/{filename}"
 
-    old_prefix = f"{str(request.base_url).rstrip('/')}/uploads/avatars/"
-    if old_avatar.startswith(old_prefix):
+    old_prefixes = [
+        f"{base_url}/uploads/avatars/",
+        f"{base_url}/avatars/",
+        "/uploads/avatars/",
+        "/avatars/",
+    ]
+    for old_prefix in old_prefixes:
+        if not old_avatar.startswith(old_prefix):
+            continue
         old_name = old_avatar[len(old_prefix):]
         old_file = AVATARS_DIR / old_name
         if old_file.exists() and old_file.is_file():
             old_file.unlink()
+        break
 
     db.commit()
     db.refresh(current)
@@ -567,7 +633,7 @@ async def upload_company_document(
         raise HTTPException(status_code=400, detail=f"Document must be <= {settings.LIBRARY_DOC_MAX_BYTES // (1024 * 1024)}MB")
     destination.write_bytes(content)
 
-    url = f"{str(request.base_url).rstrip('/')}/uploads/library/{filename}"
+    url = f"{str(request.base_url).rstrip('/')}/files/library/{filename}"
     doc = CompanyDocument(
         title=normalized_title,
         category=normalized_category,
@@ -591,9 +657,12 @@ def delete_company_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    prefix = "/uploads/library/"
-    if prefix in doc.file_url:
-        file_name = doc.file_url.split(prefix, 1)[1]
+    file_name = None
+    for prefix in ("/uploads/library/", "/files/library/"):
+        if prefix in doc.file_url:
+            file_name = doc.file_url.split(prefix, 1)[1]
+            break
+    if file_name:
         file_path = LIBRARY_DIR / file_name
         if file_path.exists() and file_path.is_file():
             file_path.unlink()

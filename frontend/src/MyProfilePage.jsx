@@ -6,6 +6,7 @@ import {
   getLeaveBalance,
   uploadMyAvatar,
   uploadMyDocument,
+  openProtectedFile,
 } from "./api";
 import Avatar from "./Avatar";
 
@@ -209,9 +210,13 @@ export default function MyProfilePage() {
                 <div className="doc-upload-meta">
                   <div className="doc-upload-label">{doc.label}</div>
                   {profile[doc.field] ? (
-                    <a href={profile[doc.field]} target="_blank" rel="noreferrer" className="doc-upload-link">
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => openProtectedFile(profile[doc.field]).catch((e) => setErr(String(e.message || e)))}
+                    >
                       View current file
-                    </a>
+                    </button>
                   ) : (
                     <div className="helper">No file uploaded</div>
                   )}

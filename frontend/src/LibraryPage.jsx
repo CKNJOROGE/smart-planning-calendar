@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { me, listLibraryDocuments, uploadLibraryDocument, deleteLibraryDocument } from "./api";
+import { me, listLibraryDocuments, uploadLibraryDocument, deleteLibraryDocument, openProtectedFile } from "./api";
 import { useToast } from "./ToastProvider";
 
 const CATEGORIES = [
@@ -157,7 +157,17 @@ export default function LibraryPage() {
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <a className="btn" href={d.file_url} target="_blank" rel="noreferrer">Open</a>
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() =>
+                            openProtectedFile(d.file_url).catch((err) => {
+                              showToast(String(err.message || err), "error");
+                            })
+                          }
+                        >
+                          Open
+                        </button>
                         {user?.role === "admin" && (
                           <button className="btn btn-danger" onClick={() => removeDoc(d.id)}>Delete</button>
                         )}

@@ -23,6 +23,13 @@ export function resolveAvatarUrl(url) {
   return url;
 }
 
+function resolveFileUrl(url) {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith("/") && IS_ABSOLUTE_API_BASE) return `${API_BASE}${url}`;
+  return url;
+}
+
 async function request(path, { method = "GET", body } = {}) {
   const token = getToken();
 
@@ -260,4 +267,27 @@ export async function deleteLibraryDocument(docId) {
     throw new Error(`${res.status} ${res.statusText}: ${text}`);
   }
   return res.json();
+}
+
+export async function openProtectedFile(url) {
+  const token = getToken();
+  const resolved = resolveFileUrl(url);
+  if (!resolved) throw new Error("Missing file URL");
+
+  const res = await fetch(resolved, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+
+  const blob = await res.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  const opened = window.open(blobUrl, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    window.location.assign(blobUrl);
+  }
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 }
