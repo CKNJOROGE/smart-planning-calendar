@@ -1,0 +1,21 @@
+﻿# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+frontend/dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.prod.example
+backend/.env
+
+# Python caches / virtual env
+backend/.venv/
+backend/__pycache__/
+**/__pycache__/
+
+# Runtime uploads (do not commit)
+backend/uploads/

@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: calendar_db
+    environment:
+      POSTGRES_USER: calendar_user
+      POSTGRES_PASSWORD: calendar_pass
+      POSTGRES_DB: calendar
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+
+volumes:
+  dbdata:
