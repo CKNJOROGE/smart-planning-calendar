@@ -8,6 +8,7 @@ import UserProfilePage from "./UserProfilePage";
 import ApprovalsPage from "./ApprovalsPage";
 import LibraryPage from "./LibraryPage";
 import ClientTaskManagerPage from "./ClientTaskManagerPage";
+import DashboardPage from "./DashboardPage";
 import { getToken, clearToken } from "./api";
 import { me } from "./api";
 import { ToastProvider } from "./ToastProvider";
@@ -44,6 +45,9 @@ function Shell({ onLogout }) {
             </button>
           </div>
           <nav className="sidebar-nav">
+            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/dashboard">
+              <span className="sidebar-link-text">Dashboard</span>
+            </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/" end>
               <span className="sidebar-link-text">Calendar</span>
             </NavLink>
@@ -95,6 +99,7 @@ function Shell({ onLogout }) {
       <main className="app-main">
         <div className="app-content">
           <Routes>
+            <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/" element={<CalendarPage />} />
             <Route path="/profile" element={<MyProfilePage />} />
             <Route path="/library" element={<LibraryPage />} />

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, date
-from typing import Optional
+from typing import List, Optional
 
 
 # -------------------------
@@ -274,3 +274,44 @@ class ClientTaskOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# -------------------------
+# Dashboard
+# -------------------------
+class DailyActivityCreate(BaseModel):
+    activity: str
+
+
+class DailyActivityOut(BaseModel):
+    id: int
+    user_id: int
+    activity_date: date
+    activity: str
+    created_at: datetime
+    user: UserOut
+
+    class Config:
+        from_attributes = True
+
+
+class TaskReminderOut(BaseModel):
+    id: int
+    task_group_id: str
+    client_id: int
+    client_name: str
+    user_id: int
+    user_name: str
+    year: int
+    quarter: int
+    task: str
+    subtask: str
+    completion_date: date
+    days_until_due: int
+
+
+class DashboardOverviewOut(BaseModel):
+    today: date
+    todays_activities: List[DailyActivityOut]
+    upcoming_subtasks: List[TaskReminderOut]
+    due_subtasks: List[TaskReminderOut]

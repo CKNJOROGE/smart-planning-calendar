@@ -326,6 +326,17 @@ export async function deleteClientTask(taskId) {
   return res.json();
 }
 
+export function listDashboardOverview() {
+  return request("/dashboard/overview");
+}
+
+export function createTodayActivity(activity) {
+  return request("/dashboard/activities/today", {
+    method: "POST",
+    body: { activity },
+  });
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);

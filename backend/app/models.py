@@ -52,6 +52,7 @@ class User(Base):
         foreign_keys="Event.user_id",
     )
     client_tasks = relationship("ClientTask", back_populates="user", foreign_keys="ClientTask.user_id")
+    daily_activities = relationship("DailyActivity", back_populates="user", cascade="all, delete-orphan")
 
 
 class Event(Base):
@@ -128,3 +129,15 @@ class ClientTask(Base):
 
     client = relationship("ClientAccount", back_populates="tasks")
     user = relationship("User", back_populates="client_tasks", foreign_keys=[user_id])
+
+
+class DailyActivity(Base):
+    __tablename__ = "daily_activities"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    activity_date = Column(Date, nullable=False, index=True)
+    activity = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="daily_activities", foreign_keys=[user_id])

@@ -210,12 +210,12 @@ export default function ClientTaskManagerPage() {
 
   return (
     <div className="page-wrap">
-      <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 900, fontSize: 18 }}>Client Task Manager</div>
-        <div className="muted">
-          Year -> Client -> Quarter. Create one task with multiple subtasks and track each completion.
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 900, fontSize: 18 }}>Client Task Manager</div>
+          <div className="muted">
+          Year → Client → Quarter. Create one task with multiple subtasks and track each completion.
+          </div>
         </div>
-      </div>
 
       {err && <div className="error">{err}</div>}
 

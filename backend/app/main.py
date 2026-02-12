@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Optional
 from pathlib import Path
 from uuid import uuid4
@@ -14,7 +14,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
-from .models import User, Event, CompanyDocument, ClientAccount, ClientTask
+from .models import User, Event, CompanyDocument, ClientAccount, ClientTask, DailyActivity
 from .schemas import (
     TokenResponse,
     FirstAdminCreate,
@@ -36,6 +36,10 @@ from .schemas import (
     ClientTaskCreate,
     ClientTaskUpdate,
     ClientTaskOut,
+    DailyActivityCreate,
+    DailyActivityOut,
+    TaskReminderOut,
+    DashboardOverviewOut,
 )
 from .security import verify_password, create_access_token, hash_password
 from .deps import get_current_user, require_admin, require_leave_approver
@@ -956,6 +960,105 @@ def delete_client_task(
     db.delete(t)
     db.commit()
     return {"ok": True}
+
+
+def _to_task_reminder(task: ClientTask) -> TaskReminderOut:
+    if task.completion_date is None:
+        raise ValueError("completion_date is required for reminders")
+    client_name = task.client.name if task.client else f"Client #{task.client_id}"
+    user_name = task.user.name if task.user else f"User #{task.user_id}"
+    return TaskReminderOut(
+        id=task.id,
+        task_group_id=task.task_group_id,
+        client_id=task.client_id,
+        client_name=client_name,
+        user_id=task.user_id,
+        user_name=user_name,
+        year=task.year,
+        quarter=task.quarter,
+        task=task.task,
+        subtask=task.subtask,
+        completion_date=task.completion_date,
+        days_until_due=(task.completion_date - date.today()).days,
+    )
+
+
+@app.get("/dashboard/overview", response_model=DashboardOverviewOut)
+def get_dashboard_overview(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    today = date.today()
+    upcoming_limit = today + timedelta(days=3)
+
+    todays_activities = (
+        db.query(DailyActivity)
+        .filter(DailyActivity.activity_date == today)
+        .order_by(DailyActivity.created_at.desc(), DailyActivity.id.desc())
+        .all()
+    )
+    for item in todays_activities:
+        _ = item.user
+
+    upcoming_rows = (
+        db.query(ClientTask)
+        .filter(
+            ClientTask.completed.is_(False),
+            ClientTask.completion_date.isnot(None),
+            ClientTask.completion_date >= today,
+            ClientTask.completion_date <= upcoming_limit,
+        )
+        .order_by(ClientTask.completion_date.asc(), ClientTask.id.asc())
+        .all()
+    )
+    for item in upcoming_rows:
+        _ = item.user
+        _ = item.client
+
+    due_rows = (
+        db.query(ClientTask)
+        .filter(
+            ClientTask.completed.is_(False),
+            ClientTask.completion_date.isnot(None),
+            ClientTask.completion_date <= today,
+        )
+        .order_by(ClientTask.completion_date.asc(), ClientTask.id.asc())
+        .all()
+    )
+    for item in due_rows:
+        _ = item.user
+        _ = item.client
+
+    return DashboardOverviewOut(
+        today=today,
+        todays_activities=todays_activities,
+        upcoming_subtasks=[_to_task_reminder(t) for t in upcoming_rows],
+        due_subtasks=[_to_task_reminder(t) for t in due_rows],
+    )
+
+
+@app.post("/dashboard/activities/today", response_model=DailyActivityOut)
+def create_todays_activity(
+    payload: DailyActivityCreate,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    text = (payload.activity or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="activity is required")
+    if len(text) > 1000:
+        raise HTTPException(status_code=400, detail="activity must be <= 1000 characters")
+
+    row = DailyActivity(
+        user_id=current.id,
+        activity_date=date.today(),
+        activity=text,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _ = row.user
+    return row
 
 
 # -------------------------
