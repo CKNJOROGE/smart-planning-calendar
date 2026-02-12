@@ -7,6 +7,7 @@ import UsersPage from "./UsersPage";
 import UserProfilePage from "./UserProfilePage";
 import ApprovalsPage from "./ApprovalsPage";
 import LibraryPage from "./LibraryPage";
+import ClientTaskManagerPage from "./ClientTaskManagerPage";
 import { getToken, clearToken } from "./api";
 import { me } from "./api";
 import { ToastProvider } from "./ToastProvider";
@@ -52,6 +53,9 @@ function Shell({ onLogout }) {
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/library">
               <span className="sidebar-link-text">Library</span>
             </NavLink>
+            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/client-task-manager">
+              <span className="sidebar-link-text">Client Task Manager</span>
+            </NavLink>
             {user?.role === "admin" && (
               <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/users">
                 <span className="sidebar-link-text">Users</span>
@@ -94,6 +98,7 @@ function Shell({ onLogout }) {
             <Route path="/" element={<CalendarPage />} />
             <Route path="/profile" element={<MyProfilePage />} />
             <Route path="/library" element={<LibraryPage />} />
+            <Route path="/client-task-manager" element={<ClientTaskManagerPage />} />
 
             {/* Admin only pages: UI hides, backend enforces */}
             <Route path="/users" element={<UsersPage />} />

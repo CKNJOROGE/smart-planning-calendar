@@ -215,3 +215,55 @@ class CompanyDocumentOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# -------------------------
+# Client Task Manager
+# -------------------------
+class ClientAccountCreate(BaseModel):
+    name: str
+
+
+class ClientAccountOut(BaseModel):
+    id: int
+    name: str
+    created_by_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ClientTaskCreate(BaseModel):
+    client_id: int
+    year: int
+    quarter: int
+    task: str
+    subtask: str
+    completion_date: Optional[date] = None
+
+
+class ClientTaskUpdate(BaseModel):
+    task: Optional[str] = None
+    subtask: Optional[str] = None
+    completion_date: Optional[date] = None
+    completed: Optional[bool] = None
+
+
+class ClientTaskOut(BaseModel):
+    id: int
+    client_id: int
+    user_id: int
+    year: int
+    quarter: int
+    task: str
+    subtask: str
+    completion_date: Optional[date] = None
+    completed: bool
+    completed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    user: UserOut
+
+    class Config:
+        from_attributes = True

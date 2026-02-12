@@ -282,6 +282,49 @@ export async function deleteLibraryDocument(docId) {
   return res.json();
 }
 
+export function listTaskYears() {
+  return request("/task-manager/years");
+}
+
+export function listTaskClients(year) {
+  const qs = typeof year === "number" ? `?year=${encodeURIComponent(String(year))}` : "";
+  return request(`/task-manager/clients${qs}`);
+}
+
+export function createTaskClient(name) {
+  return request("/task-manager/clients", { method: "POST", body: { name } });
+}
+
+export function listClientTasks({ year, clientId, quarter }) {
+  const qs = new URLSearchParams({
+    year: String(year),
+    client_id: String(clientId),
+  });
+  if (quarter) qs.set("quarter", String(quarter));
+  return request(`/task-manager/tasks?${qs.toString()}`);
+}
+
+export function createClientTask(payload) {
+  return request("/task-manager/tasks", { method: "POST", body: payload });
+}
+
+export function updateClientTask(taskId, payload) {
+  return request(`/task-manager/tasks/${taskId}`, { method: "PATCH", body: payload });
+}
+
+export async function deleteClientTask(taskId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/task-manager/tasks/${taskId}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return res.json();
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);

@@ -51,6 +51,7 @@ class User(Base):
         back_populates="user",
         foreign_keys="Event.user_id",
     )
+    client_tasks = relationship("ClientTask", back_populates="user", foreign_keys="ClientTask.user_id")
 
 
 class Event(Base):
@@ -94,3 +95,35 @@ class CompanyDocument(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     uploaded_by = relationship("User", foreign_keys=[uploaded_by_id])
+
+
+class ClientAccount(Base):
+    __tablename__ = "client_accounts"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(255), unique=True, nullable=False, index=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    tasks = relationship("ClientTask", back_populates="client", cascade="all, delete-orphan")
+
+
+class ClientTask(Base):
+    __tablename__ = "client_tasks"
+
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    year = Column(Integer, nullable=False, index=True)
+    quarter = Column(Integer, nullable=False, index=True)
+    task = Column(String(255), nullable=False)
+    subtask = Column(Text, nullable=False)
+    completion_date = Column(Date, nullable=True)
+    completed = Column(Boolean, nullable=False, default=False)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    client = relationship("ClientAccount", back_populates="tasks")
+    user = relationship("User", back_populates="client_tasks", foreign_keys=[user_id])

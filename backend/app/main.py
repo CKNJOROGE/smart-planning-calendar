@@ -14,7 +14,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
-from .models import User, Event, CompanyDocument
+from .models import User, Event, CompanyDocument, ClientAccount, ClientTask
 from .schemas import (
     TokenResponse,
     FirstAdminCreate,
@@ -31,6 +31,11 @@ from .schemas import (
     LeaveRejectRequest,
     LeaveBalanceOut,
     CompanyDocumentOut,
+    ClientAccountCreate,
+    ClientAccountOut,
+    ClientTaskCreate,
+    ClientTaskUpdate,
+    ClientTaskOut,
 )
 from .security import verify_password, create_access_token, hash_password
 from .deps import get_current_user, require_admin, require_leave_approver
@@ -775,6 +780,160 @@ def delete_company_document(
             file_path.unlink()
 
     db.delete(doc)
+    db.commit()
+    return {"ok": True}
+
+
+# -------------------------
+# Client Task Manager
+# -------------------------
+@app.get("/task-manager/years", response_model=List[int])
+def list_task_years(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    years = [int(y[0]) for y in db.query(ClientTask.year).distinct().order_by(ClientTask.year.desc()).all()]
+    current_year = date.today().year
+    if current_year not in years:
+        years.append(current_year)
+    return sorted(set(years), reverse=True)
+
+
+@app.get("/task-manager/clients", response_model=List[ClientAccountOut])
+def list_task_clients(
+    _: Optional[int] = Query(default=None, alias="year"),
+    db: Session = Depends(get_db),
+    __: User = Depends(get_current_user),
+):
+    return db.query(ClientAccount).order_by(ClientAccount.name.asc()).all()
+
+
+@app.post("/task-manager/clients", response_model=ClientAccountOut)
+def create_task_client(
+    payload: ClientAccountCreate,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Client name is required")
+    exists = db.query(ClientAccount).filter(ClientAccount.name == name).first()
+    if exists:
+        raise HTTPException(status_code=400, detail="Client already exists")
+
+    c = ClientAccount(name=name, created_by_id=current.id)
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    return c
+
+
+@app.get("/task-manager/tasks", response_model=List[ClientTaskOut])
+def list_client_tasks(
+    year: int,
+    client_id: int,
+    quarter: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    q = db.query(ClientTask).filter(ClientTask.year == year, ClientTask.client_id == client_id)
+    if quarter is not None:
+        q = q.filter(ClientTask.quarter == quarter)
+    rows = q.order_by(ClientTask.completion_date.asc().nulls_last(), ClientTask.id.asc()).all()
+    for r in rows:
+        _ = r.user
+    return rows
+
+
+@app.post("/task-manager/tasks", response_model=ClientTaskOut)
+def create_client_task(
+    payload: ClientTaskCreate,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if payload.quarter not in {1, 2, 3, 4}:
+        raise HTTPException(status_code=400, detail="quarter must be between 1 and 4")
+    if payload.year < 2000 or payload.year > 2100:
+        raise HTTPException(status_code=400, detail="year must be between 2000 and 2100")
+    task_text = (payload.task or "").strip()
+    subtask_text = (payload.subtask or "").strip()
+    if not task_text:
+        raise HTTPException(status_code=400, detail="task is required")
+    if not subtask_text:
+        raise HTTPException(status_code=400, detail="subtask is required")
+
+    client = db.query(ClientAccount).filter(ClientAccount.id == payload.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    t = ClientTask(
+        client_id=payload.client_id,
+        user_id=current.id,
+        year=payload.year,
+        quarter=payload.quarter,
+        task=task_text,
+        subtask=subtask_text,
+        completion_date=payload.completion_date,
+        completed=False,
+        completed_at=None,
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    _ = t.user
+    return t
+
+
+@app.patch("/task-manager/tasks/{task_id}", response_model=ClientTaskOut)
+def update_client_task(
+    task_id: int,
+    payload: ClientTaskUpdate,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    t = db.query(ClientTask).filter(ClientTask.id == task_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if current.role not in {"admin", "supervisor"} and t.user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    incoming = payload.dict(exclude_unset=True)
+    if "task" in incoming:
+        task_text = (incoming["task"] or "").strip()
+        if not task_text:
+            raise HTTPException(status_code=400, detail="task cannot be empty")
+        t.task = task_text
+    if "subtask" in incoming:
+        subtask_text = (incoming["subtask"] or "").strip()
+        if not subtask_text:
+            raise HTTPException(status_code=400, detail="subtask cannot be empty")
+        t.subtask = subtask_text
+    if "completion_date" in incoming:
+        t.completion_date = incoming["completion_date"]
+    if "completed" in incoming:
+        t.completed = bool(incoming["completed"])
+        t.completed_at = datetime.utcnow() if t.completed else None
+
+    t.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(t)
+    _ = t.user
+    return t
+
+
+@app.delete("/task-manager/tasks/{task_id}")
+def delete_client_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    t = db.query(ClientTask).filter(ClientTask.id == task_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if current.role not in {"admin", "supervisor"} and t.user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    db.delete(t)
     db.commit()
     return {"ok": True}
 
