@@ -13,6 +13,10 @@ import { useToast } from "./ToastProvider";
 
 const QUARTERS = [1, 2, 3, 4];
 
+function emptySubtask() {
+  return { subtask: "", completion_date: "" };
+}
+
 export default function ClientTaskManagerPage() {
   const { showToast } = useToast();
 
@@ -27,12 +31,30 @@ export default function ClientTaskManagerPage() {
   const [err, setErr] = useState("");
 
   const [newClientName, setNewClientName] = useState("");
-  const [newTask, setNewTask] = useState({ task: "", subtask: "", completion_date: "" });
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [subtaskRows, setSubtaskRows] = useState([emptySubtask()]);
 
   const selectedClient = useMemo(
     () => clients.find((c) => c.id === Number(selectedClientId)) || null,
     [clients, selectedClientId]
   );
+
+  const groupedTasks = useMemo(() => {
+    const groups = new Map();
+    for (const row of tasks) {
+      const key = row.task_group_id || `legacy_${row.id}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          task: row.task,
+          owner: row.user?.name || `User #${row.user_id}`,
+          rows: [],
+        });
+      }
+      groups.get(key).rows.push(row);
+    }
+    return Array.from(groups.values());
+  }, [tasks]);
 
   useEffect(() => {
     (async () => {
@@ -42,11 +64,9 @@ export default function ClientTaskManagerPage() {
         const u = await me();
         setCurrent(u);
         const ys = await listTaskYears();
-        const normalizedYears = Array.isArray(ys) && ys.length ? ys : [new Date().getFullYear()];
-        setYears(normalizedYears);
-        if (!normalizedYears.includes(selectedYear)) {
-          setSelectedYear(normalizedYears[0]);
-        }
+        const normalized = Array.isArray(ys) && ys.length ? ys : [new Date().getFullYear()];
+        setYears(normalized);
+        if (!normalized.includes(selectedYear)) setSelectedYear(normalized[0]);
       } catch (e) {
         setErr(String(e.message || e));
       } finally {
@@ -110,31 +130,53 @@ export default function ClientTaskManagerPage() {
     }
   }
 
+  function addSubtaskRow() {
+    setSubtaskRows((prev) => [...prev, emptySubtask()]);
+  }
+
+  function removeSubtaskRow(idx) {
+    setSubtaskRows((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
+  }
+
+  function updateSubtaskRow(idx, patch) {
+    setSubtaskRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  }
+
   async function handleCreateTask(e) {
     e.preventDefault();
-    const taskText = (newTask.task || "").trim();
-    const subtaskText = (newTask.subtask || "").trim();
-    if (!taskText || !subtaskText || !selectedClientId) {
-      setErr("Task and subtask are required.");
+    const taskTitle = (newTaskTitle || "").trim();
+    if (!taskTitle || !selectedClientId) {
+      setErr("Task title is required.");
       return;
     }
+    const cleanedSubtasks = subtaskRows
+      .map((s) => ({
+        subtask: (s.subtask || "").trim(),
+        completion_date: s.completion_date || null,
+      }))
+      .filter((s) => s.subtask);
+    if (!cleanedSubtasks.length) {
+      setErr("At least one subtask is required.");
+      return;
+    }
+
     try {
       await createClientTask({
         client_id: Number(selectedClientId),
         year: Number(selectedYear),
         quarter: Number(selectedQuarter),
-        task: taskText,
-        subtask: subtaskText,
-        completion_date: newTask.completion_date || null,
+        task: taskTitle,
+        subtasks: cleanedSubtasks,
       });
-      setNewTask({ task: "", subtask: "", completion_date: "" });
+      setNewTaskTitle("");
+      setSubtaskRows([emptySubtask()]);
       const list = await listClientTasks({
         year: selectedYear,
         clientId: Number(selectedClientId),
         quarter: selectedQuarter,
       });
       setTasks(list);
-      showToast("Task added", "success");
+      showToast("Task workplan added", "success");
     } catch (e2) {
       const msg = String(e2.message || e2);
       setErr(msg);
@@ -153,12 +195,12 @@ export default function ClientTaskManagerPage() {
     }
   }
 
-  async function handleDeleteTask(row) {
-    if (!confirm(`Delete task "${row.task}"?`)) return;
+  async function handleDeleteSubtask(row) {
+    if (!confirm(`Delete subtask "${row.subtask}"?`)) return;
     try {
       await deleteClientTask(row.id);
       setTasks((prev) => prev.filter((r) => r.id !== row.id));
-      showToast("Task deleted", "success");
+      showToast("Subtask deleted", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
@@ -171,13 +213,8 @@ export default function ClientTaskManagerPage() {
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>Client Task Manager</div>
         <div className="muted">
-          Track quarterly client tasks. Everyone can view tasks across employees.
+          Year -> Client -> Quarter. Create one task with multiple subtasks and track each completion.
         </div>
-        {current && (
-          <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-            Signed in as {current.name} ({current.role})
-          </div>
-        )}
       </div>
 
       {err && <div className="error">{err}</div>}
@@ -188,7 +225,7 @@ export default function ClientTaskManagerPage() {
           {years.map((y) => (
             <button
               key={y}
-              className={`btn ${Number(selectedYear) === Number(y) ? "btn-primary" : ""}`}
+              className={`btn task-choice-btn ${Number(selectedYear) === Number(y) ? "task-choice-active" : ""}`}
               onClick={() => setSelectedYear(Number(y))}
             >
               {y}
@@ -217,7 +254,7 @@ export default function ClientTaskManagerPage() {
           {clients.map((c) => (
             <button
               key={c.id}
-              className={`btn ${Number(selectedClientId) === c.id ? "btn-primary" : ""}`}
+              className={`btn task-choice-btn ${Number(selectedClientId) === c.id ? "task-choice-active" : ""}`}
               onClick={() => setSelectedClientId(c.id)}
             >
               {c.name}
@@ -233,7 +270,7 @@ export default function ClientTaskManagerPage() {
           {QUARTERS.map((q) => (
             <button
               key={q}
-              className={`btn ${Number(selectedQuarter) === q ? "btn-primary" : ""}`}
+              className={`btn task-choice-btn ${Number(selectedQuarter) === q ? "task-choice-active" : ""}`}
               onClick={() => setSelectedQuarter(q)}
               disabled={!selectedClientId}
             >
@@ -248,40 +285,53 @@ export default function ClientTaskManagerPage() {
           4) Workplan {selectedClient ? `- ${selectedClient.name}` : ""}
         </div>
 
-        <form onSubmit={handleCreateTask} style={{ marginBottom: 12 }}>
-          <div className="row">
-            <div className="field" style={{ flex: "1 1 220px" }}>
-              <label>Task</label>
-              <input
-                value={newTask.task}
-                onChange={(e) => setNewTask((s) => ({ ...s, task: e.target.value }))}
-                placeholder="Task title"
-                disabled={!selectedClientId}
-              />
+        <form onSubmit={handleCreateTask} style={{ marginBottom: 14 }}>
+          <div className="field">
+            <label>Main task</label>
+            <input
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              placeholder="e.g., Quarterly compliance review"
+              disabled={!selectedClientId}
+            />
+          </div>
+
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Subtasks</div>
+          {subtaskRows.map((row, idx) => (
+            <div key={idx} className="row" style={{ marginBottom: 6 }}>
+              <div className="field" style={{ flex: "1 1 320px", marginBottom: 0 }}>
+                <label>{`Subtask ${idx + 1}`}</label>
+                <input
+                  value={row.subtask}
+                  onChange={(e) => updateSubtaskRow(idx, { subtask: e.target.value })}
+                  placeholder="Subtask description"
+                  disabled={!selectedClientId}
+                />
+              </div>
+              <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                <label>Completion date</label>
+                <input
+                  type="date"
+                  value={row.completion_date}
+                  onChange={(e) => updateSubtaskRow(idx, { completion_date: e.target.value })}
+                  disabled={!selectedClientId}
+                />
+              </div>
+              <div style={{ alignSelf: "end", display: "flex", gap: 8 }}>
+                <button type="button" className="btn" onClick={addSubtaskRow} disabled={!selectedClientId}>
+                  + Subtask
+                </button>
+                <button type="button" className="btn btn-danger" onClick={() => removeSubtaskRow(idx)} disabled={!selectedClientId || subtaskRows.length <= 1}>
+                  Remove
+                </button>
+              </div>
             </div>
-            <div className="field" style={{ flex: "1 1 260px" }}>
-              <label>Subtask</label>
-              <input
-                value={newTask.subtask}
-                onChange={(e) => setNewTask((s) => ({ ...s, subtask: e.target.value }))}
-                placeholder="Subtask details"
-                disabled={!selectedClientId}
-              />
-            </div>
-            <div className="field" style={{ flex: "1 1 180px" }}>
-              <label>Completion date</label>
-              <input
-                type="date"
-                value={newTask.completion_date}
-                onChange={(e) => setNewTask((s) => ({ ...s, completion_date: e.target.value }))}
-                disabled={!selectedClientId}
-              />
-            </div>
-            <div style={{ alignSelf: "end" }}>
-              <button className="btn btn-primary" type="submit" disabled={!selectedClientId}>
-                Add Row
-              </button>
-            </div>
+          ))}
+
+          <div style={{ marginTop: 8 }}>
+            <button className="btn btn-primary" type="submit" disabled={!selectedClientId}>
+              Save Task Workplan
+            </button>
           </div>
         </form>
 
@@ -298,42 +348,48 @@ export default function ClientTaskManagerPage() {
               </tr>
             </thead>
             <tbody>
-              {tasks.map((row) => (
-                <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                  <td style={{ padding: 10 }}>{row.user?.name || `User #${row.user_id}`}</td>
-                  <td style={{ padding: 10 }}>{row.task}</td>
-                  <td style={{ padding: 10 }}>{row.subtask}</td>
-                  <td style={{ padding: 10 }}>{row.completion_date || "-"}</td>
-                  <td style={{ padding: 10 }}>
-                    <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
-                      <input
-                        type="checkbox"
-                        checked={!!row.completed}
-                        onChange={() => handleToggleCompleted(row)}
-                      />
-                      {row.completed ? "Done" : "Pending"}
-                    </label>
-                  </td>
-                  <td style={{ padding: 10 }}>
-                    <button
-                      className="btn btn-danger"
-                      onClick={() => handleDeleteTask(row)}
-                      disabled={
-                        !current
-                        || !(
-                          current.role === "admin"
-                          || current.role === "supervisor"
-                          || Number(current.id) === Number(row.user_id)
-                        )
-                      }
-                      title="Owner/admin/supervisor can delete"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!tasks.length && (
+              {groupedTasks.map((group) =>
+                group.rows.map((row, idx) => (
+                  <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                    {idx === 0 && (
+                      <>
+                        <td style={{ padding: 10 }} rowSpan={group.rows.length}>{group.owner}</td>
+                        <td style={{ padding: 10, fontWeight: 700 }} rowSpan={group.rows.length}>{group.task}</td>
+                      </>
+                    )}
+                    <td style={{ padding: 10 }}>{row.subtask}</td>
+                    <td style={{ padding: 10 }}>{row.completion_date || "-"}</td>
+                    <td style={{ padding: 10 }}>
+                      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
+                        <input
+                          type="checkbox"
+                          checked={!!row.completed}
+                          onChange={() => handleToggleCompleted(row)}
+                        />
+                        {row.completed ? "Done" : "Pending"}
+                      </label>
+                    </td>
+                    <td style={{ padding: 10 }}>
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => handleDeleteSubtask(row)}
+                        disabled={
+                          !current
+                          || !(
+                            current.role === "admin"
+                            || current.role === "supervisor"
+                            || Number(current.id) === Number(row.user_id)
+                          )
+                        }
+                        title="Owner/admin/supervisor can delete"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+              {!groupedTasks.length && (
                 <tr>
                   <td colSpan={6} style={{ padding: 14 }} className="muted">
                     {busy ? "Loading..." : "No tasks for this year/client/quarter yet."}

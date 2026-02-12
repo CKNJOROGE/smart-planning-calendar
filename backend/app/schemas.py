@@ -239,6 +239,12 @@ class ClientTaskCreate(BaseModel):
     year: int
     quarter: int
     task: str
+    subtask: Optional[str] = None
+    completion_date: Optional[date] = None
+    subtasks: Optional[list["ClientTaskSubtaskIn"]] = None
+
+
+class ClientTaskSubtaskIn(BaseModel):
     subtask: str
     completion_date: Optional[date] = None
 
@@ -254,6 +260,7 @@ class ClientTaskOut(BaseModel):
     id: int
     client_id: int
     user_id: int
+    task_group_id: str
     year: int
     quarter: int
     task: str

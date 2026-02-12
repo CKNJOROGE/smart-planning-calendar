@@ -115,6 +115,7 @@ class ClientTask(Base):
     id = Column(Integer, primary_key=True)
     client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    task_group_id = Column(String(40), nullable=False, index=True)
     year = Column(Integer, nullable=False, index=True)
     quarter = Column(Integer, nullable=False, index=True)
     task = Column(String(255), nullable=False)

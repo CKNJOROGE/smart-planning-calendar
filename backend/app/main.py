@@ -839,13 +839,17 @@ def list_client_tasks(
     q = db.query(ClientTask).filter(ClientTask.year == year, ClientTask.client_id == client_id)
     if quarter is not None:
         q = q.filter(ClientTask.quarter == quarter)
-    rows = q.order_by(ClientTask.completion_date.asc().nulls_last(), ClientTask.id.asc()).all()
+    rows = q.order_by(
+        ClientTask.task_group_id.asc(),
+        ClientTask.completion_date.asc().nulls_last(),
+        ClientTask.id.asc(),
+    ).all()
     for r in rows:
         _ = r.user
     return rows
 
 
-@app.post("/task-manager/tasks", response_model=ClientTaskOut)
+@app.post("/task-manager/tasks", response_model=List[ClientTaskOut])
 def create_client_task(
     payload: ClientTaskCreate,
     db: Session = Depends(get_db),
@@ -856,32 +860,48 @@ def create_client_task(
     if payload.year < 2000 or payload.year > 2100:
         raise HTTPException(status_code=400, detail="year must be between 2000 and 2100")
     task_text = (payload.task or "").strip()
-    subtask_text = (payload.subtask or "").strip()
+    subtask_text = (payload.subtask or "").strip() if payload.subtask is not None else ""
     if not task_text:
         raise HTTPException(status_code=400, detail="task is required")
-    if not subtask_text:
-        raise HTTPException(status_code=400, detail="subtask is required")
+    entries: list[tuple[str, Optional[date]]] = []
+    if payload.subtasks:
+        for item in payload.subtasks:
+            st = (item.subtask or "").strip()
+            if not st:
+                continue
+            entries.append((st, item.completion_date))
+    elif subtask_text:
+        entries.append((subtask_text, payload.completion_date))
+
+    if not entries:
+        raise HTTPException(status_code=400, detail="at least one subtask is required")
 
     client = db.query(ClientAccount).filter(ClientAccount.id == payload.client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    t = ClientTask(
-        client_id=payload.client_id,
-        user_id=current.id,
-        year=payload.year,
-        quarter=payload.quarter,
-        task=task_text,
-        subtask=subtask_text,
-        completion_date=payload.completion_date,
-        completed=False,
-        completed_at=None,
-    )
-    db.add(t)
+    group_id = uuid4().hex
+    created: list[ClientTask] = []
+    for subtask_value, completion_date_value in entries:
+        t = ClientTask(
+            client_id=payload.client_id,
+            user_id=current.id,
+            task_group_id=group_id,
+            year=payload.year,
+            quarter=payload.quarter,
+            task=task_text,
+            subtask=subtask_value,
+            completion_date=completion_date_value,
+            completed=False,
+            completed_at=None,
+        )
+        db.add(t)
+        created.append(t)
     db.commit()
-    db.refresh(t)
-    _ = t.user
-    return t
+    for t in created:
+        db.refresh(t)
+        _ = t.user
+    return created
 
 
 @app.patch("/task-manager/tasks/{task_id}", response_model=ClientTaskOut)

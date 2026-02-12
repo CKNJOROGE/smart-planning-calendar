@@ -1051,6 +1051,21 @@ textarea{ resize: vertical; min-height: 90px; }
   color: #991b1b;
 }
 
+.task-choice-btn {
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.task-choice-btn:hover {
+  transform: translateY(-1px);
+  border-color: #38bdf8;
+  box-shadow: 0 6px 14px rgba(14, 116, 144, 0.18);
+}
+
+.task-choice-btn.task-choice-active {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.22);
+}
+
 [data-theme="dark"] {
   --text:#e2e8f0;
   --muted:#94a3b8;
