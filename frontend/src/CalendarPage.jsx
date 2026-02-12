@@ -343,7 +343,15 @@ export default function CalendarPage() {
 
   const canEdit = useMemo(() => {
     if (!popup || !user) return false;
-    return user.role === "admin" || popup.apiEvent.user_id === user.id;
+    if (user.role === "admin") return true;
+    if (popup.apiEvent.user_id !== user.id) return false;
+
+    const isLeave = (popup.apiEvent.type || "").toLowerCase() === "leave";
+    const status = normalizeStatus(popup.apiEvent.status);
+    if (user.role === "employee" && isLeave && (status === "approved" || status === "rejected")) {
+      return false;
+    }
+    return true;
   }, [popup, user]);
 
   const canDelete = useMemo(() => {
