@@ -1466,6 +1466,18 @@ textarea{ resize: vertical; min-height: 90px; }
     inset 1px 1px 0 rgba(148, 163, 184, 0.1);
 }
 
+[data-theme="dark"] .profile-page input,
+[data-theme="dark"] .profile-page select,
+[data-theme="dark"] .profile-page textarea {
+  color: #000000;
+}
+
+[data-theme="dark"] .profile-page input::placeholder,
+[data-theme="dark"] .profile-page textarea::placeholder {
+  color: #111111;
+  opacity: 1;
+}
+
 [data-theme="dark"] .users-head { background: #0f172a; }
 [data-theme="dark"] .users-row { border-top-color: #1e293b; }
 
