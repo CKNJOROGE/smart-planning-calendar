@@ -212,6 +212,19 @@ export function createUser(payload) {
   return request("/users", { method: "POST", body: payload });
 }
 
+export async function deleteUser(userId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/users/${userId}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return res.json();
+}
+
 // Leave balance (optional as_of=YYYY-MM-DD)
 export function getLeaveBalance(asOfYYYYMMDD) {
   const qs = asOfYYYYMMDD ? `?as_of=${encodeURIComponent(asOfYYYYMMDD)}` : "";

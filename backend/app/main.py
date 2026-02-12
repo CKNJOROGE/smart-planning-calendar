@@ -471,6 +471,59 @@ def update_user_profile(
     return u
 
 
+@app.delete("/users/{user_id}")
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(require_admin),
+):
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    if current.id == u.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+
+    if u.role == "admin":
+        admin_count = db.query(User).filter(User.role == "admin").count()
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete the last admin user")
+
+    blockers: list[str] = []
+
+    owned_events = db.query(Event).filter(Event.user_id == u.id).count()
+    if owned_events:
+        blockers.append(f"owns {owned_events} event(s)")
+
+    acted_events = db.query(Event).filter(
+        (Event.requested_by_id == u.id)
+        | (Event.approved_by_id == u.id)
+        | (Event.first_approved_by_id == u.id)
+        | (Event.second_approved_by_id == u.id)
+    ).count()
+    if acted_events:
+        blockers.append(f"is referenced in {acted_events} approval/request field(s)")
+
+    uploaded_docs = db.query(CompanyDocument).filter(CompanyDocument.uploaded_by_id == u.id).count()
+    if uploaded_docs:
+        blockers.append(f"uploaded {uploaded_docs} library document(s)")
+
+    approver_refs = db.query(User).filter(
+        (User.first_approver_id == u.id) | (User.second_approver_id == u.id)
+    ).count()
+    if approver_refs:
+        blockers.append(f"is assigned as approver for {approver_refs} user(s)")
+
+    if blockers:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete user: " + "; ".join(blockers),
+        )
+
+    db.delete(u)
+    db.commit()
+    return {"ok": True}
+
+
 @app.post("/users/me/avatar", response_model=UserProfileOut)
 async def upload_my_avatar(
     request: Request,

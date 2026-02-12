@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { listUsers, createUser, me } from "./api";
+import { listUsers, createUser, deleteUser, me } from "./api";
 import { Link } from "react-router-dom";
 import Avatar from "./Avatar";
 
@@ -79,6 +79,21 @@ export default function UsersPage() {
     );
   }
 
+  async function handleDeleteUser(user) {
+    setErr("");
+    if (!confirm(`Delete user "${user.name}" (${user.email})?`)) return;
+
+    setBusy(true);
+    try {
+      await deleteUser(user.id);
+      await load();
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (current.role !== "admin") {
     return (
       <div className="page-wrap">
@@ -126,6 +141,7 @@ export default function UsersPage() {
                 <th style={{ textAlign: "left", padding: 12 }}>User</th>
                 <th style={{ textAlign: "left", padding: 12 }}>Email</th>
                 <th style={{ textAlign: "left", padding: 12 }}>Role</th>
+                <th style={{ textAlign: "left", padding: 12 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -151,11 +167,21 @@ export default function UsersPage() {
                   <td style={{ padding: 12 }}>
                     <span className="pill">{u.role}</span>
                   </td>
+                  <td style={{ padding: 12 }}>
+                    <button
+                      className="btn btn-danger"
+                      onClick={() => handleDeleteUser(u)}
+                      disabled={busy || current?.id === u.id}
+                      title={current?.id === u.id ? "You cannot delete your own account" : "Delete user"}
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!users.length && (
                 <tr>
-                  <td colSpan={3} style={{ padding: 16 }} className="muted">
+                  <td colSpan={4} style={{ padding: 16 }} className="muted">
                     No users yet.
                   </td>
                 </tr>
