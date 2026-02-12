@@ -65,16 +65,35 @@ export default function DashboardPage() {
     }
   }
 
-  const activityCount = overview.todays_activities.length;
-  const upcomingCount = overview.upcoming_subtasks.length;
-  const dueCount = overview.due_subtasks.length;
+  function renderTaskList(items, emptyText) {
+    if (!items.length) return <div className="muted">{emptyText}</div>;
+    return (
+      <div className="dashboard-mini-list">
+        {items.map((t) => (
+          <div key={t.id} className="dashboard-mini-item">
+            <div className="dashboard-mini-head">
+              <div className="dashboard-task-title">{t.task}</div>
+              <span className={`dashboard-status-badge dashboard-status-${dueBadgeClass(t.days_until_due)}`}>
+                {dueBadge(t.days_until_due)}
+              </span>
+            </div>
+            <div className="dashboard-task-subtitle">{t.subtask}</div>
+            <div className="dashboard-mini-meta">
+              <span>{t.client_name}</span>
+              <span>{t.user_name}</span>
+              <span>{formatDate(t.completion_date)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-page">
       <div className="dashboard-hero card">
-        <div>
-          <div className="dashboard-title">Operations Dashboard</div>
-          <div className="dashboard-subtitle">Team-wide daily updates and client task reminders</div>
+        <div className="dashboard-title-wrap">
+          <div className="dashboard-title">Dashboard</div>
           <div className="dashboard-date">Today: {formatDate(overview.today)}</div>
         </div>
         <button className="btn dashboard-refresh-btn" type="button" onClick={loadOverview} disabled={busy}>
@@ -82,49 +101,31 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      <div className="dashboard-metrics">
-        <div className="card dashboard-metric">
-          <div className="dashboard-metric-label">Today's Posts</div>
-          <div className="dashboard-metric-value">{activityCount}</div>
-        </div>
-        <div className="card dashboard-metric">
-          <div className="dashboard-metric-label">Upcoming (1-3 days)</div>
-          <div className="dashboard-metric-value">{upcomingCount}</div>
-        </div>
-        <div className="card dashboard-metric dashboard-metric-danger">
-          <div className="dashboard-metric-label">Due / Overdue</div>
-          <div className="dashboard-metric-value">{dueCount}</div>
-        </div>
-      </div>
-
       {err && <div className="error">{err}</div>}
 
-      <div className="dashboard-grid">
-        <div className="card dashboard-panel">
-          <div className="dashboard-panel-head">
-            <div className="dashboard-panel-title">Post Today's Activity</div>
-            <div className="muted">Visible to all team members</div>
-          </div>
-          <form onSubmit={handlePostActivity}>
-            <div className="field">
-              <label>What are you working on today?</label>
-              <textarea
-                value={newActivity}
-                onChange={(e) => setNewActivity(e.target.value)}
-                placeholder="Write today's activities..."
-                maxLength={1000}
-                className="dashboard-activity-input"
-              />
-              <div className="helper">{newActivity.length}/1000</div>
-            </div>
-            <button className="btn btn-primary" type="submit">Post Activity</button>
-          </form>
+      <div className="card dashboard-panel dashboard-compose-panel">
+        <div className="dashboard-panel-head">
+          <div className="dashboard-panel-title">Post Today&apos;s Activities</div>
         </div>
+        <form onSubmit={handlePostActivity}>
+          <div className="field">
+            <textarea
+              value={newActivity}
+              onChange={(e) => setNewActivity(e.target.value)}
+              placeholder="Write today's activities..."
+              maxLength={1000}
+              className="dashboard-activity-input"
+            />
+            <div className="helper">{newActivity.length}/1000</div>
+          </div>
+          <button className="btn btn-primary" type="submit">Post Activity</button>
+        </form>
+      </div>
 
-        <div className="card dashboard-panel">
+      <div className="dashboard-layout">
+        <div className="card dashboard-panel dashboard-today-panel">
           <div className="dashboard-panel-head">
-            <div className="dashboard-panel-title">Today's Activities</div>
-            <div className="muted">{formatDate(overview.today)}</div>
+            <div className="dashboard-panel-title">Today&apos;s Activities</div>
           </div>
           {!overview.todays_activities.length ? (
             <div className="muted">No activities posted yet today.</div>
@@ -142,93 +143,24 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
-      </div>
 
-      <div className="dashboard-grid">
-        <div className="card dashboard-panel">
-          <div className="dashboard-panel-head">
-            <div className="dashboard-panel-title">Upcoming Activities</div>
-            <div className="muted">Due in 1-3 days</div>
-          </div>
-          {!overview.upcoming_subtasks.length ? (
-            <div className="muted">No upcoming subtasks in the next 3 days.</div>
-          ) : (
-            <div className="dashboard-table-wrap">
-              <table className="table dashboard-table">
-                <thead>
-                  <tr>
-                    <th>Owner</th>
-                    <th>Client</th>
-                    <th>Task / Subtask</th>
-                    <th>Due</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overview.upcoming_subtasks.map((t) => (
-                    <tr key={t.id}>
-                      <td>{t.user_name}</td>
-                      <td>{t.client_name}</td>
-                      <td>
-                        <div className="dashboard-task-title">{t.task}</div>
-                        <div className="dashboard-task-subtitle">{t.subtask}</div>
-                      </td>
-                      <td>{formatDate(t.completion_date)}</td>
-                      <td>
-                        <span className={`dashboard-status-badge dashboard-status-${dueBadgeClass(t.days_until_due)}`}>
-                          {dueBadge(t.days_until_due)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        <div className="dashboard-right-stack">
+          <div className="card dashboard-panel">
+            <div className="dashboard-panel-head">
+              <div className="dashboard-panel-title">Upcoming Activities</div>
             </div>
-          )}
-        </div>
+            {renderTaskList(overview.upcoming_subtasks, "No upcoming subtasks in the next 3 days.")}
+          </div>
 
-        <div className="card dashboard-panel">
-          <div className="dashboard-panel-head">
-            <div className="dashboard-panel-title">Due Activities</div>
-            <div className="muted">Due today or overdue, not completed</div>
-          </div>
-          {!overview.due_subtasks.length ? (
-            <div className="muted">No due or overdue subtasks pending completion.</div>
-          ) : (
-            <div className="dashboard-table-wrap">
-              <table className="table dashboard-table">
-                <thead>
-                  <tr>
-                    <th>Owner</th>
-                    <th>Client</th>
-                    <th>Task / Subtask</th>
-                    <th>Due</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {overview.due_subtasks.map((t) => (
-                    <tr key={t.id}>
-                      <td>{t.user_name}</td>
-                      <td>{t.client_name}</td>
-                      <td>
-                        <div className="dashboard-task-title">{t.task}</div>
-                        <div className="dashboard-task-subtitle">{t.subtask}</div>
-                      </td>
-                      <td>{formatDate(t.completion_date)}</td>
-                      <td>
-                        <span className={`dashboard-status-badge dashboard-status-${dueBadgeClass(t.days_until_due)}`}>
-                          {dueBadge(t.days_until_due)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="card dashboard-panel">
+            <div className="dashboard-panel-head">
+              <div className="dashboard-panel-title">Due Activities</div>
             </div>
-          )}
+            {renderTaskList(overview.due_subtasks, "No due or overdue subtasks pending completion.")}
+          </div>
         </div>
       </div>
+
     </div>
   );
 }
