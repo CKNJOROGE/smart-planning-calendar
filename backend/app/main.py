@@ -1005,7 +1005,7 @@ def get_dashboard_overview(
         .filter(
             ClientTask.completed.is_(False),
             ClientTask.completion_date.isnot(None),
-            ClientTask.completion_date >= today,
+            ClientTask.completion_date > today,
             ClientTask.completion_date <= upcoming_limit,
         )
         .order_by(ClientTask.completion_date.asc(), ClientTask.id.asc())
