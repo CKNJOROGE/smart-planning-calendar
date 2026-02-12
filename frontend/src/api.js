@@ -233,15 +233,16 @@ export function getLeaveBalance(asOfYYYYMMDD) {
 
 // WebSocket URL helper
 export function getWsUrl() {
-  const token = getToken();
+  const token = (getToken() || "").trim();
+  if (!token) return null;
   if (IS_ABSOLUTE_API_BASE) {
     const u = new URL(API_BASE);
     const proto = u.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${u.host}/ws?token=${encodeURIComponent(token || "")}`;
+    return `${proto}//${u.host}/ws?token=${encodeURIComponent(token)}`;
   }
 
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/ws?token=${encodeURIComponent(token || "")}`;
+  return `${proto}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
 }
 
 export function listLibraryDocuments(category = "") {
@@ -347,3 +348,4 @@ export async function openProtectedFile(url) {
   }
   setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 }
+

@@ -212,6 +212,10 @@ export default function CalendarPage() {
 
     try {
       const url = getWsUrl();
+      if (!url) {
+        setLive(false);
+        return;
+      }
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
@@ -247,7 +251,14 @@ export default function CalendarPage() {
   function scheduleReconnect() {
     const tries = (reconnectRef.current.tries += 1);
     const delay = Math.min(10000, 500 * Math.pow(2, Math.min(tries, 5))); // up to 10s
-    reconnectRef.current.timer = setTimeout(() => connectWs(), delay);
+    reconnectRef.current.timer = setTimeout(() => {
+      const url = getWsUrl();
+      if (!url) {
+        setLive(false);
+        return;
+      }
+      connectWs();
+    }, delay);
   }
 
   useEffect(() => {
@@ -909,3 +920,4 @@ export default function CalendarPage() {
     </>
   );
 }
+
