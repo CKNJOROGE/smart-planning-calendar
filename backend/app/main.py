@@ -6,9 +6,8 @@ from uuid import uuid4
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Request, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from jose import jwt
 from sqlalchemy import or_
@@ -39,6 +38,7 @@ from .config import settings
 
 from .ws_manager import ConnectionManager
 from .leave_service import compute_leave_balance, validate_leave_request
+from .storage import object_storage
 
 app = FastAPI(title="Smart Planning Calendar API")
 ws_manager = ConnectionManager()
@@ -69,7 +69,6 @@ LIBRARY_CATEGORIES = {
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/avatars", StaticFiles(directory=str(AVATARS_DIR)), name="avatars")
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -144,9 +143,7 @@ def get_profile_document_file(
         raise HTTPException(status_code=403, detail="Not allowed")
 
     path = DOCUMENTS_DIR / file_name
-    if not path.exists() or not path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path)
+    return _serve_local_or_object(path, _document_key(file_name))
 
 
 @app.get("/files/library/{file_name}")
@@ -168,9 +165,13 @@ def get_library_document_file(
         raise HTTPException(status_code=404, detail="File not found")
 
     path = LIBRARY_DIR / file_name
-    if not path.exists() or not path.is_file():
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path)
+    return _serve_local_or_object(path, _library_key(file_name))
+
+
+@app.get("/avatars/{file_name}")
+def get_avatar_file(file_name: str):
+    path = AVATARS_DIR / file_name
+    return _serve_local_or_object(path, _avatar_key(file_name))
 
 
 # -------------------------
@@ -219,6 +220,35 @@ async def broadcast_events_changed(action: str, event_id: Optional[int] = None):
     )
 
 
+def _avatar_key(file_name: str) -> str:
+    return f"avatars/{file_name}"
+
+
+def _document_key(file_name: str) -> str:
+    return f"documents/{file_name}"
+
+
+def _library_key(file_name: str) -> str:
+    return f"library/{file_name}"
+
+
+def _extract_file_name_from_url(url: str, prefixes: list[str]) -> Optional[str]:
+    for prefix in prefixes:
+        if url.startswith(prefix):
+            return url[len(prefix):]
+    return None
+
+
+def _serve_local_or_object(path: Path, object_key: str) -> Response:
+    if path.exists() and path.is_file():
+        return FileResponse(path)
+    item = object_storage.get_bytes(object_key)
+    if not item:
+        raise HTTPException(status_code=404, detail="File not found")
+    content, content_type = item
+    return Response(content=content, media_type=content_type or "application/octet-stream")
+
+
 def _is_admin_user(db: Session, user_id: Optional[int]) -> bool:
     if user_id is None:
         return False
@@ -254,7 +284,6 @@ async def _upload_profile_document(
         ext = ".pdf"
 
     filename = f"{user.id}_{doc_type}_{uuid4().hex}{ext}"
-    destination = DOCUMENTS_DIR / filename
 
     allowed_types = {
         "application/pdf",
@@ -270,7 +299,10 @@ async def _upload_profile_document(
     content = await file.read()
     if len(content) > settings.PROFILE_DOC_MAX_BYTES:
         raise HTTPException(status_code=400, detail=f"Document must be <= {settings.PROFILE_DOC_MAX_BYTES // (1024 * 1024)}MB")
-    destination.write_bytes(content)
+    object_storage.upload_bytes(_document_key(filename), content, file.content_type)
+    if not object_storage.enabled:
+        destination = DOCUMENTS_DIR / filename
+        destination.write_bytes(content)
 
     base_url = str(request.base_url).rstrip("/")
     new_url = f"{base_url}/files/documents/{filename}"
@@ -283,14 +315,12 @@ async def _upload_profile_document(
         "/uploads/documents/",
         "/files/documents/",
     ]
-    for old_prefix in old_prefixes:
-        if not old_url.startswith(old_prefix):
-            continue
-        old_name = old_url[len(old_prefix):]
+    old_name = _extract_file_name_from_url(old_url, old_prefixes)
+    if old_name:
+        object_storage.delete_object(_document_key(old_name))
         old_file = DOCUMENTS_DIR / old_name
         if old_file.exists() and old_file.is_file():
             old_file.unlink()
-        break
 
     db.commit()
     db.refresh(user)
@@ -456,13 +486,15 @@ async def upload_my_avatar(
         ext = ".jpg"
 
     filename = f"{uuid4().hex}{ext}"
-    destination = AVATARS_DIR / filename
 
     content = await file.read()
     if len(content) > settings.AVATAR_MAX_BYTES:
         raise HTTPException(status_code=400, detail=f"Image must be <= {settings.AVATAR_MAX_BYTES // (1024 * 1024)}MB")
 
-    destination.write_bytes(content)
+    object_storage.upload_bytes(_avatar_key(filename), content, file.content_type)
+    if not object_storage.enabled:
+        destination = AVATARS_DIR / filename
+        destination.write_bytes(content)
 
     old_avatar = current.avatar_url or ""
     base_url = str(request.base_url).rstrip("/")
@@ -474,14 +506,12 @@ async def upload_my_avatar(
         "/uploads/avatars/",
         "/avatars/",
     ]
-    for old_prefix in old_prefixes:
-        if not old_avatar.startswith(old_prefix):
-            continue
-        old_name = old_avatar[len(old_prefix):]
+    old_name = _extract_file_name_from_url(old_avatar, old_prefixes)
+    if old_name:
+        object_storage.delete_object(_avatar_key(old_name))
         old_file = AVATARS_DIR / old_name
         if old_file.exists() and old_file.is_file():
             old_file.unlink()
-        break
 
     db.commit()
     db.refresh(current)
@@ -633,7 +663,6 @@ async def upload_company_document(
 
     safe_cat = normalized_category.lower().replace(" ", "_")
     filename = f"{safe_cat}_{uuid4().hex}{ext}"
-    destination = LIBRARY_DIR / filename
     allowed_types = {
         "application/pdf",
         "application/msword",
@@ -652,7 +681,10 @@ async def upload_company_document(
     content = await file.read()
     if len(content) > settings.LIBRARY_DOC_MAX_BYTES:
         raise HTTPException(status_code=400, detail=f"Document must be <= {settings.LIBRARY_DOC_MAX_BYTES // (1024 * 1024)}MB")
-    destination.write_bytes(content)
+    object_storage.upload_bytes(_library_key(filename), content, file.content_type)
+    if not object_storage.enabled:
+        destination = LIBRARY_DIR / filename
+        destination.write_bytes(content)
 
     url = f"{str(request.base_url).rstrip('/')}/files/library/{filename}"
     doc = CompanyDocument(
@@ -684,6 +716,7 @@ def delete_company_document(
             file_name = doc.file_url.split(prefix, 1)[1]
             break
     if file_name:
+        object_storage.delete_object(_library_key(file_name))
         file_path = LIBRARY_DIR / file_name
         if file_path.exists() and file_path.is_file():
             file_path.unlink()

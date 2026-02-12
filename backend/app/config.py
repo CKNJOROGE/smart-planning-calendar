@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     PROFILE_DOC_MAX_BYTES: int = 10 * 1024 * 1024
     LIBRARY_DOC_MAX_BYTES: int = 20 * 1024 * 1024
 
+    # Optional S3-compatible object storage (Cloudflare R2, AWS S3, etc.)
+    R2_ENDPOINT: str = ""
+    R2_BUCKET: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_REGION: str = "auto"
+
     def list_from_csv(self, value: str) -> list[str]:
         return [x.strip() for x in (value or "").split(",") if x.strip()]
 
@@ -40,6 +47,15 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
+
+    @property
+    def r2_enabled(self) -> bool:
+        return bool(
+            self.R2_ENDPOINT
+            and self.R2_BUCKET
+            and self.R2_ACCESS_KEY_ID
+            and self.R2_SECRET_ACCESS_KEY
+        )
 
 
 settings = Settings()
