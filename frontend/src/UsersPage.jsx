@@ -69,7 +69,7 @@ export default function UsersPage() {
 
   if (!current) {
     return (
-      <div className="page-wrap">
+      <div className="page-wrap users-page">
         <div className="card" style={{ padding: 16 }}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>Users</div>
           <div className="muted">Loading...</div>
@@ -96,7 +96,7 @@ export default function UsersPage() {
 
   if (current.role !== "admin") {
     return (
-      <div className="page-wrap">
+      <div className="page-wrap users-page">
         <div className="card" style={{ padding: 16 }}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>Users</div>
           <div className="muted">Admins only.</div>
@@ -106,7 +106,7 @@ export default function UsersPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap users-page">
       <div className="card" style={{ padding: 16, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
           <div>

@@ -209,7 +209,7 @@ export default function ClientTaskManagerPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap client-task-page">
         <div className="card" style={{ marginBottom: 12 }}>
           <div style={{ fontWeight: 900, fontSize: 18 }}>Client Task Manager</div>
           <div className="muted">

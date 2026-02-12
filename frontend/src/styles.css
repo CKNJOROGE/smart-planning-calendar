@@ -790,6 +790,139 @@ textarea{ resize: vertical; min-height: 90px; }
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5));
 }
 
+/* Library / Client Task / Users / Approvals neumorphism (scoped) */
+.library-page,
+.client-task-page,
+.users-page,
+.approvals-page {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 10% 12%, rgba(248, 218, 253, 0.52), rgba(248, 218, 253, 0) 35%),
+    radial-gradient(circle at 92% 88%, rgba(187, 212, 14, 0.22), rgba(187, 212, 14, 0) 32%),
+    linear-gradient(145deg, #fdf2ff 0%, #f8dafd 48%, #f7e8fb 100%);
+}
+
+.library-page .card,
+.client-task-page .card,
+.users-page .card,
+.approvals-page .card {
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.54));
+  backdrop-filter: blur(10px);
+  box-shadow:
+    10px 10px 24px rgba(148, 163, 184, 0.18),
+    -8px -8px 18px rgba(255, 255, 255, 0.86),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.library-page input,
+.library-page select,
+.library-page textarea,
+.client-task-page input,
+.client-task-page select,
+.client-task-page textarea,
+.users-page input,
+.users-page select,
+.users-page textarea,
+.approvals-page input,
+.approvals-page select,
+.approvals-page textarea {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  box-shadow:
+    inset 3px 3px 6px rgba(148, 163, 184, 0.12),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.82);
+}
+
+.library-page .btn:not(.btn-primary):not(.btn-danger),
+.client-task-page .btn:not(.btn-primary):not(.btn-danger),
+.users-page .btn:not(.btn-primary):not(.btn-danger),
+.approvals-page .btn:not(.btn-primary):not(.btn-danger) {
+  background: #f8fbff;
+  box-shadow:
+    4px 4px 9px rgba(148, 163, 184, 0.2),
+    -3px -3px 6px rgba(255, 255, 255, 0.86);
+}
+
+.library-page .btn-primary,
+.client-task-page .btn-primary,
+.users-page .btn-primary,
+.approvals-page .btn-primary {
+  background: linear-gradient(135deg, #640277, #4c025b);
+  box-shadow:
+    6px 10px 18px rgba(100, 2, 119, 0.34),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.library-page .btn-danger,
+.client-task-page .btn-danger,
+.users-page .btn-danger,
+.approvals-page .btn-danger {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow:
+    6px 10px 18px rgba(185, 28, 28, 0.32),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.library-page .library-item,
+.users-page .table tr,
+.approvals-page .table tr,
+.client-task-page .table tr {
+  background: rgba(255, 255, 255, 0.55);
+}
+
+[data-theme="dark"] .library-page,
+[data-theme="dark"] .client-task-page,
+[data-theme="dark"] .users-page,
+[data-theme="dark"] .approvals-page {
+  background:
+    radial-gradient(circle at 10% 12%, rgba(100, 2, 119, 0.2), rgba(100, 2, 119, 0) 35%),
+    radial-gradient(circle at 92% 88%, rgba(187, 212, 14, 0.12), rgba(187, 212, 14, 0) 32%),
+    linear-gradient(145deg, #0f172a 0%, #111827 48%, #1f2937 100%);
+}
+
+[data-theme="dark"] .library-page .card,
+[data-theme="dark"] .client-task-page .card,
+[data-theme="dark"] .users-page .card,
+[data-theme="dark"] .approvals-page .card {
+  border-color: rgba(71, 85, 105, 0.82);
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.82), rgba(17, 24, 39, 0.72));
+  box-shadow:
+    10px 10px 24px rgba(2, 6, 23, 0.4),
+    inset 1px 1px 0 rgba(148, 163, 184, 0.1);
+}
+
+[data-theme="dark"] .library-page input,
+[data-theme="dark"] .library-page select,
+[data-theme="dark"] .library-page textarea,
+[data-theme="dark"] .client-task-page input,
+[data-theme="dark"] .client-task-page select,
+[data-theme="dark"] .client-task-page textarea,
+[data-theme="dark"] .users-page input,
+[data-theme="dark"] .users-page select,
+[data-theme="dark"] .users-page textarea,
+[data-theme="dark"] .approvals-page input,
+[data-theme="dark"] .approvals-page select,
+[data-theme="dark"] .approvals-page textarea {
+  background: rgba(15, 23, 42, 0.86);
+  border-color: rgba(71, 85, 105, 0.9);
+  box-shadow:
+    inset 3px 3px 7px rgba(2, 6, 23, 0.55),
+    inset -3px -3px 7px rgba(51, 65, 85, 0.4);
+}
+
+[data-theme="dark"] .library-page .btn:not(.btn-primary):not(.btn-danger),
+[data-theme="dark"] .client-task-page .btn:not(.btn-primary):not(.btn-danger),
+[data-theme="dark"] .users-page .btn:not(.btn-primary):not(.btn-danger),
+[data-theme="dark"] .approvals-page .btn:not(.btn-primary):not(.btn-danger) {
+  background: #0f172a;
+  box-shadow:
+    4px 4px 9px rgba(2, 6, 23, 0.5),
+    -3px -3px 6px rgba(30, 41, 59, 0.62);
+}
+
 @keyframes auth-fade-up {
   from {
     opacity: 0;

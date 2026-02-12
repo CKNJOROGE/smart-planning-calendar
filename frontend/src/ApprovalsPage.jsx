@@ -65,7 +65,7 @@ export default function ApprovalsPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap approvals-page">
       <div className="card" style={{ padding: 16, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <div>

@@ -88,7 +88,7 @@ export default function LibraryPage() {
   if (loading) return <div>Loading library...</div>;
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap library-page">
       <div className="card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <div>
