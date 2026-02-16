@@ -990,6 +990,7 @@ def get_dashboard_overview(
     _: User = Depends(get_current_user),
 ):
     today = date.today()
+    history_start = today - timedelta(days=14)
     upcoming_limit = today + timedelta(days=3)
 
     todays_activities = (
@@ -1003,6 +1004,22 @@ def get_dashboard_overview(
         .all()
     )
     for item in todays_activities:
+        _ = item.user
+
+    history_rows = (
+        db.query(DailyActivity)
+        .filter(
+            DailyActivity.activity_date < today,
+            DailyActivity.activity_date >= history_start,
+        )
+        .order_by(
+            DailyActivity.activity_date.desc(),
+            DailyActivity.created_at.desc(),
+            DailyActivity.id.desc(),
+        )
+        .all()
+    )
+    for item in history_rows:
         _ = item.user
 
     upcoming_rows = (
@@ -1037,6 +1054,7 @@ def get_dashboard_overview(
     return DashboardOverviewOut(
         today=today,
         todays_activities=todays_activities,
+        todo_history=history_rows,
         upcoming_subtasks=[_to_task_reminder(t) for t in upcoming_rows],
         due_subtasks=[_to_task_reminder(t) for t in due_rows],
     )

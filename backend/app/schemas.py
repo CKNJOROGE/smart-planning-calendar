@@ -320,5 +320,6 @@ class TaskReminderOut(BaseModel):
 class DashboardOverviewOut(BaseModel):
     today: date
     todays_activities: List[DailyActivityOut]
+    todo_history: List[DailyActivityOut]
     upcoming_subtasks: List[TaskReminderOut]
     due_subtasks: List[TaskReminderOut]

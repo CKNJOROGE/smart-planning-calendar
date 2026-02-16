@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState({
     today: "",
     todays_activities: [],
+    todo_history: [],
     upcoming_subtasks: [],
     due_subtasks: [],
   });
@@ -65,6 +66,49 @@ export default function DashboardPage() {
         return Number(new Date(b.created_at)) - Number(new Date(a.created_at));
       });
   }, [overview.todays_activities]);
+
+  const historyByDate = useMemo(() => {
+    const groupsByDate = new Map();
+    for (const item of overview.todo_history || []) {
+      const dayKey = item.activity_date || "unknown-date";
+      if (!groupsByDate.has(dayKey)) {
+        groupsByDate.set(dayKey, []);
+      }
+      groupsByDate.get(dayKey).push(item);
+    }
+
+    const dates = Array.from(groupsByDate.keys()).sort((a, b) => String(b).localeCompare(String(a)));
+    return dates.map((dayKey) => {
+      const rows = groupsByDate.get(dayKey) || [];
+      const posts = new Map();
+      for (const item of rows) {
+        const key = item.post_group_id || `legacy_${item.id}`;
+        if (!posts.has(key)) {
+          posts.set(key, {
+            key,
+            user: item.user,
+            user_id: item.user_id,
+            created_at: item.created_at,
+            items: [],
+          });
+        }
+        const post = posts.get(key);
+        if (new Date(item.created_at) > new Date(post.created_at)) {
+          post.created_at = item.created_at;
+        }
+        post.items.push(item);
+      }
+      return {
+        dayKey,
+        posts: Array.from(posts.values())
+          .map((post) => ({
+            ...post,
+            items: [...post.items].sort((a, b) => Number(a.id) - Number(b.id)),
+          }))
+          .sort((a, b) => Number(new Date(b.created_at)) - Number(new Date(a.created_at))),
+      };
+    });
+  }, [overview.todo_history]);
 
   async function loadOverview() {
     setBusy(true);
@@ -208,6 +252,48 @@ export default function DashboardPage() {
                           {item.activity}
                         </div>
                       </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="card dashboard-panel dashboard-today-panel">
+          <div className="dashboard-panel-head">
+            <div className="dashboard-panel-title">To-Do List History</div>
+          </div>
+          {!historyByDate.length ? (
+            <div className="muted">No historical to-do lists yet.</div>
+          ) : (
+            <div className="dashboard-feed" role="list" aria-label="To-Do List History">
+              {historyByDate.map((day) => (
+                <div key={day.dayKey}>
+                  <div className="dashboard-feed-date" style={{ marginBottom: 8, fontWeight: 800 }}>
+                    {formatDate(day.dayKey)}
+                  </div>
+                  <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+                    {day.posts.map((post) => (
+                      <div key={post.key} className="dashboard-feed-item" role="listitem">
+                        <div className="dashboard-feed-author-row">
+                          <div className="dashboard-feed-author">{post.user?.name || `User #${post.user_id}`}</div>
+                          <div className="dashboard-feed-date">{formatDate(post.created_at)}</div>
+                        </div>
+                        <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                          {post.items.map((item) => (
+                            <label key={item.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                              <input type="checkbox" checked={!!item.completed} readOnly disabled style={{ marginTop: 4 }} />
+                              <div
+                                className="dashboard-feed-text"
+                                style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
+                              >
+                                {item.activity}
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
