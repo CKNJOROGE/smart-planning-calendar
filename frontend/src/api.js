@@ -344,6 +344,16 @@ export function updateTodayActivity(activityId, completed) {
   });
 }
 
+export function listTodoHistory(filters = {}) {
+  const qs = new URLSearchParams();
+  if (filters.activity_date) qs.set("activity_date", filters.activity_date);
+  if (filters.user_id) qs.set("user_id", String(filters.user_id));
+  if (filters.user_query) qs.set("user_query", String(filters.user_query));
+  if (filters.days) qs.set("days", String(filters.days));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/dashboard/activities/history${suffix}`);
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);

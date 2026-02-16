@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { createTodayActivity, listDashboardOverview, updateTodayActivity } from "./api";
+import { createTodayActivity, listDashboardOverview, listTodoHistory, me, updateTodayActivity } from "./api";
 import { useToast } from "./ToastProvider";
 
 function formatDate(v) {
@@ -19,44 +19,65 @@ function dueBadgeClass(daysUntilDue) {
   return "ok";
 }
 
+function groupActivitiesByPost(items) {
+  const groups = new Map();
+  for (const item of items || []) {
+    const key = item.post_group_id || `legacy_${item.id}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        user: item.user,
+        user_id: item.user_id,
+        created_at: item.created_at,
+        items: [],
+      });
+    }
+    const group = groups.get(key);
+    if (new Date(item.created_at) > new Date(group.created_at)) {
+      group.created_at = item.created_at;
+    }
+    group.items.push(item);
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    items: [...group.items].sort((a, b) => Number(a.id) - Number(b.id)),
+  }));
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 export default function DashboardPage() {
   const { showToast } = useToast();
+  const [currentUser, setCurrentUser] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [newActivity, setNewActivity] = useState("");
   const [togglingIds, setTogglingIds] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyFilters, setHistoryFilters] = useState({ user_query: "", activity_date: "" });
+  const [historyDraft, setHistoryDraft] = useState({ user_query: "", activity_date: "" });
   const [overview, setOverview] = useState({
     today: "",
     todays_activities: [],
-    todo_history: [],
     upcoming_subtasks: [],
     due_subtasks: [],
   });
 
-  const groupedTodayPosts = useMemo(() => {
-    const groups = new Map();
-    for (const item of overview.todays_activities || []) {
-      const key = item.post_group_id || `legacy_${item.id}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          key,
-          user: item.user,
-          user_id: item.user_id,
-          created_at: item.created_at,
-          items: [],
-        });
-      }
-      const group = groups.get(key);
-      if (new Date(item.created_at) > new Date(group.created_at)) {
-        group.created_at = item.created_at;
-      }
-      group.items.push(item);
-    }
+  const isAdmin = currentUser?.role === "admin";
 
-    return Array.from(groups.values())
+  const groupedTodayPosts = useMemo(
+    () => groupActivitiesByPost(overview.todays_activities)
       .map((group) => ({
         ...group,
-        items: [...group.items].sort((a, b) => Number(a.id) - Number(b.id)),
         all_completed: group.items.length > 0 && group.items.every((x) => !!x.completed),
       }))
       .sort((a, b) => {
@@ -64,12 +85,13 @@ export default function DashboardPage() {
           return Number(!!a.all_completed) - Number(!!b.all_completed);
         }
         return Number(new Date(b.created_at)) - Number(new Date(a.created_at));
-      });
-  }, [overview.todays_activities]);
+      }),
+    [overview.todays_activities]
+  );
 
   const historyByDate = useMemo(() => {
     const groupsByDate = new Map();
-    for (const item of overview.todo_history || []) {
+    for (const item of historyRows || []) {
       const dayKey = item.activity_date || "unknown-date";
       if (!groupsByDate.has(dayKey)) {
         groupsByDate.set(dayKey, []);
@@ -80,35 +102,16 @@ export default function DashboardPage() {
     const dates = Array.from(groupsByDate.keys()).sort((a, b) => String(b).localeCompare(String(a)));
     return dates.map((dayKey) => {
       const rows = groupsByDate.get(dayKey) || [];
-      const posts = new Map();
-      for (const item of rows) {
-        const key = item.post_group_id || `legacy_${item.id}`;
-        if (!posts.has(key)) {
-          posts.set(key, {
-            key,
-            user: item.user,
-            user_id: item.user_id,
-            created_at: item.created_at,
-            items: [],
-          });
-        }
-        const post = posts.get(key);
-        if (new Date(item.created_at) > new Date(post.created_at)) {
-          post.created_at = item.created_at;
-        }
-        post.items.push(item);
-      }
       return {
         dayKey,
-        posts: Array.from(posts.values())
+        posts: groupActivitiesByPost(rows)
           .map((post) => ({
             ...post,
-            items: [...post.items].sort((a, b) => Number(a.id) - Number(b.id)),
           }))
           .sort((a, b) => Number(new Date(b.created_at)) - Number(new Date(a.created_at))),
       };
     });
-  }, [overview.todo_history]);
+  }, [historyRows]);
 
   async function loadOverview() {
     setBusy(true);
@@ -123,9 +126,101 @@ export default function DashboardPage() {
     }
   }
 
+  async function loadHistory() {
+    if (!currentUser) return;
+    setHistoryLoading(true);
+    setErr("");
+    try {
+      const filters = { days: 90 };
+      if (historyFilters.activity_date) filters.activity_date = historyFilters.activity_date;
+      if (isAdmin && historyFilters.user_query.trim()) filters.user_query = historyFilters.user_query.trim();
+      const rows = await listTodoHistory(filters);
+      setHistoryRows(rows || []);
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  function exportHistoryPdf() {
+    if (!historyByDate.length) {
+      showToast("No history to export", "error");
+      return;
+    }
+
+    const filtersLine = isAdmin
+      ? `Filters: user="${historyFilters.user_query || "all"}", date="${historyFilters.activity_date || "all"}"`
+      : `Filters: date="${historyFilters.activity_date || "all"}"`;
+
+    const bodyHtml = historyByDate.map((day) => `
+      <section style="margin:0 0 16px 0;">
+        <h3 style="margin:0 0 8px 0;font-size:14px;">${escapeHtml(formatDate(day.dayKey))}</h3>
+        ${day.posts.map((post) => `
+          <div style="border:1px solid #ddd;border-radius:8px;padding:10px;margin:0 0 8px 0;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:#444;margin-bottom:6px;">
+              <strong>${escapeHtml(post.user?.name || `User #${post.user_id}`)}</strong>
+              <span>${escapeHtml(formatDate(post.created_at))}</span>
+            </div>
+            <ul style="margin:0;padding-left:18px;">
+              ${post.items.map((item) => `
+                <li style="margin:0 0 4px 0;text-decoration:${item.completed ? "line-through" : "none"};">
+                  [${item.completed ? "x" : " "}] ${escapeHtml(item.activity)}
+                </li>
+              `).join("")}
+            </ul>
+          </div>
+        `).join("")}
+      </section>
+    `).join("");
+
+    const popup = window.open("", "_blank", "noopener,noreferrer");
+    if (!popup) {
+      showToast("Popup blocked. Allow popups to export PDF.", "error");
+      return;
+    }
+
+    popup.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>To-Do List History</title>
+        </head>
+        <body style="font-family:Arial,sans-serif;padding:20px;color:#111;">
+          <h1 style="margin:0 0 8px 0;font-size:20px;">To-Do List History</h1>
+          <div style="margin:0 0 16px 0;font-size:12px;color:#555;">
+            Exported on ${escapeHtml(new Date().toLocaleString())}<br/>
+            ${escapeHtml(filtersLine)}
+          </div>
+          ${bodyHtml}
+        </body>
+      </html>
+    `);
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const u = await me();
+        setCurrentUser(u);
+      } catch (e) {
+        setErr(String(e.message || e));
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     loadOverview();
   }, []);
+
+  useEffect(() => {
+    loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role, historyFilters.user_query, historyFilters.activity_date]);
 
   async function handlePostActivity(e) {
     e.preventDefault();
@@ -264,8 +359,58 @@ export default function DashboardPage() {
           <div className="card dashboard-panel">
             <div className="dashboard-panel-head">
               <div className="dashboard-panel-title">To-Do List History</div>
+              {isAdmin && (
+                <button className="btn" type="button" onClick={exportHistoryPdf} disabled={!historyByDate.length}>
+                  Export as PDF
+                </button>
+              )}
             </div>
-            {!historyByDate.length ? (
+            {isAdmin && (
+              <div className="row" style={{ marginBottom: 10 }}>
+                <div className="field" style={{ flex: "1 1 240px", marginBottom: 0 }}>
+                  <label>Search User</label>
+                  <input
+                    type="text"
+                    value={historyDraft.user_query}
+                    onChange={(e) => setHistoryDraft((prev) => ({ ...prev, user_query: e.target.value }))}
+                    placeholder="Name or email"
+                  />
+                </div>
+                <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    value={historyDraft.activity_date}
+                    onChange={(e) => setHistoryDraft((prev) => ({ ...prev, activity_date: e.target.value }))}
+                  />
+                </div>
+                <div style={{ alignSelf: "end", display: "flex", gap: 8 }}>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => setHistoryFilters({ ...historyDraft })}
+                    disabled={historyLoading}
+                  >
+                    Search
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                      const reset = { user_query: "", activity_date: "" };
+                      setHistoryDraft(reset);
+                      setHistoryFilters(reset);
+                    }}
+                    disabled={historyLoading}
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+            )}
+            {historyLoading ? (
+              <div className="muted">Loading history...</div>
+            ) : !historyByDate.length ? (
               <div className="muted">No historical to-do lists yet.</div>
             ) : (
               <div className="dashboard-feed" role="list" aria-label="To-Do List History">

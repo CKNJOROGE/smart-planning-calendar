@@ -1119,6 +1119,54 @@ def update_todays_activity(
     return row
 
 
+@app.get("/dashboard/activities/history", response_model=List[DailyActivityOut])
+def list_todo_history(
+    activity_date: Optional[date] = None,
+    user_id: Optional[int] = None,
+    user_query: Optional[str] = None,
+    days: int = Query(default=30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    today = date.today()
+    q = (
+        db.query(DailyActivity)
+        .join(User, User.id == DailyActivity.user_id)
+        .filter(DailyActivity.activity_date < today)
+    )
+
+    if activity_date is not None:
+        q = q.filter(DailyActivity.activity_date == activity_date)
+    else:
+        history_start = today - timedelta(days=days)
+        q = q.filter(DailyActivity.activity_date >= history_start)
+
+    if current.role == "admin":
+        if user_id is not None:
+            q = q.filter(DailyActivity.user_id == user_id)
+        if (user_query or "").strip():
+            term = f"%{(user_query or '').strip()}%"
+            q = q.filter(User.name.ilike(term) | User.email.ilike(term))
+    else:
+        if user_id is not None and user_id != current.id:
+            raise HTTPException(status_code=403, detail="user_id filter is admin only")
+        if (user_query or "").strip():
+            raise HTTPException(status_code=403, detail="user_query filter is admin only")
+        q = q.filter(DailyActivity.user_id == current.id)
+
+    rows = (
+        q.order_by(
+            DailyActivity.activity_date.desc(),
+            DailyActivity.created_at.desc(),
+            DailyActivity.id.desc(),
+        )
+        .all()
+    )
+    for item in rows:
+        _ = item.user
+    return rows
+
+
 # -------------------------
 # Leave balance
 # -------------------------
