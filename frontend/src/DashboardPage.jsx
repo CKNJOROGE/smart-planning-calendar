@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createTodayActivity, listDashboardOverview, updateTodayActivity } from "./api";
 import { useToast } from "./ToastProvider";
 
@@ -31,6 +31,40 @@ export default function DashboardPage() {
     upcoming_subtasks: [],
     due_subtasks: [],
   });
+
+  const groupedTodayPosts = useMemo(() => {
+    const groups = new Map();
+    for (const item of overview.todays_activities || []) {
+      const key = item.post_group_id || `legacy_${item.id}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          user: item.user,
+          user_id: item.user_id,
+          created_at: item.created_at,
+          items: [],
+        });
+      }
+      const group = groups.get(key);
+      if (new Date(item.created_at) > new Date(group.created_at)) {
+        group.created_at = item.created_at;
+      }
+      group.items.push(item);
+    }
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        items: [...group.items].sort((a, b) => Number(a.id) - Number(b.id)),
+        all_completed: group.items.length > 0 && group.items.every((x) => !!x.completed),
+      }))
+      .sort((a, b) => {
+        if (Number(!!a.all_completed) !== Number(!!b.all_completed)) {
+          return Number(!!a.all_completed) - Number(!!b.all_completed);
+        }
+        return Number(new Date(b.created_at)) - Number(new Date(a.created_at));
+      });
+  }, [overview.todays_activities]);
 
   async function loadOverview() {
     setBusy(true);
@@ -76,13 +110,7 @@ export default function DashboardPage() {
       setOverview((prev) => ({
         ...prev,
         todays_activities: prev.todays_activities
-          .map((row) => (Number(row.id) === id ? { ...row, ...updated } : row))
-          .sort((a, b) => {
-            if (Number(!!a.completed) !== Number(!!b.completed)) {
-              return Number(!!a.completed) - Number(!!b.completed);
-            }
-            return Number(new Date(b.created_at)) - Number(new Date(a.created_at));
-          }),
+          .map((row) => (Number(row.id) === id ? { ...row, ...updated } : row)),
       }));
     } catch (e) {
       setErr(String(e.message || e));
@@ -153,34 +181,36 @@ export default function DashboardPage() {
           <div className="dashboard-panel-head">
             <div className="dashboard-panel-title">Today&apos;s To-Do List</div>
           </div>
-          {!overview.todays_activities.length ? (
+          {!groupedTodayPosts.length ? (
             <div className="muted">No to-do items posted yet today.</div>
           ) : (
             <div className="dashboard-feed" role="list" aria-label="Today's To-Do List">
-              {overview.todays_activities.map((item) => (
-                <label key={item.id} className="dashboard-feed-item" role="listitem">
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    <input
-                      type="checkbox"
-                      checked={!!item.completed}
-                      onChange={() => handleToggleActivity(item)}
-                      disabled={togglingIds.includes(Number(item.id))}
-                      style={{ marginTop: 4 }}
-                    />
-                    <div style={{ flex: 1 }}>
-                      <div className="dashboard-feed-author-row">
-                        <div className="dashboard-feed-author">{item.user?.name || `User #${item.user_id}`}</div>
-                        <div className="dashboard-feed-date">{formatDate(item.created_at)}</div>
-                      </div>
-                      <div
-                        className="dashboard-feed-text"
-                        style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
-                      >
-                        {item.activity}
-                      </div>
-                    </div>
+              {groupedTodayPosts.map((post) => (
+                <div key={post.key} className="dashboard-feed-item" role="listitem">
+                  <div className="dashboard-feed-author-row">
+                    <div className="dashboard-feed-author">{post.user?.name || `User #${post.user_id}`}</div>
+                    <div className="dashboard-feed-date">{formatDate(post.created_at)}</div>
                   </div>
-                </label>
+                  <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                    {post.items.map((item) => (
+                      <label key={item.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                        <input
+                          type="checkbox"
+                          checked={!!item.completed}
+                          onChange={() => handleToggleActivity(item)}
+                          disabled={togglingIds.includes(Number(item.id))}
+                          style={{ marginTop: 4 }}
+                        />
+                        <div
+                          className="dashboard-feed-text"
+                          style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
+                        >
+                          {item.activity}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}

@@ -136,6 +136,7 @@ class DailyActivity(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    post_group_id = Column(String(40), nullable=True, index=True)
     activity_date = Column(Date, nullable=False, index=True)
     activity = Column(Text, nullable=False)
     completed = Column(Boolean, nullable=False, default=False)

@@ -290,6 +290,7 @@ class DailyActivityUpdate(BaseModel):
 class DailyActivityOut(BaseModel):
     id: int
     user_id: int
+    post_group_id: Optional[str] = None
     activity_date: date
     activity: str
     completed: bool

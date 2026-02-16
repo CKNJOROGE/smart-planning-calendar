@@ -1060,9 +1060,11 @@ def create_todays_activity(
             raise HTTPException(status_code=400, detail="each activity must be <= 1000 characters")
 
     created: list[DailyActivity] = []
+    group_id = uuid4().hex
     for line in entries:
         row = DailyActivity(
             user_id=current.id,
+            post_group_id=group_id,
             activity_date=date.today(),
             activity=line,
             completed=False,
