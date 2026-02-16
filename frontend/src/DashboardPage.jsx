@@ -105,7 +105,7 @@ export default function DashboardPage() {
 
       <div className="card dashboard-panel dashboard-compose-panel">
         <div className="dashboard-panel-head">
-          <div className="dashboard-panel-title">Post Today&apos;s Activities</div>
+          <div className="dashboard-panel-title">Post Today&apos;s To-Do List</div>
         </div>
         <form onSubmit={handlePostActivity}>
           <div className="field">
@@ -125,7 +125,7 @@ export default function DashboardPage() {
       <div className="dashboard-layout">
         <div className="card dashboard-panel dashboard-today-panel">
           <div className="dashboard-panel-head">
-            <div className="dashboard-panel-title">Today&apos;s Activities</div>
+            <div className="dashboard-panel-title">Today&apos;s To-Do List</div>
           </div>
           {!overview.todays_activities.length ? (
             <div className="muted">No activities posted yet today.</div>
@@ -147,14 +147,14 @@ export default function DashboardPage() {
         <div className="dashboard-right-stack">
           <div className="card dashboard-panel">
             <div className="dashboard-panel-head">
-              <div className="dashboard-panel-title">Upcoming Activities</div>
+              <div className="dashboard-panel-title">Upcoming Tasks</div>
             </div>
             {renderTaskList(overview.upcoming_subtasks, "No upcoming subtasks in the next 3 days.")}
           </div>
 
           <div className="card dashboard-panel">
             <div className="dashboard-panel-head">
-              <div className="dashboard-panel-title">Due Activities</div>
+              <div className="dashboard-panel-title">Due Tasks</div>
             </div>
             {renderTaskList(overview.due_subtasks, "No due or overdue subtasks pending completion.")}
           </div>
