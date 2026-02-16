@@ -174,12 +174,13 @@ export default function DashboardPage() {
       </section>
     `).join("");
 
-    const popup = window.open("", "_blank", "noopener,noreferrer");
+    const popup = window.open("", "_blank");
     if (!popup) {
       showToast("Popup blocked. Allow popups to export PDF.", "error");
       return;
     }
 
+    popup.document.open();
     popup.document.write(`
       <!doctype html>
       <html>
@@ -198,8 +199,18 @@ export default function DashboardPage() {
       </html>
     `);
     popup.document.close();
-    popup.focus();
-    popup.print();
+    let printed = false;
+    const triggerPrint = () => {
+      if (printed || popup.closed) return;
+      printed = true;
+      popup.focus();
+      // Give the browser a brief render frame before triggering print.
+      setTimeout(() => {
+        if (!popup.closed) popup.print();
+      }, 150);
+    };
+    popup.onload = triggerPrint;
+    setTimeout(triggerPrint, 400);
   }
 
   useEffect(() => {
