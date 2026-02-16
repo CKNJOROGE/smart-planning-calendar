@@ -221,85 +221,87 @@ export default function DashboardPage() {
       </div>
 
       <div className="dashboard-layout">
-        <div className="card dashboard-panel dashboard-today-panel">
-          <div className="dashboard-panel-head">
-            <div className="dashboard-panel-title">Today&apos;s To-Do List</div>
-          </div>
-          {!groupedTodayPosts.length ? (
-            <div className="muted">No to-do items posted yet today.</div>
-          ) : (
-            <div className="dashboard-feed" role="list" aria-label="Today's To-Do List">
-              {groupedTodayPosts.map((post) => (
-                <div key={post.key} className="dashboard-feed-item" role="listitem">
-                  <div className="dashboard-feed-author-row">
-                    <div className="dashboard-feed-author">{post.user?.name || `User #${post.user_id}`}</div>
-                    <div className="dashboard-feed-date">{formatDate(post.created_at)}</div>
-                  </div>
-                  <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-                    {post.items.map((item) => (
-                      <label key={item.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                        <input
-                          type="checkbox"
-                          checked={!!item.completed}
-                          onChange={() => handleToggleActivity(item)}
-                          disabled={togglingIds.includes(Number(item.id))}
-                          style={{ marginTop: 4 }}
-                        />
-                        <div
-                          className="dashboard-feed-text"
-                          style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
-                        >
-                          {item.activity}
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ))}
+        <div className="dashboard-left-stack">
+          <div className="card dashboard-panel dashboard-today-panel">
+            <div className="dashboard-panel-head">
+              <div className="dashboard-panel-title">Today&apos;s To-Do List</div>
             </div>
-          )}
-        </div>
+            {!groupedTodayPosts.length ? (
+              <div className="muted">No to-do items posted yet today.</div>
+            ) : (
+              <div className="dashboard-feed" role="list" aria-label="Today's To-Do List">
+                {groupedTodayPosts.map((post) => (
+                  <div key={post.key} className="dashboard-feed-item" role="listitem">
+                    <div className="dashboard-feed-author-row">
+                      <div className="dashboard-feed-author">{post.user?.name || `User #${post.user_id}`}</div>
+                      <div className="dashboard-feed-date">{formatDate(post.created_at)}</div>
+                    </div>
+                    <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                      {post.items.map((item) => (
+                        <label key={item.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                          <input
+                            type="checkbox"
+                            checked={!!item.completed}
+                            onChange={() => handleToggleActivity(item)}
+                            disabled={togglingIds.includes(Number(item.id))}
+                            style={{ marginTop: 4 }}
+                          />
+                          <div
+                            className="dashboard-feed-text"
+                            style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
+                          >
+                            {item.activity}
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-        <div className="card dashboard-panel dashboard-today-panel">
-          <div className="dashboard-panel-head">
-            <div className="dashboard-panel-title">To-Do List History</div>
-          </div>
-          {!historyByDate.length ? (
-            <div className="muted">No historical to-do lists yet.</div>
-          ) : (
-            <div className="dashboard-feed" role="list" aria-label="To-Do List History">
-              {historyByDate.map((day) => (
-                <div key={day.dayKey}>
-                  <div className="dashboard-feed-date" style={{ marginBottom: 8, fontWeight: 800 }}>
-                    {formatDate(day.dayKey)}
-                  </div>
-                  <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
-                    {day.posts.map((post) => (
-                      <div key={post.key} className="dashboard-feed-item" role="listitem">
-                        <div className="dashboard-feed-author-row">
-                          <div className="dashboard-feed-author">{post.user?.name || `User #${post.user_id}`}</div>
-                          <div className="dashboard-feed-date">{formatDate(post.created_at)}</div>
-                        </div>
-                        <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-                          {post.items.map((item) => (
-                            <label key={item.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                              <input type="checkbox" checked={!!item.completed} readOnly disabled style={{ marginTop: 4 }} />
-                              <div
-                                className="dashboard-feed-text"
-                                style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
-                              >
-                                {item.activity}
-                              </div>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
+          <div className="card dashboard-panel">
+            <div className="dashboard-panel-head">
+              <div className="dashboard-panel-title">To-Do List History</div>
             </div>
-          )}
+            {!historyByDate.length ? (
+              <div className="muted">No historical to-do lists yet.</div>
+            ) : (
+              <div className="dashboard-feed" role="list" aria-label="To-Do List History">
+                {historyByDate.map((day) => (
+                  <div key={day.dayKey}>
+                    <div className="dashboard-feed-date" style={{ marginBottom: 8, fontWeight: 800 }}>
+                      {formatDate(day.dayKey)}
+                    </div>
+                    <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+                      {day.posts.map((post) => (
+                        <div key={post.key} className="dashboard-feed-item" role="listitem">
+                          <div className="dashboard-feed-author-row">
+                            <div className="dashboard-feed-author">{post.user?.name || `User #${post.user_id}`}</div>
+                            <div className="dashboard-feed-date">{formatDate(post.created_at)}</div>
+                          </div>
+                          <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                            {post.items.map((item) => (
+                              <label key={item.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                                <input type="checkbox" checked={!!item.completed} readOnly disabled style={{ marginTop: 4 }} />
+                                <div
+                                  className="dashboard-feed-text"
+                                  style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
+                                >
+                                  {item.activity}
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="dashboard-right-stack">
