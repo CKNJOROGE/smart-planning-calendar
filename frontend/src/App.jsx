@@ -45,14 +45,14 @@ function Shell({ onLogout }) {
             </button>
           </div>
           <nav className="sidebar-nav">
+            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/profile">
+              <span className="sidebar-link-text">My Profile</span>
+            </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/dashboard">
               <span className="sidebar-link-text">Dashboard</span>
             </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/" end>
               <span className="sidebar-link-text">Calendar</span>
-            </NavLink>
-            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/profile">
-              <span className="sidebar-link-text">My Profile</span>
             </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/library">
               <span className="sidebar-link-text">Library</span>
