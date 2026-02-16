@@ -37,6 +37,7 @@ from .schemas import (
     ClientTaskUpdate,
     ClientTaskOut,
     DailyActivityCreate,
+    DailyActivityUpdate,
     DailyActivityOut,
     TaskReminderOut,
     DashboardOverviewOut,
@@ -994,7 +995,11 @@ def get_dashboard_overview(
     todays_activities = (
         db.query(DailyActivity)
         .filter(DailyActivity.activity_date == today)
-        .order_by(DailyActivity.created_at.desc(), DailyActivity.id.desc())
+        .order_by(
+            DailyActivity.completed.asc(),
+            DailyActivity.created_at.desc(),
+            DailyActivity.id.desc(),
+        )
         .all()
     )
     for item in todays_activities:
@@ -1037,24 +1042,57 @@ def get_dashboard_overview(
     )
 
 
-@app.post("/dashboard/activities/today", response_model=DailyActivityOut)
+@app.post("/dashboard/activities/today", response_model=List[DailyActivityOut])
 def create_todays_activity(
     payload: DailyActivityCreate,
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    text = (payload.activity or "").strip()
-    if not text:
-        raise HTTPException(status_code=400, detail="activity is required")
-    if len(text) > 1000:
-        raise HTTPException(status_code=400, detail="activity must be <= 1000 characters")
+    raw_text = (payload.activity or "").replace("\r\n", "\n")
+    entries = [(line or "").strip() for line in raw_text.split("\n")]
+    entries = [line for line in entries if line]
+    if not entries:
+        raise HTTPException(status_code=400, detail="at least one activity is required")
+    if len(entries) > 50:
+        raise HTTPException(status_code=400, detail="maximum 50 activities per post")
+    for line in entries:
+        if len(line) > 1000:
+            raise HTTPException(status_code=400, detail="each activity must be <= 1000 characters")
 
-    row = DailyActivity(
-        user_id=current.id,
-        activity_date=date.today(),
-        activity=text,
-    )
-    db.add(row)
+    created: list[DailyActivity] = []
+    for line in entries:
+        row = DailyActivity(
+            user_id=current.id,
+            activity_date=date.today(),
+            activity=line,
+            completed=False,
+            completed_at=None,
+        )
+        db.add(row)
+        created.append(row)
+
+    db.commit()
+    for row in created:
+        db.refresh(row)
+        _ = row.user
+    return created
+
+
+@app.patch("/dashboard/activities/{activity_id}", response_model=DailyActivityOut)
+def update_todays_activity(
+    activity_id: int,
+    payload: DailyActivityUpdate,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    row = db.query(DailyActivity).filter(DailyActivity.id == activity_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    if current.role != "admin" and row.user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    row.completed = bool(payload.completed)
+    row.completed_at = datetime.utcnow() if row.completed else None
     db.commit()
     db.refresh(row)
     _ = row.user

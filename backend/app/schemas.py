@@ -283,11 +283,17 @@ class DailyActivityCreate(BaseModel):
     activity: str
 
 
+class DailyActivityUpdate(BaseModel):
+    completed: bool
+
+
 class DailyActivityOut(BaseModel):
     id: int
     user_id: int
     activity_date: date
     activity: str
+    completed: bool
+    completed_at: Optional[datetime] = None
     created_at: datetime
     user: UserOut
 

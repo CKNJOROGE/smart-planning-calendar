@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { createTodayActivity, listDashboardOverview } from "./api";
+import { createTodayActivity, listDashboardOverview, updateTodayActivity } from "./api";
 import { useToast } from "./ToastProvider";
 
 function formatDate(v) {
@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [newActivity, setNewActivity] = useState("");
+  const [togglingIds, setTogglingIds] = useState([]);
   const [overview, setOverview] = useState({
     today: "",
     todays_activities: [],
@@ -52,16 +53,41 @@ export default function DashboardPage() {
     e.preventDefault();
     const text = (newActivity || "").trim();
     if (!text) {
-      setErr("Please enter your activity.");
+      setErr("Please enter at least one to-do item.");
       return;
     }
     try {
       await createTodayActivity(text);
       setNewActivity("");
       await loadOverview();
-      showToast("Today's activity posted", "success");
+      showToast("To-do list posted", "success");
     } catch (e2) {
       setErr(String(e2.message || e2));
+    }
+  }
+
+  async function handleToggleActivity(item) {
+    const id = Number(item.id);
+    if (!id || togglingIds.includes(id)) return;
+    setErr("");
+    setTogglingIds((prev) => [...prev, id]);
+    try {
+      const updated = await updateTodayActivity(id, !item.completed);
+      setOverview((prev) => ({
+        ...prev,
+        todays_activities: prev.todays_activities
+          .map((row) => (Number(row.id) === id ? { ...row, ...updated } : row))
+          .sort((a, b) => {
+            if (Number(!!a.completed) !== Number(!!b.completed)) {
+              return Number(!!a.completed) - Number(!!b.completed);
+            }
+            return Number(new Date(b.created_at)) - Number(new Date(a.created_at));
+          }),
+      }));
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      setTogglingIds((prev) => prev.filter((x) => x !== id));
     }
   }
 
@@ -112,13 +138,13 @@ export default function DashboardPage() {
             <textarea
               value={newActivity}
               onChange={(e) => setNewActivity(e.target.value)}
-              placeholder="Write today's activities..."
+              placeholder="Write one to-do item per line..."
               maxLength={1000}
               className="dashboard-activity-input"
             />
             <div className="helper">{newActivity.length}/1000</div>
           </div>
-          <button className="btn btn-primary" type="submit">Post Activity</button>
+          <button className="btn btn-primary" type="submit">Post To-Do List</button>
         </form>
       </div>
 
@@ -128,17 +154,33 @@ export default function DashboardPage() {
             <div className="dashboard-panel-title">Today&apos;s To-Do List</div>
           </div>
           {!overview.todays_activities.length ? (
-            <div className="muted">No activities posted yet today.</div>
+            <div className="muted">No to-do items posted yet today.</div>
           ) : (
-            <div className="dashboard-feed">
+            <div className="dashboard-feed" role="list" aria-label="Today's To-Do List">
               {overview.todays_activities.map((item) => (
-                <div key={item.id} className="dashboard-feed-item">
-                  <div className="dashboard-feed-author-row">
-                    <div className="dashboard-feed-author">{item.user?.name || `User #${item.user_id}`}</div>
-                    <div className="dashboard-feed-date">{formatDate(item.created_at)}</div>
+                <label key={item.id} className="dashboard-feed-item" role="listitem">
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <input
+                      type="checkbox"
+                      checked={!!item.completed}
+                      onChange={() => handleToggleActivity(item)}
+                      disabled={togglingIds.includes(Number(item.id))}
+                      style={{ marginTop: 4 }}
+                    />
+                    <div style={{ flex: 1 }}>
+                      <div className="dashboard-feed-author-row">
+                        <div className="dashboard-feed-author">{item.user?.name || `User #${item.user_id}`}</div>
+                        <div className="dashboard-feed-date">{formatDate(item.created_at)}</div>
+                      </div>
+                      <div
+                        className="dashboard-feed-text"
+                        style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
+                      >
+                        {item.activity}
+                      </div>
+                    </div>
                   </div>
-                  <div className="dashboard-feed-text">{item.activity}</div>
-                </div>
+                </label>
               ))}
             </div>
           )}

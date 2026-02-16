@@ -138,6 +138,8 @@ class DailyActivity(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     activity_date = Column(Date, nullable=False, index=True)
     activity = Column(Text, nullable=False)
+    completed = Column(Boolean, nullable=False, default=False)
+    completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="daily_activities", foreign_keys=[user_id])

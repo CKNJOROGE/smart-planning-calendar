@@ -337,6 +337,13 @@ export function createTodayActivity(activity) {
   });
 }
 
+export function updateTodayActivity(activityId, completed) {
+  return request(`/dashboard/activities/${activityId}`, {
+    method: "PATCH",
+    body: { completed: !!completed },
+  });
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);
