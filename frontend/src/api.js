@@ -346,7 +346,8 @@ export function updateTodayActivity(activityId, completed) {
 
 export function listTodoHistory(filters = {}) {
   const qs = new URLSearchParams();
-  if (filters.activity_date) qs.set("activity_date", filters.activity_date);
+  if (filters.start_date) qs.set("start_date", filters.start_date);
+  if (filters.end_date) qs.set("end_date", filters.end_date);
   if (filters.user_id) qs.set("user_id", String(filters.user_id));
   if (filters.user_query) qs.set("user_query", String(filters.user_query));
   if (filters.days) qs.set("days", String(filters.days));

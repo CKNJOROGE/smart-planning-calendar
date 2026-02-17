@@ -63,8 +63,8 @@ export default function DashboardPage() {
   const [togglingIds, setTogglingIds] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyRows, setHistoryRows] = useState([]);
-  const [historyFilters, setHistoryFilters] = useState({ user_query: "", activity_date: "" });
-  const [historyDraft, setHistoryDraft] = useState({ user_query: "", activity_date: "" });
+  const [historyFilters, setHistoryFilters] = useState({ user_query: "", start_date: "", end_date: "" });
+  const [historyDraft, setHistoryDraft] = useState({ user_query: "", start_date: "", end_date: "" });
   const [overview, setOverview] = useState({
     today: "",
     todays_activities: [],
@@ -156,7 +156,8 @@ export default function DashboardPage() {
     setErr("");
     try {
       const filters = { days: 90 };
-      if (historyFilters.activity_date) filters.activity_date = historyFilters.activity_date;
+      if (historyFilters.start_date) filters.start_date = historyFilters.start_date;
+      if (historyFilters.end_date) filters.end_date = historyFilters.end_date;
       if (isAdmin && historyFilters.user_query.trim()) filters.user_query = historyFilters.user_query.trim();
       const rows = await listTodoHistory(filters);
       setHistoryRows(rows || []);
@@ -174,8 +175,8 @@ export default function DashboardPage() {
     }
 
     const filtersLine = isAdmin
-      ? `Filters: user="${historyFilters.user_query || "all"}", date="${historyFilters.activity_date || "all"}"`
-      : `Filters: date="${historyFilters.activity_date || "all"}"`;
+      ? `Filters: user="${historyFilters.user_query || "all"}", from="${historyFilters.start_date || "all"}", to="${historyFilters.end_date || "all"}"`
+      : `Filters: from="${historyFilters.start_date || "all"}", to="${historyFilters.end_date || "all"}"`;
 
     const bodyHtml = historyByDate.map((day) => `
       <section style="margin:0 0 16px 0;">
@@ -188,7 +189,7 @@ export default function DashboardPage() {
             </div>
             <ul style="margin:0;padding-left:18px;">
               ${post.items.map((item) => `
-                <li style="margin:0 0 4px 0;text-decoration:${item.completed ? "line-through" : "none"};">
+                <li style="margin:0 0 4px 0;">
                   [${item.completed ? "x" : " "}] ${escapeHtml(item.activity)}
                 </li>
               `).join("")}
@@ -255,7 +256,7 @@ export default function DashboardPage() {
   useEffect(() => {
     loadHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id, currentUser?.role, historyFilters.user_query, historyFilters.activity_date]);
+  }, [currentUser?.id, currentUser?.role, historyFilters.user_query, historyFilters.start_date, historyFilters.end_date]);
 
   async function handlePostActivity(e) {
     e.preventDefault();
@@ -479,11 +480,19 @@ export default function DashboardPage() {
                   />
                 </div>
                 <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
-                  <label>Date</label>
+                  <label>From</label>
                   <input
                     type="date"
-                    value={historyDraft.activity_date}
-                    onChange={(e) => setHistoryDraft((prev) => ({ ...prev, activity_date: e.target.value }))}
+                    value={historyDraft.start_date}
+                    onChange={(e) => setHistoryDraft((prev) => ({ ...prev, start_date: e.target.value }))}
+                  />
+                </div>
+                <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                  <label>To</label>
+                  <input
+                    type="date"
+                    value={historyDraft.end_date}
+                    onChange={(e) => setHistoryDraft((prev) => ({ ...prev, end_date: e.target.value }))}
                   />
                 </div>
                 <div style={{ alignSelf: "end", display: "flex", gap: 8 }}>
@@ -499,7 +508,7 @@ export default function DashboardPage() {
                     className="btn"
                     type="button"
                     onClick={() => {
-                      const reset = { user_query: "", activity_date: "" };
+                      const reset = { user_query: "", start_date: "", end_date: "" };
                       setHistoryDraft(reset);
                       setHistoryFilters(reset);
                     }}
@@ -534,7 +543,7 @@ export default function DashboardPage() {
                                 <input type="checkbox" checked={!!item.completed} readOnly disabled style={{ marginTop: 4 }} />
                                 <div
                                   className="dashboard-feed-text"
-                                  style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
+                                  style={{ opacity: item.completed ? 0.7 : 1 }}
                                 >
                                   {item.activity}
                                 </div>

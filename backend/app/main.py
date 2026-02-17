@@ -1149,7 +1149,8 @@ def update_todays_activity(
 
 @app.get("/dashboard/activities/history", response_model=List[DailyActivityOut])
 def list_todo_history(
-    activity_date: Optional[date] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     user_id: Optional[int] = None,
     user_query: Optional[str] = None,
     days: int = Query(default=30, ge=1, le=365),
@@ -1163,9 +1164,11 @@ def list_todo_history(
         .filter(DailyActivity.activity_date < today)
     )
 
-    if activity_date is not None:
-        q = q.filter(DailyActivity.activity_date == activity_date)
-    else:
+    if start_date is not None:
+        q = q.filter(DailyActivity.activity_date >= start_date)
+    if end_date is not None:
+        q = q.filter(DailyActivity.activity_date <= end_date)
+    if start_date is None and end_date is None:
         history_start = today - timedelta(days=days)
         q = q.filter(DailyActivity.activity_date >= history_start)
 
