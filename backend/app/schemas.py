@@ -321,5 +321,7 @@ class DashboardOverviewOut(BaseModel):
     today: date
     todays_activities: List[DailyActivityOut]
     todo_history: List[DailyActivityOut]
+    carried_over_activities: List[DailyActivityOut]
+    unfinished_count: int
     upcoming_subtasks: List[TaskReminderOut]
     due_subtasks: List[TaskReminderOut]

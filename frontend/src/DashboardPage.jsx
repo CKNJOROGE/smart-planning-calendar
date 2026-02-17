@@ -68,6 +68,8 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState({
     today: "",
     todays_activities: [],
+    carried_over_activities: [],
+    unfinished_count: 0,
     upcoming_subtasks: [],
     due_subtasks: [],
   });
@@ -112,6 +114,28 @@ export default function DashboardPage() {
       };
     });
   }, [historyRows]);
+
+  const carriedOverByDate = useMemo(() => {
+    const groupsByDate = new Map();
+    for (const item of overview.carried_over_activities || []) {
+      const dayKey = item.activity_date || "unknown-date";
+      if (!groupsByDate.has(dayKey)) {
+        groupsByDate.set(dayKey, []);
+      }
+      groupsByDate.get(dayKey).push(item);
+    }
+
+    const dates = Array.from(groupsByDate.keys()).sort((a, b) => String(b).localeCompare(String(a)));
+    return dates.map((dayKey) => {
+      const rows = groupsByDate.get(dayKey) || [];
+      return {
+        dayKey,
+        posts: groupActivitiesByPost(rows).sort(
+          (a, b) => Number(new Date(b.created_at)) - Number(new Date(a.created_at))
+        ),
+      };
+    });
+  }, [overview.carried_over_activities]);
 
   async function loadOverview() {
     setBusy(true);
@@ -261,7 +285,12 @@ export default function DashboardPage() {
         ...prev,
         todays_activities: prev.todays_activities
           .map((row) => (Number(row.id) === id ? { ...row, ...updated } : row)),
+        carried_over_activities: prev.carried_over_activities
+          .map((row) => (Number(row.id) === id ? { ...row, ...updated } : row))
+          .filter((row) => !row.completed),
+        unfinished_count: Math.max(0, prev.unfinished_count + (updated.completed ? -1 : 1)),
       }));
+      setHistoryRows((prev) => prev.map((row) => (Number(row.id) === id ? { ...row, ...updated } : row)));
     } catch (e) {
       setErr(String(e.message || e));
     } finally {
@@ -299,6 +328,18 @@ export default function DashboardPage() {
         <div className="dashboard-title-wrap">
           <div className="dashboard-title">Dashboard</div>
           <div className="dashboard-date">Today: {formatDate(overview.today)}</div>
+          <div style={{ marginTop: 6 }}>
+            <span
+              className="pill"
+              style={{
+                borderColor: overview.unfinished_count > 0 ? "#ef4444" : undefined,
+                color: overview.unfinished_count > 0 ? "#b91c1c" : undefined,
+                fontWeight: 800,
+              }}
+            >
+              Unfinished: {overview.unfinished_count || 0}
+            </span>
+          </div>
         </div>
         <button className="btn dashboard-refresh-btn" type="button" onClick={loadOverview} disabled={busy}>
           {busy ? "Refreshing..." : "Refresh"}
@@ -359,6 +400,56 @@ export default function DashboardPage() {
                             {item.activity}
                           </div>
                         </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="card dashboard-panel">
+            <div className="dashboard-panel-head">
+              <div className="dashboard-panel-title">Carried Over (Unfinished)</div>
+            </div>
+            {!carriedOverByDate.length ? (
+              <div className="muted">No carried-over items.</div>
+            ) : (
+              <div className="dashboard-feed" role="list" aria-label="Carried Over Unfinished Items">
+                {carriedOverByDate.map((day) => (
+                  <div key={day.dayKey}>
+                    <div className="dashboard-feed-date" style={{ marginBottom: 8, fontWeight: 800 }}>
+                      {formatDate(day.dayKey)}
+                    </div>
+                    <div style={{ display: "grid", gap: 10, marginBottom: 12 }}>
+                      {day.posts.map((post) => (
+                        <div
+                          key={post.key}
+                          className="dashboard-feed-item"
+                          role="listitem"
+                          style={{ borderLeft: "4px solid #ef4444" }}
+                        >
+                          <div className="dashboard-feed-author-row">
+                            <div className="dashboard-feed-author">{post.user?.name || `User #${post.user_id}`}</div>
+                            <div className="dashboard-feed-date">{formatDate(post.created_at)}</div>
+                          </div>
+                          <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                            {post.items.map((item) => (
+                              <label key={item.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={!!item.completed}
+                                  onChange={() => handleToggleActivity(item)}
+                                  disabled={togglingIds.includes(Number(item.id))}
+                                  style={{ marginTop: 4 }}
+                                />
+                                <div className="dashboard-feed-text" style={{ color: "#b91c1c", fontWeight: 600 }}>
+                                  {item.activity}
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>

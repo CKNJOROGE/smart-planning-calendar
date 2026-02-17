@@ -1022,6 +1022,32 @@ def get_dashboard_overview(
     for item in history_rows:
         _ = item.user
 
+    carried_over_rows = (
+        db.query(DailyActivity)
+        .filter(
+            DailyActivity.activity_date < today,
+            DailyActivity.completed.is_(False),
+        )
+        .order_by(
+            DailyActivity.activity_date.desc(),
+            DailyActivity.created_at.desc(),
+            DailyActivity.id.desc(),
+        )
+        .limit(100)
+        .all()
+    )
+    for item in carried_over_rows:
+        _ = item.user
+
+    unfinished_count = (
+        db.query(DailyActivity)
+        .filter(
+            DailyActivity.activity_date < today,
+            DailyActivity.completed.is_(False),
+        )
+        .count()
+    )
+
     upcoming_rows = (
         db.query(ClientTask)
         .filter(
@@ -1055,6 +1081,8 @@ def get_dashboard_overview(
         today=today,
         todays_activities=todays_activities,
         todo_history=history_rows,
+        carried_over_activities=carried_over_rows,
+        unfinished_count=unfinished_count,
         upcoming_subtasks=[_to_task_reminder(t) for t in upcoming_rows],
         due_subtasks=[_to_task_reminder(t) for t in due_rows],
     )
