@@ -22,7 +22,8 @@ export default function Login({ onLoggedIn }) {
     const mouse = { x: -9999, y: -9999 };
     let raf = null;
 
-    const count = Math.min(110, Math.max(60, Math.floor(window.innerWidth / 16)));
+    const baseCount = Math.min(110, Math.max(60, Math.floor(window.innerWidth / 16)));
+    const count = baseCount * 3;
 
     function resize() {
       canvas.width = Math.floor(window.innerWidth * dpr);
