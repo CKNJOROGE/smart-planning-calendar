@@ -39,8 +39,8 @@ export default function Login({ onLoggedIn }) {
         particles.push({
           x: Math.random() * window.innerWidth,
           y: Math.random() * window.innerHeight,
-          vx: (Math.random() - 0.5) * 0.4,
-          vy: (Math.random() - 0.5) * 0.4,
+          vx: (Math.random() - 0.5) * 0.9,
+          vy: (Math.random() - 0.5) * 0.9,
           r: 1 + Math.random() * 2.2,
         });
       }
@@ -50,8 +50,8 @@ export default function Login({ onLoggedIn }) {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       for (const p of particles) {
         // Add subtle ambient drift so particles never become static.
-        p.vx += (Math.random() - 0.5) * 0.012;
-        p.vy += (Math.random() - 0.5) * 0.012;
+        p.vx += (Math.random() - 0.5) * 0.028;
+        p.vy += (Math.random() - 0.5) * 0.028;
 
         const dx = p.x - mouse.x;
         const dy = p.y - mouse.y;
@@ -62,8 +62,8 @@ export default function Login({ onLoggedIn }) {
           p.vy += (dy / 120) * force * 0.08;
         }
 
-        p.vx *= 0.996;
-        p.vy *= 0.996;
+        p.vx *= 0.9985;
+        p.vy *= 0.9985;
         p.x += p.vx;
         p.y += p.vy;
 
