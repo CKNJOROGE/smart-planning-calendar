@@ -23,7 +23,7 @@ export default function Login({ onLoggedIn }) {
     let raf = null;
 
     const baseCount = Math.min(110, Math.max(60, Math.floor(window.innerWidth / 16)));
-    const count = baseCount * 3;
+    const count = baseCount * 5;
 
     function resize() {
       canvas.width = Math.floor(window.innerWidth * dpr);
