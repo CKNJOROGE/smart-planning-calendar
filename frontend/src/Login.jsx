@@ -49,6 +49,10 @@ export default function Login({ onLoggedIn }) {
     function draw() {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       for (const p of particles) {
+        // Add subtle ambient drift so particles never become static.
+        p.vx += (Math.random() - 0.5) * 0.012;
+        p.vy += (Math.random() - 0.5) * 0.012;
+
         const dx = p.x - mouse.x;
         const dy = p.y - mouse.y;
         const distSq = dx * dx + dy * dy;
@@ -58,8 +62,8 @@ export default function Login({ onLoggedIn }) {
           p.vy += (dy / 120) * force * 0.08;
         }
 
-        p.vx *= 0.992;
-        p.vy *= 0.992;
+        p.vx *= 0.996;
+        p.vy *= 0.996;
         p.x += p.vx;
         p.y += p.vy;
 
