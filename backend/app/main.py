@@ -1144,6 +1144,7 @@ def get_cash_reimbursement_draft(
         period_end=period_end,
         auto_items=items,
         manual_items=_parse_manual_reimbursement_items(saved_draft.manual_items_json) if saved_draft else [],
+        can_edit_manual=not already_submitted_for_period,
         can_submit=can_submit,
         submit_due_today=due_today,
         submit_message=(

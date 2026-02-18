@@ -42,7 +42,7 @@ export default function FinanceRequestsPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  const [draft, setDraft] = useState({ period_start: "", period_end: "", auto_items: [] });
+  const [draft, setDraft] = useState({ period_start: "", period_end: "", auto_items: [], can_edit_manual: true });
   const [manualItems, setManualItems] = useState([emptyManual()]);
   const [myRequests, setMyRequests] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -71,7 +71,7 @@ export default function FinanceRequestsPage() {
         getCashReimbursementDraft(),
         listMyCashReimbursements(),
       ]);
-      setDraft(draftData || { period_start: "", period_end: "", auto_items: [] });
+      setDraft(draftData || { period_start: "", period_end: "", auto_items: [], can_edit_manual: true });
       const savedManualRows = (draftData?.manual_items || []).map((x) => ({
         item_date: x.item_date ? toDateInput(x.item_date) : "",
         description: String(x.description || ""),
@@ -108,14 +108,17 @@ export default function FinanceRequestsPage() {
   }, []);
 
   function addManualRow() {
+    if (!draft.can_edit_manual) return;
     setManualItems((prev) => [...prev, emptyManual()]);
   }
 
   function removeManualRow(idx) {
+    if (!draft.can_edit_manual) return;
     setManualItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)));
   }
 
   function updateManualRow(idx, patch) {
+    if (!draft.can_edit_manual) return;
     setManualItems((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   }
 
@@ -158,6 +161,7 @@ export default function FinanceRequestsPage() {
 
   async function saveManualDraft() {
     setErr("");
+    if (!draft.can_edit_manual) return;
     const payload = (manualItems || []).map((x) => {
       const amount = String(x.amount || "").trim();
       return {
@@ -330,6 +334,7 @@ export default function FinanceRequestsPage() {
                       type="date"
                       value={row.item_date}
                       onChange={(e) => updateManualRow(idx, { item_date: e.target.value })}
+                      disabled={!draft.can_edit_manual}
                     />
                   </td>
                   <td style={{ padding: 10 }}>
@@ -337,6 +342,7 @@ export default function FinanceRequestsPage() {
                       value={row.description}
                       onChange={(e) => updateManualRow(idx, { description: e.target.value })}
                       placeholder="Manual reimbursement description"
+                      disabled={!draft.can_edit_manual}
                     />
                   </td>
                   <td style={{ padding: 10 }}>
@@ -347,10 +353,11 @@ export default function FinanceRequestsPage() {
                       value={row.amount}
                       onChange={(e) => updateManualRow(idx, { amount: e.target.value })}
                       placeholder="0.00"
+                      disabled={!draft.can_edit_manual}
                     />
                   </td>
                   <td style={{ padding: 10 }}>
-                    <button className="btn btn-danger" onClick={() => removeManualRow(idx)}>Remove</button>
+                    <button className="btn btn-danger" onClick={() => removeManualRow(idx)} disabled={!draft.can_edit_manual}>Remove</button>
                   </td>
                 </tr>
               ))}
@@ -365,8 +372,8 @@ export default function FinanceRequestsPage() {
         </div>
 
         <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button className="btn" type="button" onClick={addManualRow}>+ Add Manual Item</button>
-          <button className="btn" type="button" onClick={saveManualDraft}>Save Draft</button>
+          <button className="btn" type="button" onClick={addManualRow} disabled={!draft.can_edit_manual}>+ Add Manual Item</button>
+          <button className="btn" type="button" onClick={saveManualDraft} disabled={!draft.can_edit_manual}>Save Draft</button>
           {draft.can_submit && (
             <button className="btn btn-primary" type="button" onClick={submitReimbursement} disabled={busy}>
               Submit 2-Week Reimbursement

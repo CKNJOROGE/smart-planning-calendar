@@ -361,6 +361,7 @@ class CashReimbursementDraftOut(BaseModel):
     period_end: date
     auto_items: List[CashReimbursementDraftItemOut]
     manual_items: List["CashReimbursementDraftManualItemOut"] = []
+    can_edit_manual: bool = True
     can_submit: bool = False
     submit_due_today: bool = False
     submit_message: Optional[str] = None
