@@ -45,6 +45,32 @@ function groupActivitiesByPost(items) {
   }));
 }
 
+function groupActivitiesByUserDay(items) {
+  const groups = new Map();
+  for (const item of items || []) {
+    const key = `${item.user_id}_${item.activity_date || "unknown-date"}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        user: item.user,
+        user_id: item.user_id,
+        created_at: item.created_at,
+        items: [],
+      });
+    }
+    const group = groups.get(key);
+    if (new Date(item.created_at) > new Date(group.created_at)) {
+      group.created_at = item.created_at;
+    }
+    group.items.push(item);
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    items: [...group.items].sort((a, b) => Number(a.id) - Number(b.id)),
+  }));
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -82,7 +108,7 @@ export default function DashboardPage() {
   const isAdmin = currentUser?.role === "admin";
 
   const groupedTodayPosts = useMemo(
-    () => groupActivitiesByPost(overview.todays_activities)
+    () => groupActivitiesByUserDay(overview.todays_activities)
       .map((group) => ({
         ...group,
         all_completed: group.items.length > 0 && group.items.every((x) => !!x.completed),
