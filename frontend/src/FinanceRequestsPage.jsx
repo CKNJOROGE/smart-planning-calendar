@@ -6,6 +6,8 @@ import {
   listMyCashReimbursements,
   listPendingCashReimbursements,
   decideCashReimbursement,
+  listTaskClients,
+  updateTaskClient,
 } from "./api";
 import { useToast } from "./ToastProvider";
 
@@ -43,6 +45,8 @@ export default function FinanceRequestsPage() {
   const [manualItems, setManualItems] = useState([emptyManual()]);
   const [myRequests, setMyRequests] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [clientPricing, setClientPricing] = useState([]);
+  const [pricingSaving, setPricingSaving] = useState({});
 
   const canReview = useMemo(() => {
     const role = (current?.role || "").toLowerCase();
@@ -67,6 +71,16 @@ export default function FinanceRequestsPage() {
       ]);
       setDraft(draftData || { period_start: "", period_end: "", auto_items: [] });
       setMyRequests(mine || []);
+      if (user.role === "admin" || user.role === "ceo") {
+        const clients = await listTaskClients(new Date().getFullYear());
+        setClientPricing((clients || []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          reimbursement_amount: String(Number(c.reimbursement_amount || 0)),
+        })));
+      } else {
+        setClientPricing([]);
+      }
       if (user.role === "finance" || user.role === "admin" || user.role === "ceo") {
         const pending = await listPendingCashReimbursements();
         setPendingRequests(pending || []);
@@ -151,6 +165,26 @@ export default function FinanceRequestsPage() {
     }
   }
 
+  async function saveClientPrice(row) {
+    const amount = Number(row.reimbursement_amount || 0);
+    if (Number.isNaN(amount) || amount < 0) {
+      setErr("Client reimbursement amount must be a number >= 0.");
+      return;
+    }
+    setPricingSaving((prev) => ({ ...prev, [row.id]: true }));
+    try {
+      await updateTaskClient(row.id, amount);
+      await loadData();
+      showToast("Client visit reimbursement amount saved", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    } finally {
+      setPricingSaving((prev) => ({ ...prev, [row.id]: false }));
+    }
+  }
+
   return (
     <div className="page-wrap">
       <div className="card" style={{ marginBottom: 12 }}>
@@ -162,6 +196,56 @@ export default function FinanceRequestsPage() {
 
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Reimbursement (Current 2-Week Window)</div>
+        {(current?.role === "admin" || current?.role === "ceo") && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>Client Visit Amount Setup (Admin/CEO only)</div>
+            <div className="muted" style={{ marginBottom: 8 }}>
+              Set default reimbursement amount per client. Auto-filled Client Visit reimbursements use these values.
+            </div>
+            <div style={{ width: "100%", overflowX: "auto" }}>
+              <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ textAlign: "left", padding: 10 }}>Client</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientPricing.map((row) => (
+                    <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <td style={{ padding: 10 }}>{row.name}</td>
+                      <td style={{ padding: 10 }}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={row.reimbursement_amount}
+                          onChange={(e) => setClientPricing((prev) => prev.map((x) => (
+                            x.id === row.id ? { ...x, reimbursement_amount: e.target.value } : x
+                          )))}
+                        />
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => saveClientPrice(row)}
+                          disabled={!!pricingSaving[row.id]}
+                        >
+                          {pricingSaving[row.id] ? "Saving..." : "Save"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!clientPricing.length && (
+                    <tr><td colSpan={3} style={{ padding: 14 }} className="muted">No clients found.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         <div className="muted" style={{ marginBottom: 10 }}>
           Period: {draft.period_start || "-"} to {draft.period_end || "-"}
         </div>

@@ -4,7 +4,6 @@ import {
   listTaskYears,
   listTaskClients,
   createTaskClient,
-  updateTaskClient,
   listClientTasks,
   createClientTask,
   updateClientTask,
@@ -32,8 +31,6 @@ export default function ClientTaskManagerPage() {
   const [err, setErr] = useState("");
 
   const [newClientName, setNewClientName] = useState("");
-  const [newClientReimbursementAmount, setNewClientReimbursementAmount] = useState("");
-  const [selectedClientReimbursementAmount, setSelectedClientReimbursementAmount] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [subtaskRows, setSubtaskRows] = useState([emptySubtask()]);
 
@@ -96,15 +93,6 @@ export default function ClientTaskManagerPage() {
   }, [selectedYear]);
 
   useEffect(() => {
-    const selected = clients.find((c) => c.id === Number(selectedClientId));
-    if (!selected) {
-      setSelectedClientReimbursementAmount("");
-      return;
-    }
-    setSelectedClientReimbursementAmount(String(Number(selected.reimbursement_amount || 0)));
-  }, [clients, selectedClientId]);
-
-  useEffect(() => {
     if (!selectedYear || !selectedClientId || !selectedQuarter) {
       setTasks([]);
       return;
@@ -129,29 +117,14 @@ export default function ClientTaskManagerPage() {
     const name = (newClientName || "").trim();
     if (!name) return;
     try {
-      const created = await createTaskClient(name, newClientReimbursementAmount || 0);
+      const created = await createTaskClient(name);
       setNewClientName("");
-      setNewClientReimbursementAmount("");
       const list = await listTaskClients(selectedYear);
       setClients(list);
       setSelectedClientId(created.id);
       showToast("Client added", "success");
     } catch (e2) {
       const msg = String(e2.message || e2);
-      setErr(msg);
-      showToast(msg, "error");
-    }
-  }
-
-  async function handleUpdateClientReimbursementAmount() {
-    if (!selectedClientId) return;
-    try {
-      await updateTaskClient(Number(selectedClientId), selectedClientReimbursementAmount || 0);
-      const list = await listTaskClients(selectedYear);
-      setClients(list);
-      showToast("Client reimbursement amount updated", "success");
-    } catch (e) {
-      const msg = String(e.message || e);
       setErr(msg);
       showToast(msg, "error");
     }
@@ -272,17 +245,6 @@ export default function ClientTaskManagerPage() {
               placeholder="e.g., Titan Group"
             />
           </div>
-          <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
-            <label>Client visit reimbursement amount</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={newClientReimbursementAmount}
-              onChange={(e) => setNewClientReimbursementAmount(e.target.value)}
-              placeholder="0.00"
-            />
-          </div>
           <div style={{ alignSelf: "end" }}>
             <button className="btn btn-primary" type="submit">Add Client</button>
           </div>
@@ -300,25 +262,6 @@ export default function ClientTaskManagerPage() {
           ))}
           {!clients.length && <div className="muted">No clients yet. Add one above.</div>}
         </div>
-        {selectedClient && (current?.role === "admin" || current?.role === "ceo") && (
-          <div className="row" style={{ marginTop: 10 }}>
-            <div className="field" style={{ flex: "1 1 260px", marginBottom: 0 }}>
-              <label>Selected client reimbursement amount</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={selectedClientReimbursementAmount}
-                onChange={(e) => setSelectedClientReimbursementAmount(e.target.value)}
-              />
-            </div>
-            <div style={{ alignSelf: "end" }}>
-              <button className="btn" type="button" onClick={handleUpdateClientReimbursementAmount}>
-                Save Amount
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
