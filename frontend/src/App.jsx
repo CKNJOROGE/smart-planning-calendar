@@ -9,6 +9,7 @@ import ApprovalsPage from "./ApprovalsPage";
 import LibraryPage from "./LibraryPage";
 import ClientTaskManagerPage from "./ClientTaskManagerPage";
 import DashboardPage from "./DashboardPage";
+import FinanceRequestsPage from "./FinanceRequestsPage";
 import { getToken, clearToken } from "./api";
 import { me } from "./api";
 import { ToastProvider } from "./ToastProvider";
@@ -60,6 +61,9 @@ function Shell({ onLogout }) {
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/client-task-manager">
               <span className="sidebar-link-text">Client Task Manager</span>
             </NavLink>
+            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/finance-requests">
+              <span className="sidebar-link-text">Finance Requests</span>
+            </NavLink>
             {user?.role === "admin" && (
               <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/users">
                 <span className="sidebar-link-text">Users</span>
@@ -104,6 +108,7 @@ function Shell({ onLogout }) {
             <Route path="/profile" element={<MyProfilePage />} />
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/client-task-manager" element={<ClientTaskManagerPage />} />
+            <Route path="/finance-requests" element={<FinanceRequestsPage />} />
 
             {/* Admin only pages: UI hides, backend enforces */}
             <Route path="/users" element={<UsersPage />} />
