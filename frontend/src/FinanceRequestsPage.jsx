@@ -56,6 +56,7 @@ export default function FinanceRequestsPage() {
   const [clientPricing, setClientPricing] = useState([]);
   const [pricingSaving, setPricingSaving] = useState({});
   const [showClientPricing, setShowClientPricing] = useState(false);
+  const [activeSection, setActiveSection] = useState("cash_reimbursement");
 
   const canReview = useMemo(() => {
     const role = (current?.role || "").toLowerCase();
@@ -256,11 +257,34 @@ export default function FinanceRequestsPage() {
     <div className="page-wrap">
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>Finance Requests</div>
-        <div className="muted">Cash reimbursement is active. Other request types will follow in the next slices.</div>
+        <div className="muted">Use the request menu to navigate between finance modules.</div>
       </div>
 
       {err && <div className="error">{err}</div>}
 
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
+        <div className="card" style={{ flex: "1 1 220px", minWidth: 220 }}>
+          <div style={{ fontWeight: 800, marginBottom: 8 }}>Request Types</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            <button className={`btn ${activeSection === "cash_reimbursement" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("cash_reimbursement")}>
+              Cash Reimbursement
+            </button>
+            <button className={`btn ${activeSection === "cash_requisition" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("cash_requisition")}>
+              Cash Requisition
+            </button>
+            <button className={`btn ${activeSection === "authority_to_incur" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("authority_to_incur")}>
+              Authority To Incur Expenditure
+            </button>
+            <button className={`btn ${activeSection === "salary_advance" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("salary_advance")}>
+              Salary Advance Request
+            </button>
+          </div>
+        </div>
+
+        <div style={{ flex: "999 1 520px", minWidth: 0 }}>
+
+      {activeSection === "cash_reimbursement" && (
+        <>
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Reimbursement (Current 2-Week Window)</div>
         {(current?.role === "admin" || current?.role === "ceo") && (
@@ -540,6 +564,29 @@ export default function FinanceRequestsPage() {
           </div>
         </div>
       )}
+        </>
+      )}
+
+      {activeSection === "cash_requisition" && (
+        <div className="card">
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Requisition</div>
+          <div className="muted">This module is not implemented yet.</div>
+        </div>
+      )}
+      {activeSection === "authority_to_incur" && (
+        <div className="card">
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>Authority To Incur Expenditure</div>
+          <div className="muted">This module is not implemented yet.</div>
+        </div>
+      )}
+      {activeSection === "salary_advance" && (
+        <div className="card">
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>Salary Advance Request</div>
+          <div className="muted">This module is not implemented yet.</div>
+        </div>
+      )}
+        </div>
+      </div>
     </div>
   );
 }
