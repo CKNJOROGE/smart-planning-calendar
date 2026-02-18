@@ -32,6 +32,13 @@ function statusPillClass(status) {
   return "dashboard-status-warn";
 }
 
+function decisionLabel(decision) {
+  const d = (decision || "").toLowerCase();
+  if (d === "approved") return "Approved";
+  if (d === "rejected") return "Rejected";
+  return "Pending";
+}
+
 function emptyManual() {
   return { item_date: toDateInput(new Date()), description: "", amount: "" };
 }
@@ -53,6 +60,12 @@ export default function FinanceRequestsPage() {
   const canReview = useMemo(() => {
     const role = (current?.role || "").toLowerCase();
     return role === "finance" || role === "admin" || role === "ceo";
+  }, [current?.role]);
+  const reviewerSlot = useMemo(() => {
+    const role = (current?.role || "").toLowerCase();
+    if (role === "finance") return "finance";
+    if (role === "admin" || role === "ceo") return "ceo";
+    return "";
   }, [current?.role]);
   const canApplyReimbursement = useMemo(() => {
     const role = (current?.role || "").toLowerCase();
@@ -210,6 +223,13 @@ export default function FinanceRequestsPage() {
       setErr(msg);
       showToast(msg, "error");
     }
+  }
+
+  function remainingApprovers(r) {
+    const remaining = [];
+    if (!r?.ceo_decision) remaining.push("CEO");
+    if (!r?.finance_decision) remaining.push("Finance");
+    return remaining;
   }
 
   async function saveClientPrice(row) {
@@ -411,7 +431,18 @@ export default function FinanceRequestsPage() {
                     <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
                     <td style={{ padding: 10 }}><span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{r.status}</span></td>
                     <td style={{ padding: 10 }}>
-                      {r.ceo_comment ? `CEO: ${r.ceo_comment}` : "-"}{r.finance_comment ? ` | Finance: ${r.finance_comment}` : ""}
+                      <div>CEO: {decisionLabel(r.ceo_decision)}</div>
+                      <div>Finance: {decisionLabel(r.finance_decision)}</div>
+                      {remainingApprovers(r).length > 0 ? (
+                        <div className="muted">Remaining: {remainingApprovers(r).join(", ")}</div>
+                      ) : (
+                        <div className="muted">All approvals completed.</div>
+                      )}
+                      {(r.ceo_comment || r.finance_comment) && (
+                        <div style={{ marginTop: 4 }}>
+                          {r.ceo_comment ? `CEO comment: ${r.ceo_comment}` : ""}{r.ceo_comment && r.finance_comment ? " | " : ""}{r.finance_comment ? `Finance comment: ${r.finance_comment}` : ""}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -445,10 +476,17 @@ export default function FinanceRequestsPage() {
                       <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
                       <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
                       <td style={{ padding: 10 }}>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button className="btn btn-primary" onClick={() => takeDecision(r.id, true)}>Approve</button>
-                          <button className="btn btn-danger" onClick={() => takeDecision(r.id, false)}>Reject</button>
-                        </div>
+                        {((reviewerSlot === "ceo" && !r.ceo_decision) || (reviewerSlot === "finance" && !r.finance_decision)) ? (
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button className="btn btn-primary" onClick={() => takeDecision(r.id, true)}>Approve</button>
+                            <button className="btn btn-danger" onClick={() => takeDecision(r.id, false)}>Reject</button>
+                          </div>
+                        ) : (
+                          <span className="muted">
+                            {reviewerSlot === "ceo" ? `CEO already ${decisionLabel(r.ceo_decision).toLowerCase()}.` : ""}
+                            {reviewerSlot === "finance" ? `Finance already ${decisionLabel(r.finance_decision).toLowerCase()}.` : ""}
+                          </span>
+                        )}
                       </td>
                     </tr>
                     <tr>
@@ -456,6 +494,15 @@ export default function FinanceRequestsPage() {
                         <div style={{ border: "1px solid #eef2f7", borderRadius: 8, overflow: "hidden" }}>
                           <div style={{ padding: 10, background: "#f8fafc", fontWeight: 700 }}>
                             Submitted Items
+                          </div>
+                          <div style={{ padding: "6px 10px", borderTop: "1px solid #eef2f7", borderBottom: "1px solid #eef2f7", background: "#fcfcfd" }}>
+                            <span style={{ marginRight: 12 }}>CEO: <strong>{decisionLabel(r.ceo_decision)}</strong></span>
+                            <span style={{ marginRight: 12 }}>Finance: <strong>{decisionLabel(r.finance_decision)}</strong></span>
+                            {remainingApprovers(r).length > 0 ? (
+                              <span className="muted">Remaining: {remainingApprovers(r).join(", ")}</span>
+                            ) : (
+                              <span className="muted">All approvals completed.</span>
+                            )}
                           </div>
                           <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
                             <thead>
