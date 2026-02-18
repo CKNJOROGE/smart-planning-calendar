@@ -190,3 +190,20 @@ class CashReimbursementItem(Base):
     request = relationship("CashReimbursementRequest", back_populates="items")
     client = relationship("ClientAccount", foreign_keys=[client_id])
     source_event = relationship("Event", foreign_keys=[source_event_id])
+
+
+class CashReimbursementDraft(Base):
+    __tablename__ = "cash_reimbursement_drafts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "period_start", "period_end", name="uq_cash_reimbursement_drafts_user_period"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    period_start = Column(Date, nullable=False, index=True)
+    period_end = Column(Date, nullable=False, index=True)
+    manual_items_json = Column(Text, nullable=False, default="[]")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", foreign_keys=[user_id])

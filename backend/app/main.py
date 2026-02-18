@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import List, Optional
 from pathlib import Path
 from uuid import uuid4
+import json
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Request, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +25,7 @@ from .models import (
     DailyActivity,
     CashReimbursementRequest,
     CashReimbursementItem,
+    CashReimbursementDraft,
 )
 from .schemas import (
     TokenResponse,
@@ -57,6 +59,8 @@ from .schemas import (
     CashReimbursementSubmitIn,
     CashReimbursementRequestOut,
     CashReimbursementDecisionIn,
+    CashReimbursementDraftSaveIn,
+    CashReimbursementDraftManualItemOut,
 )
 from .security import verify_password, create_access_token, hash_password
 from .deps import get_current_user, require_admin, require_leave_approver
@@ -322,6 +326,43 @@ def _reimbursement_due_message(today: date, can_submit: bool) -> str:
     if today.month == 2:
         return "Cash reimbursement can be submitted on February 28."
     return "Cash reimbursement can be submitted on the 15th and 30th of each month."
+
+
+def _parse_manual_reimbursement_items(raw_json: str) -> list[CashReimbursementDraftManualItemOut]:
+    try:
+        payload = json.loads(raw_json or "[]")
+    except Exception:
+        payload = []
+    if not isinstance(payload, list):
+        return []
+
+    out: list[CashReimbursementDraftManualItemOut] = []
+    for row in payload:
+        if not isinstance(row, dict):
+            continue
+        item_date = None
+        raw_date = row.get("item_date")
+        if isinstance(raw_date, str) and raw_date.strip():
+            try:
+                item_date = date.fromisoformat(raw_date.strip())
+            except Exception:
+                item_date = None
+
+        description = str(row.get("description") or "")
+        raw_amount = row.get("amount")
+        amount = None
+        if raw_amount not in (None, ""):
+            try:
+                amount = float(raw_amount)
+            except Exception:
+                amount = None
+
+        out.append(CashReimbursementDraftManualItemOut(
+            item_date=item_date,
+            description=description,
+            amount=amount,
+        ))
+    return out
 
 
 async def _upload_profile_document(
@@ -1051,6 +1092,15 @@ def get_cash_reimbursement_draft(
         .first()
     )
     can_submit = due_today and not already_submitted_for_period
+    saved_draft = (
+        db.query(CashReimbursementDraft)
+        .filter(
+            CashReimbursementDraft.user_id == current.id,
+            CashReimbursementDraft.period_start == period_start,
+            CashReimbursementDraft.period_end == period_end,
+        )
+        .first()
+    )
 
     used_event_ids = {
         int(x[0]) for x in db.query(CashReimbursementItem.source_event_id)
@@ -1093,6 +1143,7 @@ def get_cash_reimbursement_draft(
         period_start=period_start,
         period_end=period_end,
         auto_items=items,
+        manual_items=_parse_manual_reimbursement_items(saved_draft.manual_items_json) if saved_draft else [],
         can_submit=can_submit,
         submit_due_today=due_today,
         submit_message=(
@@ -1101,6 +1152,73 @@ def get_cash_reimbursement_draft(
             else _reimbursement_due_message(today, can_submit)
         ),
     )
+
+
+@app.post("/finance/reimbursements/draft", response_model=CashReimbursementDraftOut)
+def save_cash_reimbursement_draft(
+    payload: CashReimbursementDraftSaveIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    today = date.today()
+    period_start, period_end = _biweekly_period_for(today)
+
+    existing_submission = (
+        db.query(CashReimbursementRequest.id)
+        .filter(
+            CashReimbursementRequest.user_id == current.id,
+            CashReimbursementRequest.period_start == period_start,
+            CashReimbursementRequest.period_end == period_end,
+        )
+        .first()
+    )
+    if existing_submission:
+        raise HTTPException(status_code=400, detail="This period is already submitted and can no longer be edited.")
+
+    normalized_items = []
+    for row in payload.manual_items or []:
+        description = (row.description or "").strip()
+        amount = row.amount
+        if description and len(description) > 1000:
+            raise HTTPException(status_code=400, detail="Each manual reimbursement description must be <= 1000 characters")
+        if amount is not None and amount < 0:
+            raise HTTPException(status_code=400, detail="Manual reimbursement amount cannot be negative")
+        if row.item_date is None and not description and amount in (None, 0):
+            continue
+        normalized_items.append({
+            "item_date": row.item_date.isoformat() if row.item_date else None,
+            "description": description,
+            "amount": amount,
+        })
+
+    if len(normalized_items) > 200:
+        raise HTTPException(status_code=400, detail="Maximum 200 manual reimbursement draft rows")
+
+    draft = (
+        db.query(CashReimbursementDraft)
+        .filter(
+            CashReimbursementDraft.user_id == current.id,
+            CashReimbursementDraft.period_start == period_start,
+            CashReimbursementDraft.period_end == period_end,
+        )
+        .first()
+    )
+    if draft:
+        draft.manual_items_json = json.dumps(normalized_items)
+        draft.updated_at = datetime.utcnow()
+    else:
+        draft = CashReimbursementDraft(
+            user_id=current.id,
+            period_start=period_start,
+            period_end=period_end,
+            manual_items_json=json.dumps(normalized_items),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(draft)
+
+    db.commit()
+    return get_cash_reimbursement_draft(db=db, current=current)
 
 
 def _load_reimbursement_request(db: Session, request_id: int) -> Optional[CashReimbursementRequest]:
@@ -1250,6 +1368,12 @@ def submit_cash_reimbursement(
             client_id=row["client_id"],
             source_event_id=row["source_event_id"],
         ))
+
+    db.query(CashReimbursementDraft).filter(
+        CashReimbursementDraft.user_id == current.id,
+        CashReimbursementDraft.period_start == period_start,
+        CashReimbursementDraft.period_end == period_end,
+    ).delete(synchronize_session=False)
 
     db.commit()
     db.refresh(req)

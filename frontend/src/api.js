@@ -369,6 +369,13 @@ export function getCashReimbursementDraft() {
   return request("/finance/reimbursements/draft");
 }
 
+export function saveCashReimbursementDraft(manualItems) {
+  return request("/finance/reimbursements/draft", {
+    method: "POST",
+    body: { manual_items: manualItems || [] },
+  });
+}
+
 export function submitCashReimbursement(manualItems) {
   return request("/finance/reimbursements/submit", {
     method: "POST",

@@ -360,6 +360,7 @@ class CashReimbursementDraftOut(BaseModel):
     period_start: date
     period_end: date
     auto_items: List[CashReimbursementDraftItemOut]
+    manual_items: List["CashReimbursementDraftManualItemOut"] = []
     can_submit: bool = False
     submit_due_today: bool = False
     submit_message: Optional[str] = None
@@ -367,6 +368,22 @@ class CashReimbursementDraftOut(BaseModel):
 
 class CashReimbursementSubmitIn(BaseModel):
     manual_items: List[CashReimbursementItemIn] = []
+
+
+class CashReimbursementDraftManualItemIn(BaseModel):
+    item_date: Optional[date] = None
+    description: Optional[str] = None
+    amount: Optional[float] = None
+
+
+class CashReimbursementDraftManualItemOut(BaseModel):
+    item_date: Optional[date] = None
+    description: str = ""
+    amount: Optional[float] = None
+
+
+class CashReimbursementDraftSaveIn(BaseModel):
+    manual_items: List[CashReimbursementDraftManualItemIn] = []
 
 
 class CashReimbursementDecisionIn(BaseModel):

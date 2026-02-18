@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   me,
   getCashReimbursementDraft,
+  saveCashReimbursementDraft,
   submitCashReimbursement,
   listMyCashReimbursements,
   listPendingCashReimbursements,
@@ -35,8 +36,6 @@ function emptyManual() {
   return { item_date: toDateInput(new Date()), description: "", amount: "" };
 }
 
-const MANUAL_REIMBURSEMENT_DRAFT_KEY = "cash_reimbursement_manual_items_v1";
-
 export default function FinanceRequestsPage() {
   const { showToast } = useToast();
   const [current, setCurrent] = useState(null);
@@ -62,22 +61,6 @@ export default function FinanceRequestsPage() {
     return autoTotal + manualTotal;
   }, [draft.auto_items, manualItems]);
 
-  function saveManualDraft() {
-    try {
-      const cleaned = (manualItems || []).map((x) => ({
-        item_date: x.item_date || "",
-        description: String(x.description || ""),
-        amount: String(x.amount || ""),
-      }));
-      localStorage.setItem(MANUAL_REIMBURSEMENT_DRAFT_KEY, JSON.stringify(cleaned));
-      showToast("Manual reimbursement draft saved", "success");
-    } catch (e) {
-      const msg = `Could not save draft: ${String(e.message || e)}`;
-      setErr(msg);
-      showToast(msg, "error");
-    }
-  }
-
   async function loadData() {
     setBusy(true);
     setErr("");
@@ -89,6 +72,12 @@ export default function FinanceRequestsPage() {
         listMyCashReimbursements(),
       ]);
       setDraft(draftData || { period_start: "", period_end: "", auto_items: [] });
+      const savedManualRows = (draftData?.manual_items || []).map((x) => ({
+        item_date: x.item_date ? toDateInput(x.item_date) : "",
+        description: String(x.description || ""),
+        amount: x.amount == null ? "" : String(x.amount),
+      }));
+      setManualItems(savedManualRows.length ? savedManualRows : [emptyManual()]);
       setMyRequests(mine || []);
       if (user.role === "admin" || user.role === "ceo") {
         const clients = await listTaskClients(new Date().getFullYear());
@@ -116,23 +105,6 @@ export default function FinanceRequestsPage() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(MANUAL_REIMBURSEMENT_DRAFT_KEY);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed) || !parsed.length) return;
-      const rows = parsed.map((x) => ({
-        item_date: String(x?.item_date || toDateInput(new Date())),
-        description: String(x?.description || ""),
-        amount: String(x?.amount || ""),
-      }));
-      setManualItems(rows);
-    } catch {
-      // Ignore invalid local draft data.
-    }
   }, []);
 
   function addManualRow() {
@@ -175,9 +147,39 @@ export default function FinanceRequestsPage() {
     try {
       await submitCashReimbursement(cleaned);
       setManualItems([emptyManual()]);
-      localStorage.removeItem(MANUAL_REIMBURSEMENT_DRAFT_KEY);
       await loadData();
       showToast("Cash reimbursement submitted for approval", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function saveManualDraft() {
+    setErr("");
+    const payload = (manualItems || []).map((x) => {
+      const amount = String(x.amount || "").trim();
+      return {
+        item_date: x.item_date || null,
+        description: (x.description || "").trim(),
+        amount: amount === "" ? null : Number(amount),
+      };
+    });
+    if (payload.some((x) => x.amount != null && Number.isNaN(x.amount))) {
+      setErr("Manual reimbursement amount must be a valid number.");
+      return;
+    }
+    try {
+      const saved = await saveCashReimbursementDraft(payload);
+      const savedManualRows = (saved?.manual_items || []).map((x) => ({
+        item_date: x.item_date ? toDateInput(x.item_date) : "",
+        description: String(x.description || ""),
+        amount: x.amount == null ? "" : String(x.amount),
+      }));
+      setDraft(saved || draft);
+      setManualItems(savedManualRows.length ? savedManualRows : [emptyManual()]);
+      showToast("Manual reimbursement draft saved", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
