@@ -170,8 +170,11 @@ class CashReimbursementRequest(Base):
     finance_decision = Column(String(20), nullable=True)
     finance_comment = Column(Text, nullable=True)
     finance_decided_at = Column(DateTime, nullable=True)
+    reimbursed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    reimbursed_at = Column(DateTime, nullable=True)
 
     user = relationship("User", foreign_keys=[user_id])
+    reimbursed_by = relationship("User", foreign_keys=[reimbursed_by_id])
     items = relationship("CashReimbursementItem", back_populates="request", cascade="all, delete-orphan")
 
 

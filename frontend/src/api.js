@@ -391,10 +391,21 @@ export function listPendingCashReimbursements() {
   return request("/finance/reimbursements/pending");
 }
 
+export function listApprovedCashReimbursements() {
+  return request("/finance/reimbursements/approved");
+}
+
 export function decideCashReimbursement(requestId, approve, comment) {
   return request(`/finance/reimbursements/${requestId}/decision`, {
     method: "POST",
     body: { approve: !!approve, comment: comment || null },
+  });
+}
+
+export function markCashReimbursed(requestId) {
+  return request(`/finance/reimbursements/${requestId}/reimburse`, {
+    method: "POST",
+    body: {},
   });
 }
 

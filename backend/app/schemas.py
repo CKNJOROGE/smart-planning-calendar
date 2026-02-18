@@ -419,6 +419,8 @@ class CashReimbursementRequestOut(BaseModel):
     finance_decision: Optional[str] = None
     finance_comment: Optional[str] = None
     finance_decided_at: Optional[datetime] = None
+    reimbursed_by_id: Optional[int] = None
+    reimbursed_at: Optional[datetime] = None
     user: UserOut
     items: List[CashReimbursementItemOut]
 

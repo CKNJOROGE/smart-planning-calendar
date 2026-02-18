@@ -6,7 +6,9 @@ import {
   submitCashReimbursement,
   listMyCashReimbursements,
   listPendingCashReimbursements,
+  listApprovedCashReimbursements,
   decideCashReimbursement,
+  markCashReimbursed,
   listTaskClients,
   updateTaskClient,
 } from "./api";
@@ -27,9 +29,20 @@ function fmtCurrency(v) {
 
 function statusPillClass(status) {
   const s = (status || "").toLowerCase();
-  if (s === "approved") return "dashboard-status-ok";
+  if (s === "amount_reimbursed") return "dashboard-status-ok";
+  if (s === "pending_reimbursement") return "dashboard-status-warn";
+  if (s === "pending_approval") return "dashboard-status-warn";
   if (s === "rejected") return "dashboard-status-danger";
   return "dashboard-status-warn";
+}
+
+function statusLabel(status) {
+  const s = (status || "").toLowerCase();
+  if (s === "pending_approval") return "pending approval (awaiting approvals)";
+  if (s === "pending_reimbursement") return "pending reimbursement (approved, waiting payout)";
+  if (s === "amount_reimbursed") return "amount reimbursed (paid)";
+  if (s === "rejected") return "rejected";
+  return status || "-";
 }
 
 function decisionLabel(decision) {
@@ -53,6 +66,7 @@ export default function FinanceRequestsPage() {
   const [manualItems, setManualItems] = useState([emptyManual()]);
   const [myRequests, setMyRequests] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [approvedRequests, setApprovedRequests] = useState([]);
   const [clientPricing, setClientPricing] = useState([]);
   const [pricingSaving, setPricingSaving] = useState({});
   const [showClientPricing, setShowClientPricing] = useState(false);
@@ -108,10 +122,15 @@ export default function FinanceRequestsPage() {
         setClientPricing([]);
       }
       if (user.role === "finance" || user.role === "admin" || user.role === "ceo") {
-        const pending = await listPendingCashReimbursements();
+        const [pending, approved] = await Promise.all([
+          listPendingCashReimbursements(),
+          listApprovedCashReimbursements(),
+        ]);
         setPendingRequests(pending || []);
+        setApprovedRequests(approved || []);
       } else {
         setPendingRequests([]);
+        setApprovedRequests([]);
       }
     } catch (e) {
       setErr(String(e.message || e));
@@ -219,6 +238,18 @@ export default function FinanceRequestsPage() {
       await decideCashReimbursement(requestId, approve, comment);
       await loadData();
       showToast(approve ? "Request approved" : "Request rejected", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function markReimbursed(requestId) {
+    try {
+      await markCashReimbursed(requestId);
+      await loadData();
+      showToast("Reimbursement marked as paid", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
@@ -453,7 +484,9 @@ export default function FinanceRequestsPage() {
                   <tr key={r.id} style={{ borderTop: "1px solid #eef2f7" }}>
                     <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
                     <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
-                    <td style={{ padding: 10 }}><span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{r.status}</span></td>
+                            <td style={{ padding: 10 }}>
+                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status)}</span>
+                            </td>
                     <td style={{ padding: 10 }}>
                       <div>CEO: {decisionLabel(r.ceo_decision)}</div>
                       <div>Finance: {decisionLabel(r.finance_decision)}</div>
@@ -479,8 +512,8 @@ export default function FinanceRequestsPage() {
         </div>
       )}
 
-      {canReview && (
-        <div className="card">
+              {canReview && (
+                <div className="card">
           <div style={{ fontWeight: 900, marginBottom: 8 }}>Pending Approvals (CEO / Finance)</div>
           <div style={{ width: "100%", overflowX: "auto" }}>
             <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -562,10 +595,55 @@ export default function FinanceRequestsPage() {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-        </>
-      )}
+                </div>
+              )}
+
+              {canReview && (
+                <div className="card" style={{ marginTop: 12 }}>
+                  <div style={{ fontWeight: 900, marginBottom: 8 }}>Approved Reimbursements Record</div>
+                  <div style={{ width: "100%", overflowX: "auto" }}>
+                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc" }}>
+                          <th style={{ textAlign: "left", padding: 10 }}>Requester</th>
+                          <th style={{ textAlign: "left", padding: 10 }}>Period</th>
+                          <th style={{ textAlign: "left", padding: 10 }}>Total</th>
+                          <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                          <th style={{ textAlign: "left", padding: 10 }}>Payout</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(approvedRequests || []).map((r) => (
+                          <tr key={`approved_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                            <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
+                            <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
+                            <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
+                            <td style={{ padding: 10 }}>
+                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status)}</span>
+                            </td>
+                            <td style={{ padding: 10 }}>
+                              {String(current?.role || "").toLowerCase() === "ceo" && r.status === "pending_reimbursement" ? (
+                                <button className="btn btn-primary" type="button" onClick={() => markReimbursed(r.id)}>
+                                  Mark Reimbursed
+                                </button>
+                              ) : r.status === "amount_reimbursed" ? (
+                                <span className="muted">Paid on {r.reimbursed_at ? new Date(r.reimbursed_at).toLocaleString() : "-"}</span>
+                              ) : (
+                                <span className="muted">Pending CEO reimbursement</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                        {!approvedRequests.length && (
+                          <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No approved reimbursements yet.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
       {activeSection === "cash_requisition" && (
         <div className="card">

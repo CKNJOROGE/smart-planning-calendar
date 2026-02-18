@@ -1258,8 +1258,28 @@ def list_pending_cash_reimbursements(
 
     rows = (
         db.query(CashReimbursementRequest)
-        .filter(CashReimbursementRequest.status == "pending")
+        .filter(CashReimbursementRequest.status == "pending_approval")
         .order_by(CashReimbursementRequest.submitted_at.asc(), CashReimbursementRequest.id.asc())
+        .all()
+    )
+    for r in rows:
+        _ = r.user
+        _ = r.items
+    return rows
+
+
+@app.get("/finance/reimbursements/approved", response_model=List[CashReimbursementRequestOut])
+def list_approved_cash_reimbursements(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _is_finance_reviewer(current.role):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    rows = (
+        db.query(CashReimbursementRequest)
+        .filter(CashReimbursementRequest.status.in_(["pending_reimbursement", "amount_reimbursed"]))
+        .order_by(CashReimbursementRequest.submitted_at.desc(), CashReimbursementRequest.id.desc())
         .all()
     )
     for r in rows:
@@ -1355,7 +1375,7 @@ def submit_cash_reimbursement(
         period_start=period_start,
         period_end=period_end,
         total_amount=total,
-        status="pending",
+        status="pending_approval",
     )
     db.add(req)
     db.flush()
@@ -1393,8 +1413,10 @@ def decide_cash_reimbursement(
     req = _load_reimbursement_request(db, request_id)
     if not req:
         raise HTTPException(status_code=404, detail="Reimbursement request not found")
-    if req.status in {"approved", "rejected"}:
+    if req.status in {"amount_reimbursed", "rejected"}:
         raise HTTPException(status_code=400, detail="Request already finalized")
+    if req.status == "pending_reimbursement":
+        raise HTTPException(status_code=400, detail="Request is already approved and awaiting reimbursement")
 
     decision = "approved" if payload.approve else "rejected"
     comment = (payload.comment or "").strip()
@@ -1417,10 +1439,38 @@ def decide_cash_reimbursement(
     if req.ceo_decision == "rejected" or req.finance_decision == "rejected":
         req.status = "rejected"
     elif req.ceo_decision == "approved" and req.finance_decision == "approved":
-        req.status = "approved"
+        req.status = "pending_reimbursement"
     else:
-        req.status = "pending"
+        req.status = "pending_approval"
 
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    _ = req.items
+    return req
+
+
+@app.post("/finance/reimbursements/{request_id}/reimburse", response_model=CashReimbursementRequestOut)
+def mark_cash_reimbursement_paid(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role != "ceo":
+        raise HTTPException(status_code=403, detail="Only CEO can mark reimbursement as paid")
+
+    req = _load_reimbursement_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Reimbursement request not found")
+    if req.status == "amount_reimbursed":
+        raise HTTPException(status_code=400, detail="Request is already marked reimbursed")
+    if req.status != "pending_reimbursement":
+        raise HTTPException(status_code=400, detail="Only approved reimbursements can be marked reimbursed")
+
+    req.status = "amount_reimbursed"
+    req.reimbursed_by_id = current.id
+    req.reimbursed_at = datetime.utcnow()
     db.commit()
     db.refresh(req)
     _ = req.user
