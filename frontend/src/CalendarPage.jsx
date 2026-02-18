@@ -6,6 +6,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import {
   me,
   listUsers,
+  listTaskClients,
   adminGetUserProfile,
   listEvents,
   createEvent,
@@ -68,6 +69,7 @@ export default function CalendarPage() {
 
   // Filtering
   const [users, setUsers] = useState([]);
+  const [taskClients, setTaskClients] = useState([]);
   const [filters, setFilters] = useState({
     type: "",         // Leave/Hospital/...
     user_id: "",      // admin only
@@ -100,6 +102,7 @@ export default function CalendarPage() {
     endDate: "",
     allDay: true,
     type: "Leave",
+    clientId: "",
     note: "",
   });
 
@@ -110,6 +113,7 @@ export default function CalendarPage() {
     startDate: "",
     endDate: "",
     type: "Leave",
+    clientId: "",
     note: "",
   });
 
@@ -142,6 +146,12 @@ export default function CalendarPage() {
   async function loadMe() {
     const u = await me();
     setUser(u);
+    try {
+      const clients = await listTaskClients(new Date().getFullYear());
+      setTaskClients(clients);
+    } catch {
+      setTaskClients([]);
+    }
     try {
       const bal = await getLeaveBalance();
       setDashboardBalance(bal);
@@ -297,6 +307,7 @@ export default function CalendarPage() {
       endDate: d,
       allDay: true,
       type: "Leave",
+      clientId: "",
       note: "",
     };
     setForm(next);
@@ -339,6 +350,13 @@ export default function CalendarPage() {
     if (!id) return "Unassigned";
     const found = users.find((u) => u.id === id);
     return found ? `${found.name} (ID ${found.id})` : `Admin #${id}`;
+  }
+
+  function clientNameById(id) {
+    const n = Number(id);
+    if (!n) return "Unassigned";
+    const found = taskClients.find((c) => Number(c.id) === n);
+    return found ? found.name : `Client #${n}`;
   }
 
   const canEdit = useMemo(() => {
@@ -389,6 +407,7 @@ export default function CalendarPage() {
       startDate: startD,
       endDate: endD,
       type: e.type || "Other",
+      clientId: e.client_id ? String(e.client_id) : "",
       note: e.note || "",
     });
     setEditOpen(true);
@@ -448,6 +467,11 @@ export default function CalendarPage() {
     const end = new Date(form.endDate);
     end.setDate(end.getDate() + 1);
     const endISO = end.toISOString().slice(0, 19);
+    const isClientVisit = (form.type || "").toLowerCase() === "client visit";
+    if (isClientVisit && !form.clientId) {
+      setError("Please choose a client for Client Visit.");
+      return;
+    }
 
     try {
       if ((form.type || "").toLowerCase() === "leave") {
@@ -463,6 +487,7 @@ export default function CalendarPage() {
           end_ts: endISO,
           all_day: true,
           type: form.type,
+          client_id: isClientVisit ? Number(form.clientId) : null,
           note: form.note || null,
         });
       }
@@ -488,6 +513,11 @@ export default function CalendarPage() {
     const end = new Date(editForm.endDate);
     end.setDate(end.getDate() + 1);
     const endISO = end.toISOString().slice(0, 19);
+    const isClientVisit = (editForm.type || "").toLowerCase() === "client visit";
+    if (isClientVisit && !editForm.clientId) {
+      setError("Please choose a client for Client Visit.");
+      return;
+    }
 
     try {
       await updateEvent(editForm.id, {
@@ -495,6 +525,7 @@ export default function CalendarPage() {
         end_ts: endISO,
         all_day: true,
         type: editForm.type,
+        client_id: isClientVisit ? Number(editForm.clientId) : null,
         note: editForm.note || null,
       });
       setEditOpen(false);
@@ -687,6 +718,12 @@ export default function CalendarPage() {
                 <div className="calendar-popup-label">To</div>
                 <div className="calendar-popup-value">{formatDateTime(popup.apiEvent.end_ts)}</div>
               </div>
+              {(popup.apiEvent.type || "").toLowerCase() === "client visit" && (
+                <div className="calendar-popup-field">
+                  <div className="calendar-popup-label">Client</div>
+                  <div className="calendar-popup-value">{clientNameById(popup.apiEvent.client_id)}</div>
+                </div>
+              )}
               {popup.apiEvent.rejection_reason && (
                 <div className="calendar-popup-field">
                   <div className="calendar-popup-label">Rejection reason</div>
@@ -760,7 +797,7 @@ export default function CalendarPage() {
                     value={form.type}
                     onChange={(e) => {
                       const t = e.target.value;
-                      setForm((f) => ({ ...f, type: t }));
+                      setForm((f) => ({ ...f, type: t, clientId: t === "Client Visit" ? f.clientId : "" }));
                       if (t === "Leave" && form.startDate) refreshLeaveBalance(form.startDate);
                       else setLeaveBalance(null);
                     }}
@@ -781,6 +818,24 @@ export default function CalendarPage() {
                   <div className="helper">For v1 we store all entries as full-day blocks.</div>
                 </div>
               </div>
+
+              {form.type === "Client Visit" && (
+                <div className="field">
+                  <label>Client</label>
+                  <select
+                    value={form.clientId}
+                    onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}
+                  >
+                    <option value="">Select client</option>
+                    {taskClients.map((c) => (
+                      <option key={c.id} value={String(c.id)}>{c.name}</option>
+                    ))}
+                  </select>
+                  {!taskClients.length && (
+                    <div className="helper">No clients found. Add clients in Client Task Manager first.</div>
+                  )}
+                </div>
+              )}
 
               {/* Leave balance */}
               {form.type === "Leave" && leaveBalance && (
@@ -856,7 +911,7 @@ export default function CalendarPage() {
                     value={editForm.type}
                     onChange={(e) => {
                       const t = e.target.value;
-                      setEditForm((f) => ({ ...f, type: t }));
+                      setEditForm((f) => ({ ...f, type: t, clientId: t === "Client Visit" ? f.clientId : "" }));
                       if (t === "Leave" && editForm.startDate) refreshLeaveBalance(editForm.startDate);
                       else setLeaveBalance(null);
                     }}
@@ -869,6 +924,24 @@ export default function CalendarPage() {
                   </select>
                 </div>
               </div>
+
+              {editForm.type === "Client Visit" && (
+                <div className="field">
+                  <label>Client</label>
+                  <select
+                    value={editForm.clientId}
+                    onChange={(e) => setEditForm((f) => ({ ...f, clientId: e.target.value }))}
+                  >
+                    <option value="">Select client</option>
+                    {taskClients.map((c) => (
+                      <option key={c.id} value={String(c.id)}>{c.name}</option>
+                    ))}
+                  </select>
+                  {!taskClients.length && (
+                    <div className="helper">No clients found. Add clients in Client Task Manager first.</div>
+                  )}
+                </div>
+              )}
 
               {editForm.type === "Leave" && leaveBalance && (
                 <div className="card" style={{ marginBottom: 12, background: "#f8fafc" }}>

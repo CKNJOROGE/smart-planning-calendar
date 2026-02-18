@@ -66,6 +66,7 @@ class Event(Base):
     all_day = Column(Boolean, default=True)
 
     type = Column(String(50), nullable=False)
+    client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=True, index=True)
     note = Column(Text, nullable=True)
     status = Column(String(20), nullable=False, default="approved")
     requested_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
@@ -83,6 +84,7 @@ class Event(Base):
     approved_by = relationship("User", foreign_keys=[approved_by_id])
     first_approved_by = relationship("User", foreign_keys=[first_approved_by_id])
     second_approved_by = relationship("User", foreign_keys=[second_approved_by_id])
+    client = relationship("ClientAccount", foreign_keys=[client_id])
 
 
 class CompanyDocument(Base):

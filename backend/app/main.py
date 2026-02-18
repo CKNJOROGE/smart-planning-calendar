@@ -1469,20 +1469,32 @@ async def create_event(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    normalized_type = (payload.type or "").strip()
+    is_client_visit = normalized_type.lower() == "client visit"
+    client_id: Optional[int] = payload.client_id if is_client_visit else None
+
+    if is_client_visit:
+        if client_id is None:
+            raise HTTPException(status_code=400, detail="client_id is required for Client Visit")
+        exists = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Client not found")
+
     # Leave enforcement (only for Leave)
-    if (payload.type or "").strip() == "Leave":
+    if normalized_type == "Leave":
         try:
             validate_leave_request(db, user, payload.start_ts, payload.end_ts, exclude_event_id=None)
         except ValueError as ve:
             raise HTTPException(status_code=400, detail=str(ve))
 
-    is_leave = (payload.type or "").strip().lower() == "leave"
+    is_leave = normalized_type.lower() == "leave"
     e = Event(
         user_id=user.id,
         start_ts=payload.start_ts,
         end_ts=payload.end_ts,
         all_day=payload.all_day,
         type=payload.type,
+        client_id=client_id,
         note=payload.note,
         status="pending" if is_leave else "approved",
         requested_by_id=user.id if is_leave else None,
@@ -1514,6 +1526,17 @@ async def update_event(
     new_start = payload.start_ts if payload.start_ts is not None else e.start_ts
     new_end = payload.end_ts if payload.end_ts is not None else e.end_ts
     new_type = payload.type if payload.type is not None else e.type
+    new_client_id = payload.client_id if payload.client_id is not None else e.client_id
+
+    is_client_visit = (new_type or "").strip().lower() == "client visit"
+    if is_client_visit:
+        if new_client_id is None:
+            raise HTTPException(status_code=400, detail="client_id is required for Client Visit")
+        exists = db.query(ClientAccount).filter(ClientAccount.id == new_client_id).first()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Client not found")
+    else:
+        new_client_id = None
 
     if (new_type or "").strip() == "Leave":
         # enforce leave for the owner of the event (not necessarily the current admin)
@@ -1534,6 +1557,7 @@ async def update_event(
         e.all_day = payload.all_day
     if payload.type is not None:
         e.type = payload.type
+    e.client_id = new_client_id
     if payload.note is not None:
         e.note = payload.note or None
 

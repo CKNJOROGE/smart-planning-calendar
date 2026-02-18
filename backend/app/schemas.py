@@ -135,6 +135,7 @@ class EventCreate(BaseModel):
     end_ts: datetime
     all_day: bool = True
     type: str
+    client_id: Optional[int] = None
     note: Optional[str] = None
 
 
@@ -154,6 +155,7 @@ class EventUpdate(BaseModel):
     end_ts: Optional[datetime] = None
     all_day: Optional[bool] = None
     type: Optional[str] = None
+    client_id: Optional[int] = None
     note: Optional[str] = None
 
 
@@ -164,6 +166,7 @@ class EventOut(BaseModel):
     end_ts: datetime
     all_day: bool
     type: str
+    client_id: Optional[int] = None
     note: Optional[str]
     status: str
     requested_by_id: Optional[int] = None
