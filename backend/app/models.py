@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Date
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Date, Numeric, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, date
 from .db import Base
@@ -105,6 +105,7 @@ class ClientAccount(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(255), unique=True, nullable=False, index=True)
+    reimbursement_amount = Column(Numeric(12, 2), nullable=False, default=0)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
@@ -146,3 +147,46 @@ class DailyActivity(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="daily_activities", foreign_keys=[user_id])
+
+
+class CashReimbursementRequest(Base):
+    __tablename__ = "cash_reimbursement_requests"
+    __table_args__ = (
+        UniqueConstraint("user_id", "period_start", "period_end", name="uq_cash_reimbursements_user_period"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    period_start = Column(Date, nullable=False, index=True)
+    period_end = Column(Date, nullable=False, index=True)
+    total_amount = Column(Numeric(12, 2), nullable=False, default=0)
+    status = Column(String(20), nullable=False, default="pending")
+    submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    ceo_decision = Column(String(20), nullable=True)
+    ceo_comment = Column(Text, nullable=True)
+    ceo_decided_at = Column(DateTime, nullable=True)
+
+    finance_decision = Column(String(20), nullable=True)
+    finance_comment = Column(Text, nullable=True)
+    finance_decided_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+    items = relationship("CashReimbursementItem", back_populates="request", cascade="all, delete-orphan")
+
+
+class CashReimbursementItem(Base):
+    __tablename__ = "cash_reimbursement_items"
+
+    id = Column(Integer, primary_key=True)
+    request_id = Column(Integer, ForeignKey("cash_reimbursement_requests.id"), nullable=False, index=True)
+    item_date = Column(Date, nullable=False, index=True)
+    description = Column(Text, nullable=False)
+    amount = Column(Numeric(12, 2), nullable=False)
+    client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=True, index=True)
+    source_event_id = Column(Integer, ForeignKey("events.id"), nullable=True, unique=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    request = relationship("CashReimbursementRequest", back_populates="items")
+    client = relationship("ClientAccount", foreign_keys=[client_id])
+    source_event = relationship("Event", foreign_keys=[source_event_id])

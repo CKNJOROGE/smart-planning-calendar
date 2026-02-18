@@ -160,7 +160,7 @@ export default function CalendarPage() {
     }
 
     // admin loads users list for filtering
-    if (u.role === "admin") {
+    if (u.role === "admin" || u.role === "ceo") {
       const all = await listUsers();
       setUsers(all);
     } else {
@@ -332,7 +332,7 @@ export default function CalendarPage() {
 
   async function loadPopupApprovalConfig(apiEvent) {
     setPopupApprovalConfig(null);
-    if (!user || user.role !== "admin") return;
+    if (!user || (user.role !== "admin" && user.role !== "ceo")) return;
     if ((apiEvent?.type || "").toLowerCase() !== "leave") return;
     try {
       const p = await adminGetUserProfile(apiEvent.user_id);
@@ -361,7 +361,7 @@ export default function CalendarPage() {
 
   const canEdit = useMemo(() => {
     if (!popup || !user) return false;
-    if (user.role === "admin") return true;
+    if (user.role === "admin" || user.role === "ceo") return true;
     if (popup.apiEvent.user_id !== user.id) return false;
 
     const isLeave = (popup.apiEvent.type || "").toLowerCase() === "leave";
@@ -374,13 +374,13 @@ export default function CalendarPage() {
 
   const canDelete = useMemo(() => {
     if (!popup || !user) return false;
-    return user.role === "admin" || popup.apiEvent.user_id === user.id;
+    return user.role === "admin" || user.role === "ceo" || popup.apiEvent.user_id === user.id;
   }, [popup, user]);
 
   const canReviewLeave = useMemo(() => {
     if (!popup || !user) return false;
     return (
-      user.role === "admin" &&
+      (user.role === "admin" || user.role === "ceo") &&
       (popup.apiEvent.type || "").toLowerCase() === "leave" &&
       (popup.apiEvent.status || "").toLowerCase() === "pending"
     );
@@ -604,7 +604,7 @@ export default function CalendarPage() {
               </select>
             </div>
 
-            {user?.role === "admin" && (
+            {(user?.role === "admin" || user?.role === "ceo") && (
               <>
                 <div className="field" style={{ flex: "1 1 260px" }}>
                   <label>User</label>

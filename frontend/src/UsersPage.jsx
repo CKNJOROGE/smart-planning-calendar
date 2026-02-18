@@ -94,7 +94,7 @@ export default function UsersPage() {
     }
   }
 
-  if (current.role !== "admin") {
+  if (current.role !== "admin" && current.role !== "ceo") {
     return (
       <div className="page-wrap users-page">
         <div className="card" style={{ padding: 16 }}>
@@ -241,7 +241,9 @@ export default function UsersPage() {
                   >
                     <option value="employee">employee</option>
                     <option value="supervisor">supervisor</option>
+                    <option value="finance">finance</option>
                     <option value="admin">admin</option>
+                    <option value="ceo">ceo</option>
                   </select>
                 </div>
               </div>

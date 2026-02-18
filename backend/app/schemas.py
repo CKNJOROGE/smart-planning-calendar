@@ -225,11 +225,17 @@ class CompanyDocumentOut(BaseModel):
 # -------------------------
 class ClientAccountCreate(BaseModel):
     name: str
+    reimbursement_amount: Optional[float] = 0.0
+
+
+class ClientAccountUpdate(BaseModel):
+    reimbursement_amount: float
 
 
 class ClientAccountOut(BaseModel):
     id: int
     name: str
+    reimbursement_amount: float = 0.0
     created_by_id: Optional[int] = None
     created_at: datetime
 
@@ -328,3 +334,67 @@ class DashboardOverviewOut(BaseModel):
     unfinished_count: int
     upcoming_subtasks: List[TaskReminderOut]
     due_subtasks: List[TaskReminderOut]
+
+
+class CashReimbursementItemIn(BaseModel):
+    item_date: date
+    description: str
+    amount: float
+
+
+class CashReimbursementDraftItemOut(BaseModel):
+    item_date: date
+    description: str
+    amount: float
+    client_id: Optional[int] = None
+    source_event_id: Optional[int] = None
+    auto_filled: bool
+
+
+class CashReimbursementDraftOut(BaseModel):
+    period_start: date
+    period_end: date
+    auto_items: List[CashReimbursementDraftItemOut]
+
+
+class CashReimbursementSubmitIn(BaseModel):
+    manual_items: List[CashReimbursementItemIn] = []
+
+
+class CashReimbursementDecisionIn(BaseModel):
+    approve: bool
+    comment: Optional[str] = None
+
+
+class CashReimbursementItemOut(BaseModel):
+    id: int
+    item_date: date
+    description: str
+    amount: float
+    client_id: Optional[int] = None
+    source_event_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class CashReimbursementRequestOut(BaseModel):
+    id: int
+    user_id: int
+    period_start: date
+    period_end: date
+    total_amount: float
+    status: str
+    submitted_at: datetime
+    ceo_decision: Optional[str] = None
+    ceo_comment: Optional[str] = None
+    ceo_decided_at: Optional[datetime] = None
+    finance_decision: Optional[str] = None
+    finance_comment: Optional[str] = None
+    finance_decided_at: Optional[datetime] = None
+    user: UserOut
+    items: List[CashReimbursementItemOut]
+
+    class Config:
+        from_attributes = True

@@ -1,4 +1,5 @@
 from datetime import datetime, date, timedelta
+from decimal import Decimal
 from typing import List, Optional
 from pathlib import Path
 from uuid import uuid4
@@ -14,7 +15,16 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
-from .models import User, Event, CompanyDocument, ClientAccount, ClientTask, DailyActivity
+from .models import (
+    User,
+    Event,
+    CompanyDocument,
+    ClientAccount,
+    ClientTask,
+    DailyActivity,
+    CashReimbursementRequest,
+    CashReimbursementItem,
+)
 from .schemas import (
     TokenResponse,
     FirstAdminCreate,
@@ -32,6 +42,7 @@ from .schemas import (
     LeaveBalanceOut,
     CompanyDocumentOut,
     ClientAccountCreate,
+    ClientAccountUpdate,
     ClientAccountOut,
     ClientTaskCreate,
     ClientTaskUpdate,
@@ -41,6 +52,11 @@ from .schemas import (
     DailyActivityOut,
     TaskReminderOut,
     DashboardOverviewOut,
+    CashReimbursementDraftOut,
+    CashReimbursementDraftItemOut,
+    CashReimbursementSubmitIn,
+    CashReimbursementRequestOut,
+    CashReimbursementDecisionIn,
 )
 from .security import verify_password, create_access_token, hash_password
 from .deps import get_current_user, require_admin, require_leave_approver
@@ -149,7 +165,7 @@ def get_profile_document_file(
     owner = db.query(User).filter(or_(*like_filters)).first()
     if not owner:
         raise HTTPException(status_code=404, detail="File not found")
-    if current.role != "admin" and current.id != owner.id:
+    if not _is_admin_like(current.role) and current.id != owner.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     path = DOCUMENTS_DIR / file_name
@@ -263,7 +279,7 @@ def _is_admin_user(db: Session, user_id: Optional[int]) -> bool:
     if user_id is None:
         return False
     u = db.query(User).filter(User.id == user_id).first()
-    return bool(u and u.role == "admin")
+    return bool(u and u.role in {"admin", "ceo"})
 
 
 def _is_supervisor_user(db: Session, user_id: Optional[int]) -> bool:
@@ -274,7 +290,24 @@ def _is_supervisor_user(db: Session, user_id: Optional[int]) -> bool:
 
 
 def _is_valid_role(role: Optional[str]) -> bool:
-    return (role or "").strip().lower() in {"employee", "admin", "supervisor"}
+    return (role or "").strip().lower() in {"employee", "admin", "supervisor", "ceo", "finance"}
+
+
+def _is_admin_like(role: Optional[str]) -> bool:
+    return (role or "").strip().lower() in {"admin", "ceo"}
+
+
+def _is_finance_reviewer(role: Optional[str]) -> bool:
+    return (role or "").strip().lower() in {"finance", "admin", "ceo"}
+
+
+def _biweekly_period_for(d: date) -> tuple[date, date]:
+    # Anchor to a Monday to keep 14-day windows stable.
+    anchor = date(2025, 1, 6)
+    n = (d - anchor).days // 14
+    start = anchor + timedelta(days=n * 14)
+    end = start + timedelta(days=13)
+    return start, end
 
 
 async def _upload_profile_document(
@@ -411,7 +444,7 @@ def create_user(
     if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email already exists")
     if not _is_valid_role(payload.role):
-        raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, admin")
+        raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, finance, admin, ceo")
 
     u = User(
         name=payload.name,
@@ -442,7 +475,7 @@ def get_user_profile(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    if current.role != "admin" and current.id != user_id:
+    if not _is_admin_like(current.role) and current.id != user_id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     u = db.query(User).filter(User.id == user_id).first()
@@ -458,7 +491,7 @@ def update_user_profile(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    if current.role != "admin" and current.id != user_id:
+    if not _is_admin_like(current.role) and current.id != user_id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     u = db.query(User).filter(User.id == user_id).first()
@@ -634,7 +667,7 @@ def admin_update_user_profile(
     if "role" in incoming:
         role = (incoming["role"] or "").strip().lower()
         if not _is_valid_role(role):
-            raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, admin")
+            raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, finance, admin, ceo")
         incoming["role"] = role
 
     first_approver_id = incoming.get("first_approver_id", u.first_approver_id)
@@ -647,7 +680,7 @@ def admin_update_user_profile(
     if first_approver_id is not None and not _is_supervisor_user(db, first_approver_id):
         raise HTTPException(status_code=400, detail="first_approver_id must be a supervisor user")
     if second_approver_id is not None and not _is_admin_user(db, second_approver_id):
-        raise HTTPException(status_code=400, detail="second_approver_id must be an admin user")
+        raise HTTPException(status_code=400, detail="second_approver_id must be an admin/ceo user")
 
     if first_approver_id is not None and second_approver_id is not None and first_approver_id == second_approver_id:
         raise HTTPException(status_code=400, detail="first_approver_id and second_approver_id must be different")
@@ -655,7 +688,7 @@ def admin_update_user_profile(
     if requires_two_step and (first_approver_id is None or second_approver_id is None):
         raise HTTPException(
             status_code=400,
-            detail="Two-step leave approval requires both first_approver_id (supervisor) and second_approver_id (admin)",
+            detail="Two-step leave approval requires both first_approver_id (supervisor) and second_approver_id (admin/ceo)",
         )
 
     for k, v in incoming.items():
@@ -826,8 +859,31 @@ def create_task_client(
     if exists:
         raise HTTPException(status_code=400, detail="Client already exists")
 
-    c = ClientAccount(name=name, created_by_id=current.id)
+    amt = Decimal(str(payload.reimbursement_amount or 0))
+    if amt < 0:
+        raise HTTPException(status_code=400, detail="reimbursement_amount must be >= 0")
+
+    c = ClientAccount(name=name, reimbursement_amount=amt, created_by_id=current.id)
     db.add(c)
+    db.commit()
+    db.refresh(c)
+    return c
+
+
+@app.patch("/task-manager/clients/{client_id}", response_model=ClientAccountOut)
+def update_task_client(
+    client_id: int,
+    payload: ClientAccountUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    c = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+    amt = Decimal(str(payload.reimbursement_amount or 0))
+    if amt < 0:
+        raise HTTPException(status_code=400, detail="reimbursement_amount must be >= 0")
+    c.reimbursement_amount = amt
     db.commit()
     db.refresh(c)
     return c
@@ -919,7 +975,7 @@ def update_client_task(
     t = db.query(ClientTask).filter(ClientTask.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
-    if current.role not in {"admin", "supervisor"} and t.user_id != current.id:
+    if current.role not in {"admin", "ceo", "supervisor"} and t.user_id != current.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     incoming = payload.dict(exclude_unset=True)
@@ -955,12 +1011,256 @@ def delete_client_task(
     t = db.query(ClientTask).filter(ClientTask.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
-    if current.role not in {"admin", "supervisor"} and t.user_id != current.id:
+    if current.role not in {"admin", "ceo", "supervisor"} and t.user_id != current.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     db.delete(t)
     db.commit()
     return {"ok": True}
+
+
+@app.get("/finance/reimbursements/draft", response_model=CashReimbursementDraftOut)
+def get_cash_reimbursement_draft(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    period_start, period_end = _biweekly_period_for(date.today())
+
+    used_event_ids = {
+        int(x[0]) for x in db.query(CashReimbursementItem.source_event_id)
+        .filter(CashReimbursementItem.source_event_id.isnot(None))
+        .all()
+    }
+    rows = (
+        db.query(Event)
+        .filter(
+            Event.user_id == current.id,
+            Event.type == "Client Visit",
+            Event.client_id.isnot(None),
+            Event.start_ts >= datetime.combine(period_start, datetime.min.time()),
+            Event.start_ts < datetime.combine(period_end + timedelta(days=1), datetime.min.time()),
+        )
+        .order_by(Event.start_ts.asc(), Event.id.asc())
+        .all()
+    )
+
+    items: list[CashReimbursementDraftItemOut] = []
+    for e in rows:
+        if e.id in used_event_ids:
+            continue
+        client = db.query(ClientAccount).filter(ClientAccount.id == e.client_id).first()
+        if not client:
+            continue
+        amount = float(client.reimbursement_amount or 0)
+        items.append(
+            CashReimbursementDraftItemOut(
+                item_date=e.start_ts.date(),
+                description=f"Client visit to and from {client.name}",
+                amount=amount,
+                client_id=e.client_id,
+                source_event_id=e.id,
+                auto_filled=True,
+            )
+        )
+
+    return CashReimbursementDraftOut(
+        period_start=period_start,
+        period_end=period_end,
+        auto_items=items,
+    )
+
+
+def _load_reimbursement_request(db: Session, request_id: int) -> Optional[CashReimbursementRequest]:
+    req = db.query(CashReimbursementRequest).filter(CashReimbursementRequest.id == request_id).first()
+    if not req:
+        return None
+    _ = req.user
+    _ = req.items
+    return req
+
+
+@app.get("/finance/reimbursements/my", response_model=List[CashReimbursementRequestOut])
+def list_my_cash_reimbursements(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(CashReimbursementRequest)
+        .filter(CashReimbursementRequest.user_id == current.id)
+        .order_by(CashReimbursementRequest.period_start.desc(), CashReimbursementRequest.id.desc())
+        .all()
+    )
+    for r in rows:
+        _ = r.user
+        _ = r.items
+    return rows
+
+
+@app.get("/finance/reimbursements/pending", response_model=List[CashReimbursementRequestOut])
+def list_pending_cash_reimbursements(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _is_finance_reviewer(current.role):
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    rows = (
+        db.query(CashReimbursementRequest)
+        .filter(CashReimbursementRequest.status == "pending")
+        .order_by(CashReimbursementRequest.submitted_at.asc(), CashReimbursementRequest.id.asc())
+        .all()
+    )
+    for r in rows:
+        _ = r.user
+        _ = r.items
+    return rows
+
+
+@app.post("/finance/reimbursements/submit", response_model=CashReimbursementRequestOut)
+def submit_cash_reimbursement(
+    payload: CashReimbursementSubmitIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    period_start, period_end = _biweekly_period_for(date.today())
+    existing = (
+        db.query(CashReimbursementRequest)
+        .filter(
+            CashReimbursementRequest.user_id == current.id,
+            CashReimbursementRequest.period_start == period_start,
+            CashReimbursementRequest.period_end == period_end,
+        )
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Cash reimbursement already submitted for this biweekly period")
+
+    used_event_ids = {
+        int(x[0]) for x in db.query(CashReimbursementItem.source_event_id)
+        .filter(CashReimbursementItem.source_event_id.isnot(None))
+        .all()
+    }
+    auto_events = (
+        db.query(Event)
+        .filter(
+            Event.user_id == current.id,
+            Event.type == "Client Visit",
+            Event.client_id.isnot(None),
+            Event.start_ts >= datetime.combine(period_start, datetime.min.time()),
+            Event.start_ts < datetime.combine(period_end + timedelta(days=1), datetime.min.time()),
+        )
+        .order_by(Event.start_ts.asc(), Event.id.asc())
+        .all()
+    )
+
+    all_items: list[dict] = []
+    total = Decimal("0")
+
+    for e in auto_events:
+        if e.id in used_event_ids:
+            continue
+        client = db.query(ClientAccount).filter(ClientAccount.id == e.client_id).first()
+        if not client:
+            continue
+        amount = Decimal(str(client.reimbursement_amount or 0))
+        all_items.append({
+            "item_date": e.start_ts.date(),
+            "description": f"Client visit to and from {client.name}",
+            "amount": amount,
+            "client_id": e.client_id,
+            "source_event_id": e.id,
+        })
+        total += amount
+
+    for m in payload.manual_items or []:
+        desc = (m.description or "").strip()
+        if not desc:
+            raise HTTPException(status_code=400, detail="Manual reimbursement description is required")
+        amount = Decimal(str(m.amount))
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Manual reimbursement amount must be > 0")
+        all_items.append({
+            "item_date": m.item_date,
+            "description": desc,
+            "amount": amount,
+            "client_id": None,
+            "source_event_id": None,
+        })
+        total += amount
+
+    if not all_items:
+        raise HTTPException(status_code=400, detail="No reimbursement items to submit for this period")
+
+    req = CashReimbursementRequest(
+        user_id=current.id,
+        period_start=period_start,
+        period_end=period_end,
+        total_amount=total,
+        status="pending",
+    )
+    db.add(req)
+    db.flush()
+
+    for row in all_items:
+        db.add(CashReimbursementItem(
+            request_id=req.id,
+            item_date=row["item_date"],
+            description=row["description"],
+            amount=row["amount"],
+            client_id=row["client_id"],
+            source_event_id=row["source_event_id"],
+        ))
+
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    _ = req.items
+    return req
+
+
+@app.post("/finance/reimbursements/{request_id}/decision", response_model=CashReimbursementRequestOut)
+def decide_cash_reimbursement(
+    request_id: int,
+    payload: CashReimbursementDecisionIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    req = _load_reimbursement_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Reimbursement request not found")
+    if req.status in {"approved", "rejected"}:
+        raise HTTPException(status_code=400, detail="Request already finalized")
+
+    decision = "approved" if payload.approve else "rejected"
+    comment = (payload.comment or "").strip()
+    if not payload.approve and not comment:
+        raise HTTPException(status_code=400, detail="Comment is required when denying")
+
+    role = (current.role or "").strip().lower()
+    now = datetime.utcnow()
+    if role in {"admin", "ceo"}:
+        req.ceo_decision = decision
+        req.ceo_comment = comment or None
+        req.ceo_decided_at = now
+    elif role == "finance":
+        req.finance_decision = decision
+        req.finance_comment = comment or None
+        req.finance_decided_at = now
+    else:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    if req.ceo_decision == "rejected" or req.finance_decision == "rejected":
+        req.status = "rejected"
+    elif req.ceo_decision == "approved" and req.finance_decision == "approved":
+        req.status = "approved"
+    else:
+        req.status = "pending"
+
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    _ = req.items
+    return req
 
 
 def _to_task_reminder(task: ClientTask) -> TaskReminderOut:
@@ -1136,7 +1436,7 @@ def update_todays_activity(
     row = db.query(DailyActivity).filter(DailyActivity.id == activity_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Activity not found")
-    if current.role != "admin" and row.user_id != current.id:
+    if not _is_admin_like(current.role) and row.user_id != current.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     row.completed = bool(payload.completed)
@@ -1172,7 +1472,7 @@ def list_todo_history(
         history_start = today - timedelta(days=days)
         q = q.filter(DailyActivity.activity_date >= history_start)
 
-    if current.role == "admin":
+    if _is_admin_like(current.role):
         if user_id is not None:
             q = q.filter(DailyActivity.user_id == user_id)
         if (user_query or "").strip():
@@ -1284,14 +1584,14 @@ async def approve_leave_request(
         if not _is_supervisor_user(db, first_approver_id):
             raise HTTPException(status_code=400, detail="Leave owner has invalid approval setup: first approver must be supervisor")
         if not _is_admin_user(db, second_approver_id):
-            raise HTTPException(status_code=400, detail="Leave owner has invalid approval setup: second approver must be admin")
+            raise HTTPException(status_code=400, detail="Leave owner has invalid approval setup: second approver must be admin/ceo")
 
         if approver.id not in {first_approver_id, second_approver_id}:
             raise HTTPException(status_code=403, detail="You are not assigned to approve this leave")
         if approver.id == first_approver_id and approver.role != "supervisor":
             raise HTTPException(status_code=403, detail="First approval must be done by the assigned supervisor")
-        if approver.id == second_approver_id and approver.role != "admin":
-            raise HTTPException(status_code=403, detail="Second approval must be done by the assigned admin")
+        if approver.id == second_approver_id and not _is_admin_like(approver.role):
+            raise HTTPException(status_code=403, detail="Second approval must be done by the assigned admin/ceo")
 
         # Approval order: first approver must approve before second approver.
         if approver.id == second_approver_id and e.first_approved_by_id is None:
@@ -1322,8 +1622,8 @@ async def approve_leave_request(
             # Keep pending until both approvals are completed.
             e.status = "pending"
     else:
-        if approver.role != "admin":
-            raise HTTPException(status_code=403, detail="Only admin can approve single-step leave")
+        if not _is_admin_like(approver.role):
+            raise HTTPException(status_code=403, detail="Only admin/ceo can approve single-step leave")
         e.status = "approved"
         e.approved_by_id = approver.id
         e.approved_at = datetime.utcnow()
@@ -1367,10 +1667,10 @@ async def reject_leave_request(
             raise HTTPException(status_code=403, detail="You are not assigned to reject this leave")
         if approver.id == owner.first_approver_id and approver.role != "supervisor":
             raise HTTPException(status_code=403, detail="First approver must be supervisor")
-        if approver.id == owner.second_approver_id and approver.role != "admin":
+        if approver.id == owner.second_approver_id and not _is_admin_like(approver.role):
             raise HTTPException(status_code=403, detail="Second approver must be admin")
-    elif approver.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admin can reject single-step leave")
+    elif not _is_admin_like(approver.role):
+        raise HTTPException(status_code=403, detail="Only admin/ceo can reject single-step leave")
 
     e.status = "rejected"
     e.approved_by_id = approver.id
@@ -1405,7 +1705,7 @@ def list_leave_requests(
     if end is not None:
         q = q.filter(Event.start_ts < end)
 
-    if current.role != "admin":
+    if not _is_admin_like(current.role):
         if current.role == "supervisor":
             q = q.filter(
                 Event.user.has(User.first_approver_id == current.id)
@@ -1447,13 +1747,13 @@ def list_events(
 
     # user filter (admin only)
     if user_id is not None:
-        if current.role != "admin":
+        if not _is_admin_like(current.role):
             raise HTTPException(status_code=403, detail="Admin only filter")
         q = q.filter(Event.user_id == user_id)
 
     # department filter (admin only)
     if department:
-        if current.role != "admin":
+        if not _is_admin_like(current.role):
             raise HTTPException(status_code=403, detail="Admin only filter")
         q = q.join(User, User.id == Event.user_id).filter(User.department == department)
 
@@ -1519,7 +1819,7 @@ async def update_event(
     if not e:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if user.role != "admin" and e.user_id != user.id:
+    if not _is_admin_like(user.role) and e.user_id != user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     # Prepare prospective values for leave validation
@@ -1580,7 +1880,7 @@ async def delete_event(
     if not e:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if user.role != "admin" and e.user_id != user.id:
+    if not _is_admin_like(user.role) and e.user_id != user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
 
     db.delete(e)
@@ -1588,4 +1888,7 @@ async def delete_event(
 
     await broadcast_events_changed("deleted", event_id)
     return {"ok": True}
+
+
+
 

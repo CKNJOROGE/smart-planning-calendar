@@ -35,12 +35,12 @@ export default function UserProfilePage() {
       const p = await adminGetUserProfile(userId);
       setProfile(p);
       const allUsers = await listUsers();
-      setAdminUsers(allUsers.filter((x) => x.role === "admin"));
+      setAdminUsers(allUsers.filter((x) => x.role === "admin" || x.role === "ceo"));
       setSupervisorUsers(allUsers.filter((x) => x.role === "supervisor"));
     })().catch((e) => setErr(String(e.message || e)));
   }, [userId]);
 
-  if (current && current.role !== "admin") return <Navigate to="/" replace />;
+  if (current && current.role !== "admin" && current.role !== "ceo") return <Navigate to="/" replace />;
   if (err) return <div style={{ color: "crimson" }}>{err}</div>;
   if (!profile) return <div>Loading...</div>;
 
@@ -134,7 +134,9 @@ export default function UserProfilePage() {
               >
                 <option value="employee">employee</option>
                 <option value="supervisor">supervisor</option>
+                <option value="finance">finance</option>
                 <option value="admin">admin</option>
+                <option value="ceo">ceo</option>
               </select>
             </div>
 
@@ -274,7 +276,7 @@ export default function UserProfilePage() {
                 }
                 style={{ width: 230 }}
               >
-                <option value="">Second approver (admin)</option>
+                <option value="">Second approver (admin/ceo)</option>
                 {adminUsers.map((a) => (
                   <option key={a.id} value={a.id}>{a.name} (ID {a.id})</option>
                 ))}

@@ -292,8 +292,18 @@ export function listTaskClients(year) {
   return request(`/task-manager/clients${qs}`);
 }
 
-export function createTaskClient(name) {
-  return request("/task-manager/clients", { method: "POST", body: { name } });
+export function createTaskClient(name, reimbursementAmount = 0) {
+  return request("/task-manager/clients", {
+    method: "POST",
+    body: { name, reimbursement_amount: Number(reimbursementAmount || 0) },
+  });
+}
+
+export function updateTaskClient(clientId, reimbursementAmount) {
+  return request(`/task-manager/clients/${clientId}`, {
+    method: "PATCH",
+    body: { reimbursement_amount: Number(reimbursementAmount) },
+  });
 }
 
 export function listClientTasks({ year, clientId, quarter }) {
@@ -353,6 +363,32 @@ export function listTodoHistory(filters = {}) {
   if (filters.days) qs.set("days", String(filters.days));
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return request(`/dashboard/activities/history${suffix}`);
+}
+
+export function getCashReimbursementDraft() {
+  return request("/finance/reimbursements/draft");
+}
+
+export function submitCashReimbursement(manualItems) {
+  return request("/finance/reimbursements/submit", {
+    method: "POST",
+    body: { manual_items: manualItems || [] },
+  });
+}
+
+export function listMyCashReimbursements() {
+  return request("/finance/reimbursements/my");
+}
+
+export function listPendingCashReimbursements() {
+  return request("/finance/reimbursements/pending");
+}
+
+export function decideCashReimbursement(requestId, approve, comment) {
+  return request(`/finance/reimbursements/${requestId}/decision`, {
+    method: "POST",
+    body: { approve: !!approve, comment: comment || null },
+  });
 }
 
 export async function openProtectedFile(url) {

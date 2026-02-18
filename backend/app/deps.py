@@ -26,12 +26,12 @@ def get_current_user(
     return user
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
-    if user.role != "admin":
+    if user.role not in {"admin", "ceo"}:
         raise HTTPException(status_code=403, detail="Admin only")
     return user
 
 
 def require_leave_approver(user: User = Depends(get_current_user)) -> User:
-    if user.role not in {"admin", "supervisor"}:
+    if user.role not in {"admin", "ceo", "supervisor"}:
         raise HTTPException(status_code=403, detail="Approvers only")
     return user
