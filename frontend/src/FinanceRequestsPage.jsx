@@ -54,6 +54,10 @@ export default function FinanceRequestsPage() {
     const role = (current?.role || "").toLowerCase();
     return role === "finance" || role === "admin" || role === "ceo";
   }, [current?.role]);
+  const canApplyReimbursement = useMemo(() => {
+    const role = (current?.role || "").toLowerCase();
+    return role !== "admin" && role !== "ceo";
+  }, [current?.role]);
 
   const totalAmount = useMemo(() => {
     const autoTotal = (draft.auto_items || []).reduce((acc, x) => acc + Number(x.amount || 0), 0);
@@ -300,119 +304,125 @@ export default function FinanceRequestsPage() {
             )}
           </div>
         )}
-        <div className="muted" style={{ marginBottom: 10 }}>
-          Period: {draft.period_start || "-"} to {draft.period_end || "-"}
-        </div>
-        <div className="muted" style={{ marginBottom: 10 }}>
-          {draft.submit_message || "Cash reimbursement can be submitted on the 15th and 30th of each month, and Feb 28."}
-        </div>
+        {canApplyReimbursement && (
+          <>
+            <div className="muted" style={{ marginBottom: 10 }}>
+              Period: {draft.period_start || "-"} to {draft.period_end || "-"}
+            </div>
+            <div className="muted" style={{ marginBottom: 10 }}>
+              {draft.submit_message || "Cash reimbursement can be submitted on the 15th and 30th of each month, and Feb 28."}
+            </div>
 
-        <div style={{ width: "100%", overflowX: "auto" }}>
-          <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "#f8fafc" }}>
-                <th style={{ textAlign: "left", padding: 10 }}>Date</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Description</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Source</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(draft.auto_items || []).map((item, idx) => (
-                <tr key={`auto_${idx}`} style={{ borderTop: "1px solid #eef2f7" }}>
-                  <td style={{ padding: 10 }}>{item.item_date}</td>
-                  <td style={{ padding: 10 }}>{item.description}</td>
-                  <td style={{ padding: 10 }}>{fmtCurrency(item.amount)}</td>
-                  <td style={{ padding: 10 }}><span className="pill">Auto: Client Visit</span></td>
-                </tr>
-              ))}
+            <div style={{ width: "100%", overflowX: "auto" }}>
+              <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ textAlign: "left", padding: 10 }}>Date</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Description</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(draft.auto_items || []).map((item, idx) => (
+                    <tr key={`auto_${idx}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <td style={{ padding: 10 }}>{item.item_date}</td>
+                      <td style={{ padding: 10 }}>{item.description}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(item.amount)}</td>
+                      <td style={{ padding: 10 }}><span className="pill">Auto: Client Visit</span></td>
+                    </tr>
+                  ))}
 
-              {(manualItems || []).map((row, idx) => (
-                <tr key={`manual_${idx}`} style={{ borderTop: "1px solid #eef2f7" }}>
-                  <td style={{ padding: 10 }}>
-                    <input
-                      type="date"
-                      value={row.item_date}
-                      onChange={(e) => updateManualRow(idx, { item_date: e.target.value })}
-                      disabled={!draft.can_edit_manual}
-                    />
-                  </td>
-                  <td style={{ padding: 10 }}>
-                    <input
-                      value={row.description}
-                      onChange={(e) => updateManualRow(idx, { description: e.target.value })}
-                      placeholder="Manual reimbursement description"
-                      disabled={!draft.can_edit_manual}
-                    />
-                  </td>
-                  <td style={{ padding: 10 }}>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.amount}
-                      onChange={(e) => updateManualRow(idx, { amount: e.target.value })}
-                      placeholder="0.00"
-                      disabled={!draft.can_edit_manual}
-                    />
-                  </td>
-                  <td style={{ padding: 10 }}>
-                    <button className="btn btn-danger" onClick={() => removeManualRow(idx)} disabled={!draft.can_edit_manual}>Remove</button>
-                  </td>
-                </tr>
-              ))}
+                  {(manualItems || []).map((row, idx) => (
+                    <tr key={`manual_${idx}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <td style={{ padding: 10 }}>
+                        <input
+                          type="date"
+                          value={row.item_date}
+                          onChange={(e) => updateManualRow(idx, { item_date: e.target.value })}
+                          disabled={!draft.can_edit_manual}
+                        />
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <input
+                          value={row.description}
+                          onChange={(e) => updateManualRow(idx, { description: e.target.value })}
+                          placeholder="Manual reimbursement description"
+                          disabled={!draft.can_edit_manual}
+                        />
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={row.amount}
+                          onChange={(e) => updateManualRow(idx, { amount: e.target.value })}
+                          placeholder="0.00"
+                          disabled={!draft.can_edit_manual}
+                        />
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <button className="btn btn-danger" onClick={() => removeManualRow(idx)} disabled={!draft.can_edit_manual}>Remove</button>
+                      </td>
+                    </tr>
+                  ))}
 
-              {!draft.auto_items?.length && manualItems.length === 0 && (
-                <tr>
-                  <td colSpan={4} style={{ padding: 14 }} className="muted">No reimbursement rows yet.</td>
-                </tr>
+                  {!draft.auto_items?.length && manualItems.length === 0 && (
+                    <tr>
+                      <td colSpan={4} style={{ padding: 14 }} className="muted">No reimbursement rows yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <button className="btn" type="button" onClick={addManualRow} disabled={!draft.can_edit_manual}>+ Add Manual Item</button>
+              <button className="btn" type="button" onClick={saveManualDraft} disabled={!draft.can_edit_manual}>Save Draft</button>
+              {draft.can_submit && (
+                <button className="btn btn-primary" type="button" onClick={submitReimbursement} disabled={busy}>
+                  Submit 2-Week Reimbursement
+                </button>
               )}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button className="btn" type="button" onClick={addManualRow} disabled={!draft.can_edit_manual}>+ Add Manual Item</button>
-          <button className="btn" type="button" onClick={saveManualDraft} disabled={!draft.can_edit_manual}>Save Draft</button>
-          {draft.can_submit && (
-            <button className="btn btn-primary" type="button" onClick={submitReimbursement} disabled={busy}>
-              Submit 2-Week Reimbursement
-            </button>
-          )}
-          <span className="pill">Total: {fmtCurrency(totalAmount)}</span>
-        </div>
+              <span className="pill">Total: {fmtCurrency(totalAmount)}</span>
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 900, marginBottom: 8 }}>My Reimbursement Requests</div>
-        <div style={{ width: "100%", overflowX: "auto" }}>
-          <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "#f8fafc" }}>
-                <th style={{ textAlign: "left", padding: 10 }}>Period</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Total</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Status</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Comments</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(myRequests || []).map((r) => (
-                <tr key={r.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                  <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
-                  <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
-                  <td style={{ padding: 10 }}><span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{r.status}</span></td>
-                  <td style={{ padding: 10 }}>
-                    {r.ceo_comment ? `CEO: ${r.ceo_comment}` : "-"}{r.finance_comment ? ` | Finance: ${r.finance_comment}` : ""}
-                  </td>
+      {canApplyReimbursement && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>My Reimbursement Requests</div>
+          <div style={{ width: "100%", overflowX: "auto" }}>
+            <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  <th style={{ textAlign: "left", padding: 10 }}>Period</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Total</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Comments</th>
                 </tr>
-              ))}
-              {!myRequests.length && (
-                <tr><td colSpan={4} style={{ padding: 14 }} className="muted">No submissions yet.</td></tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {(myRequests || []).map((r) => (
+                  <tr key={r.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                    <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
+                    <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
+                    <td style={{ padding: 10 }}><span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{r.status}</span></td>
+                    <td style={{ padding: 10 }}>
+                      {r.ceo_comment ? `CEO: ${r.ceo_comment}` : "-"}{r.finance_comment ? ` | Finance: ${r.finance_comment}` : ""}
+                    </td>
+                  </tr>
+                ))}
+                {!myRequests.length && (
+                  <tr><td colSpan={4} style={{ padding: 14 }} className="muted">No submissions yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {canReview && (
         <div className="card">
