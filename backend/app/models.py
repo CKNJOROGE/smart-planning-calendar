@@ -160,7 +160,7 @@ class CashReimbursementRequest(Base):
     period_start = Column(Date, nullable=False, index=True)
     period_end = Column(Date, nullable=False, index=True)
     total_amount = Column(Numeric(12, 2), nullable=False, default=0)
-    status = Column(String(20), nullable=False, default="pending")
+    status = Column(String(40), nullable=False, default="pending_approval")
     submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     ceo_decision = Column(String(20), nullable=True)

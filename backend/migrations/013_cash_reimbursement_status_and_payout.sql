@@ -4,6 +4,9 @@
 BEGIN;
 
 ALTER TABLE cash_reimbursement_requests
+    ALTER COLUMN status TYPE VARCHAR(40);
+
+ALTER TABLE cash_reimbursement_requests
     ADD COLUMN IF NOT EXISTS reimbursed_by_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL;
 
 ALTER TABLE cash_reimbursement_requests
