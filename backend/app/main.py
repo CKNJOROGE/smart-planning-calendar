@@ -310,6 +310,20 @@ def _biweekly_period_for(d: date) -> tuple[date, date]:
     return start, end
 
 
+def _is_reimbursement_due_day(d: date) -> bool:
+    if d.month == 2:
+        return d.day == 28
+    return d.day in {15, 30}
+
+
+def _reimbursement_due_message(today: date, can_submit: bool) -> str:
+    if can_submit:
+        return "Cash reimbursement submission is open today. Submit your 2-week reimbursement."
+    if today.month == 2:
+        return "Cash reimbursement can be submitted on February 28."
+    return "Cash reimbursement can be submitted on the 15th and 30th of each month."
+
+
 async def _upload_profile_document(
     request: Request,
     db: Session,
@@ -1024,7 +1038,19 @@ def get_cash_reimbursement_draft(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    period_start, period_end = _biweekly_period_for(date.today())
+    today = date.today()
+    period_start, period_end = _biweekly_period_for(today)
+    due_today = _is_reimbursement_due_day(today)
+    already_submitted_for_period = bool(
+        db.query(CashReimbursementRequest.id)
+        .filter(
+            CashReimbursementRequest.user_id == current.id,
+            CashReimbursementRequest.period_start == period_start,
+            CashReimbursementRequest.period_end == period_end,
+        )
+        .first()
+    )
+    can_submit = due_today and not already_submitted_for_period
 
     used_event_ids = {
         int(x[0]) for x in db.query(CashReimbursementItem.source_event_id)
@@ -1067,6 +1093,13 @@ def get_cash_reimbursement_draft(
         period_start=period_start,
         period_end=period_end,
         auto_items=items,
+        can_submit=can_submit,
+        submit_due_today=due_today,
+        submit_message=(
+            "You already submitted this period's reimbursement."
+            if already_submitted_for_period
+            else _reimbursement_due_message(today, can_submit)
+        ),
     )
 
 
@@ -1122,7 +1155,14 @@ def submit_cash_reimbursement(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    period_start, period_end = _biweekly_period_for(date.today())
+    today = date.today()
+    if not _is_reimbursement_due_day(today):
+        raise HTTPException(
+            status_code=400,
+            detail=_reimbursement_due_message(today, False),
+        )
+
+    period_start, period_end = _biweekly_period_for(today)
     existing = (
         db.query(CashReimbursementRequest)
         .filter(
@@ -1287,7 +1327,7 @@ def _to_task_reminder(task: ClientTask) -> TaskReminderOut:
 @app.get("/dashboard/overview", response_model=DashboardOverviewOut)
 def get_dashboard_overview(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current: User = Depends(get_current_user),
 ):
     today = date.today()
     history_start = today - timedelta(days=14)
@@ -1377,6 +1417,23 @@ def get_dashboard_overview(
         _ = item.user
         _ = item.client
 
+    reimbursement_due = _is_reimbursement_due_day(today)
+    reimbursement_period_start, reimbursement_period_end = _biweekly_period_for(today)
+    already_submitted_for_period = bool(
+        db.query(CashReimbursementRequest.id)
+        .filter(
+            CashReimbursementRequest.user_id == current.id,
+            CashReimbursementRequest.period_start == reimbursement_period_start,
+            CashReimbursementRequest.period_end == reimbursement_period_end,
+        )
+        .first()
+    )
+    reimbursement_can_submit = reimbursement_due and not already_submitted_for_period
+    if already_submitted_for_period:
+        reimbursement_submit_message = "You already submitted this period's reimbursement."
+    else:
+        reimbursement_submit_message = _reimbursement_due_message(today, reimbursement_can_submit)
+
     return DashboardOverviewOut(
         today=today,
         todays_activities=todays_activities,
@@ -1385,6 +1442,11 @@ def get_dashboard_overview(
         unfinished_count=unfinished_count,
         upcoming_subtasks=[_to_task_reminder(t) for t in upcoming_rows],
         due_subtasks=[_to_task_reminder(t) for t in due_rows],
+        reimbursement_can_submit=reimbursement_can_submit,
+        reimbursement_submit_due_today=reimbursement_due,
+        reimbursement_submit_period_start=reimbursement_period_start,
+        reimbursement_submit_period_end=reimbursement_period_end,
+        reimbursement_submit_message=reimbursement_submit_message,
     )
 
 

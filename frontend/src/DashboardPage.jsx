@@ -72,6 +72,11 @@ export default function DashboardPage() {
     unfinished_count: 0,
     upcoming_subtasks: [],
     due_subtasks: [],
+    reimbursement_can_submit: false,
+    reimbursement_submit_due_today: false,
+    reimbursement_submit_period_start: "",
+    reimbursement_submit_period_end: "",
+    reimbursement_submit_message: "",
   });
 
   const isAdmin = currentUser?.role === "admin";
@@ -348,6 +353,24 @@ export default function DashboardPage() {
       </div>
 
       {err && <div className="error">{err}</div>}
+      {overview.reimbursement_can_submit && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 12,
+            border: "1px solid #f59e0b",
+            background: "#fffbeb",
+          }}
+        >
+          <div style={{ fontWeight: 900, marginBottom: 4 }}>Cash Reimbursement Due</div>
+          <div style={{ fontSize: 14 }}>
+            Submit your reimbursement for {formatDate(overview.reimbursement_submit_period_start)} to {formatDate(overview.reimbursement_submit_period_end)}.
+          </div>
+          <div className="muted" style={{ marginTop: 4 }}>
+            {overview.reimbursement_submit_message || "Submission is open today."}
+          </div>
+        </div>
+      )}
 
       <div className="card dashboard-panel dashboard-compose-panel">
         <div className="dashboard-panel-head">

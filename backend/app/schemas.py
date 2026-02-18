@@ -334,6 +334,11 @@ class DashboardOverviewOut(BaseModel):
     unfinished_count: int
     upcoming_subtasks: List[TaskReminderOut]
     due_subtasks: List[TaskReminderOut]
+    reimbursement_can_submit: bool = False
+    reimbursement_submit_due_today: bool = False
+    reimbursement_submit_period_start: Optional[date] = None
+    reimbursement_submit_period_end: Optional[date] = None
+    reimbursement_submit_message: Optional[str] = None
 
 
 class CashReimbursementItemIn(BaseModel):
@@ -355,6 +360,9 @@ class CashReimbursementDraftOut(BaseModel):
     period_start: date
     period_end: date
     auto_items: List[CashReimbursementDraftItemOut]
+    can_submit: bool = False
+    submit_due_today: bool = False
+    submit_message: Optional[str] = None
 
 
 class CashReimbursementSubmitIn(BaseModel):

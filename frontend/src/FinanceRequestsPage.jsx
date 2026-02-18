@@ -47,6 +47,7 @@ export default function FinanceRequestsPage() {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [clientPricing, setClientPricing] = useState([]);
   const [pricingSaving, setPricingSaving] = useState({});
+  const [showClientPricing, setShowClientPricing] = useState(false);
 
   const canReview = useMemo(() => {
     const role = (current?.role || "").toLowerCase();
@@ -198,56 +199,70 @@ export default function FinanceRequestsPage() {
         <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Reimbursement (Current 2-Week Window)</div>
         {(current?.role === "admin" || current?.role === "ceo") && (
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 800, marginBottom: 6 }}>Client Visit Amount Setup (Admin/CEO only)</div>
-            <div className="muted" style={{ marginBottom: 8 }}>
-              Set default reimbursement amount per client. Auto-filled Client Visit reimbursements use these values.
-            </div>
-            <div style={{ width: "100%", overflowX: "auto" }}>
-              <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    <th style={{ textAlign: "left", padding: 10 }}>Client</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clientPricing.map((row) => (
-                    <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                      <td style={{ padding: 10 }}>{row.name}</td>
-                      <td style={{ padding: 10 }}>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={row.reimbursement_amount}
-                          onChange={(e) => setClientPricing((prev) => prev.map((x) => (
-                            x.id === row.id ? { ...x, reimbursement_amount: e.target.value } : x
-                          )))}
-                        />
-                      </td>
-                      <td style={{ padding: 10 }}>
-                        <button
-                          className="btn"
-                          type="button"
-                          onClick={() => saveClientPrice(row)}
-                          disabled={!!pricingSaving[row.id]}
-                        >
-                          {pricingSaving[row.id] ? "Saving..." : "Save"}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {!clientPricing.length && (
-                    <tr><td colSpan={3} style={{ padding: 14 }} className="muted">No clients found.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => setShowClientPricing((v) => !v)}
+              style={{ marginBottom: 8 }}
+            >
+              {showClientPricing ? "Hide" : "Show"} Client Visit Amount Setup (Admin/CEO only)
+            </button>
+            {showClientPricing && (
+              <>
+                <div className="muted" style={{ marginBottom: 8 }}>
+                  Set default reimbursement amount per client. Auto-filled Client Visit reimbursements use these values.
+                </div>
+                <div style={{ width: "100%", overflowX: "auto" }}>
+                  <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc" }}>
+                        <th style={{ textAlign: "left", padding: 10 }}>Client</th>
+                        <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                        <th style={{ textAlign: "left", padding: 10 }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientPricing.map((row) => (
+                        <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                          <td style={{ padding: 10 }}>{row.name}</td>
+                          <td style={{ padding: 10 }}>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.reimbursement_amount}
+                              onChange={(e) => setClientPricing((prev) => prev.map((x) => (
+                                x.id === row.id ? { ...x, reimbursement_amount: e.target.value } : x
+                              )))}
+                            />
+                          </td>
+                          <td style={{ padding: 10 }}>
+                            <button
+                              className="btn"
+                              type="button"
+                              onClick={() => saveClientPrice(row)}
+                              disabled={!!pricingSaving[row.id]}
+                            >
+                              {pricingSaving[row.id] ? "Saving..." : "Save"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      {!clientPricing.length && (
+                        <tr><td colSpan={3} style={{ padding: 14 }} className="muted">No clients found.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
         <div className="muted" style={{ marginBottom: 10 }}>
           Period: {draft.period_start || "-"} to {draft.period_end || "-"}
+        </div>
+        <div className="muted" style={{ marginBottom: 10 }}>
+          {draft.submit_message || "Cash reimbursement can be submitted on the 15th and 30th of each month, and Feb 28."}
         </div>
 
         <div style={{ width: "100%", overflowX: "auto" }}>
@@ -313,9 +328,11 @@ export default function FinanceRequestsPage() {
 
         <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <button className="btn" type="button" onClick={addManualRow}>+ Add Manual Item</button>
-          <button className="btn btn-primary" type="button" onClick={submitReimbursement} disabled={busy}>
-            Submit 2-Week Reimbursement
-          </button>
+          {draft.can_submit && (
+            <button className="btn btn-primary" type="button" onClick={submitReimbursement} disabled={busy}>
+              Submit 2-Week Reimbursement
+            </button>
+          )}
           <span className="pill">Total: {fmtCurrency(totalAmount)}</span>
         </div>
       </div>
@@ -366,17 +383,51 @@ export default function FinanceRequestsPage() {
               </thead>
               <tbody>
                 {(pendingRequests || []).map((r) => (
-                  <tr key={r.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                    <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
-                    <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
-                    <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
-                    <td style={{ padding: 10 }}>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button className="btn btn-primary" onClick={() => takeDecision(r.id, true)}>Approve</button>
-                        <button className="btn btn-danger" onClick={() => takeDecision(r.id, false)}>Reject</button>
-                      </div>
-                    </td>
-                  </tr>
+                  <React.Fragment key={r.id}>
+                    <tr style={{ borderTop: "1px solid #eef2f7" }}>
+                      <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
+                      <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
+                      <td style={{ padding: 10 }}>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button className="btn btn-primary" onClick={() => takeDecision(r.id, true)}>Approve</button>
+                          <button className="btn btn-danger" onClick={() => takeDecision(r.id, false)}>Reject</button>
+                        </div>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td colSpan={4} style={{ padding: "0 10px 10px 10px" }}>
+                        <div style={{ border: "1px solid #eef2f7", borderRadius: 8, overflow: "hidden" }}>
+                          <div style={{ padding: 10, background: "#f8fafc", fontWeight: 700 }}>
+                            Submitted Items
+                          </div>
+                          <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                            <thead>
+                              <tr style={{ background: "#ffffff" }}>
+                                <th style={{ textAlign: "left", padding: 10 }}>Date</th>
+                                <th style={{ textAlign: "left", padding: 10 }}>Description</th>
+                                <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(r.items || []).map((item) => (
+                                <tr key={item.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                                  <td style={{ padding: 10 }}>{item.item_date}</td>
+                                  <td style={{ padding: 10 }}>{item.description}</td>
+                                  <td style={{ padding: 10 }}>{fmtCurrency(item.amount)}</td>
+                                </tr>
+                              ))}
+                              {!r.items?.length && (
+                                <tr>
+                                  <td colSpan={3} style={{ padding: 10 }} className="muted">No submitted items.</td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </td>
+                    </tr>
+                  </React.Fragment>
                 ))}
                 {!pendingRequests.length && (
                   <tr><td colSpan={4} style={{ padding: 14 }} className="muted">No pending reimbursement requests.</td></tr>
