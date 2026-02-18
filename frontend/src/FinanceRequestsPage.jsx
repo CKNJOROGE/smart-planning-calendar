@@ -35,6 +35,8 @@ function emptyManual() {
   return { item_date: toDateInput(new Date()), description: "", amount: "" };
 }
 
+const MANUAL_REIMBURSEMENT_DRAFT_KEY = "cash_reimbursement_manual_items_v1";
+
 export default function FinanceRequestsPage() {
   const { showToast } = useToast();
   const [current, setCurrent] = useState(null);
@@ -59,6 +61,22 @@ export default function FinanceRequestsPage() {
     const manualTotal = (manualItems || []).reduce((acc, x) => acc + Number(x.amount || 0), 0);
     return autoTotal + manualTotal;
   }, [draft.auto_items, manualItems]);
+
+  function saveManualDraft() {
+    try {
+      const cleaned = (manualItems || []).map((x) => ({
+        item_date: x.item_date || "",
+        description: String(x.description || ""),
+        amount: String(x.amount || ""),
+      }));
+      localStorage.setItem(MANUAL_REIMBURSEMENT_DRAFT_KEY, JSON.stringify(cleaned));
+      showToast("Manual reimbursement draft saved", "success");
+    } catch (e) {
+      const msg = `Could not save draft: ${String(e.message || e)}`;
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
 
   async function loadData() {
     setBusy(true);
@@ -98,6 +116,23 @@ export default function FinanceRequestsPage() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(MANUAL_REIMBURSEMENT_DRAFT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed) || !parsed.length) return;
+      const rows = parsed.map((x) => ({
+        item_date: String(x?.item_date || toDateInput(new Date())),
+        description: String(x?.description || ""),
+        amount: String(x?.amount || ""),
+      }));
+      setManualItems(rows);
+    } catch {
+      // Ignore invalid local draft data.
+    }
   }, []);
 
   function addManualRow() {
@@ -140,6 +175,7 @@ export default function FinanceRequestsPage() {
     try {
       await submitCashReimbursement(cleaned);
       setManualItems([emptyManual()]);
+      localStorage.removeItem(MANUAL_REIMBURSEMENT_DRAFT_KEY);
       await loadData();
       showToast("Cash reimbursement submitted for approval", "success");
     } catch (e) {
@@ -328,6 +364,7 @@ export default function FinanceRequestsPage() {
 
         <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <button className="btn" type="button" onClick={addManualRow}>+ Add Manual Item</button>
+          <button className="btn" type="button" onClick={saveManualDraft}>Save Draft</button>
           {draft.can_submit && (
             <button className="btn btn-primary" type="button" onClick={submitReimbursement} disabled={busy}>
               Submit 2-Week Reimbursement
