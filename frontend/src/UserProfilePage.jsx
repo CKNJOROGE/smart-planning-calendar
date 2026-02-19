@@ -243,19 +243,22 @@ export default function UserProfilePage() {
           <div className="section-title">Leave Policy</div>
           <div className="profile-grid" style={{ marginBottom: 10 }}>
             <Field
-              label="Opening leave as of"
+              label="Start Date"
+              helpText="From when should this app start calculating this person's leave?"
               type="date"
               value={profile.leave_opening_as_of || ""}
               onChange={(v) => setProfile((p) => ({ ...p, leave_opening_as_of: v }))}
             />
             <Field
-              label="Opening accrued days"
+              label="Starting Accrued"
+              helpText="How many leave days had they earned by that date?"
               type="number"
               value={profile.leave_opening_accrued ?? ""}
               onChange={(v) => setProfile((p) => ({ ...p, leave_opening_accrued: v }))}
             />
             <Field
-              label="Opening used days"
+              label="Starting Used"
+              helpText="How many had they already taken by that date?"
               type="number"
               value={profile.leave_opening_used ?? ""}
               onChange={(v) => setProfile((p) => ({ ...p, leave_opening_used: v }))}
@@ -336,10 +339,33 @@ export default function UserProfilePage() {
   );
 }
 
-function Field({ label, value, onChange, disabled, type = "text" }) {
+function Field({ label, value, onChange, disabled, type = "text", helpText = "" }) {
   return (
     <div className="field">
-      <label>{label}</label>
+      <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span>{label}</span>
+        {helpText ? (
+          <span
+            title={helpText}
+            aria-label={helpText}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 16,
+              height: 16,
+              borderRadius: "50%",
+              border: "1px solid #6c4a7b",
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "help",
+              userSelect: "none",
+            }}
+          >
+            !
+          </span>
+        ) : null}
+      </label>
       <input
         type={type}
         value={value}
