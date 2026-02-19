@@ -53,6 +53,16 @@ function formatDateTime(v) {
   return new Date(v).toLocaleString();
 }
 
+function formatEventBoundary(v, allDay, isEnd = false) {
+  if (!v) return "N/A";
+  const d = new Date(v);
+  if (allDay) {
+    if (isEnd) d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString();
+  }
+  return d.toLocaleString();
+}
+
 function normalizeStatus(status) {
   const s = (status || "approved").toLowerCase();
   if (s === "pending" || s === "approved" || s === "rejected") return s;
@@ -116,6 +126,7 @@ export default function CalendarPage() {
     clientId: "",
     note: "",
   });
+  const minDate = useMemo(() => toLocalDateInput(new Date()), []);
 
   const popupLayout = useMemo(() => {
     if (!popup || typeof window === "undefined") return null;
@@ -316,6 +327,8 @@ export default function CalendarPage() {
   }
 
   function onDateClick(info) {
+    const clicked = toLocalDateInput(info.date);
+    if (clicked < minDate) return;
     openCreateForDay(info.date);
   }
 
@@ -462,6 +475,10 @@ export default function CalendarPage() {
       setError("Please select start and end date.");
       return;
     }
+    if (form.startDate < minDate || form.endDate < minDate) {
+      setError("Past dates are not allowed.");
+      return;
+    }
 
     const startISO = `${form.startDate}T00:00:00`;
     const end = new Date(form.endDate);
@@ -506,6 +523,10 @@ export default function CalendarPage() {
 
     if (!editForm.startDate || !editForm.endDate) {
       setError("Please select start and end date.");
+      return;
+    }
+    if (editForm.startDate < minDate || editForm.endDate < minDate) {
+      setError("Past dates are not allowed.");
       return;
     }
 
@@ -658,6 +679,7 @@ export default function CalendarPage() {
               right: "dayGridMonth,timeGridWeek,timeGridDay",
             }}
             events={events}
+            validRange={{ start: minDate }}
             datesSet={onDatesSet}
             dateClick={onDateClick}
             eventClick={onEventClick}
@@ -712,11 +734,15 @@ export default function CalendarPage() {
             <div className="calendar-popup-body">
               <div className="calendar-popup-field">
                 <div className="calendar-popup-label">From</div>
-                <div className="calendar-popup-value">{formatDateTime(popup.apiEvent.start_ts)}</div>
+                <div className="calendar-popup-value">
+                  {formatEventBoundary(popup.apiEvent.start_ts, popup.apiEvent.all_day, false)}
+                </div>
               </div>
               <div className="calendar-popup-field">
                 <div className="calendar-popup-label">To</div>
-                <div className="calendar-popup-value">{formatDateTime(popup.apiEvent.end_ts)}</div>
+                <div className="calendar-popup-value">
+                  {formatEventBoundary(popup.apiEvent.end_ts, popup.apiEvent.all_day, true)}
+                </div>
               </div>
               {(popup.apiEvent.type || "").toLowerCase() === "client visit" && (
                 <div className="calendar-popup-field">
@@ -858,6 +884,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={form.startDate}
+                    min={minDate}
                     onChange={(e) => {
                       const v = e.target.value;
                       setForm((f) => ({ ...f, startDate: v }));
@@ -871,6 +898,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={form.endDate}
+                    min={minDate}
                     onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
                   />
                 </div>
@@ -963,6 +991,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={editForm.startDate}
+                    min={minDate}
                     onChange={(e) => {
                       const v = e.target.value;
                       setEditForm((f) => ({ ...f, startDate: v }));
@@ -976,6 +1005,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={editForm.endDate}
+                    min={minDate}
                     onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
                   />
                 </div>
