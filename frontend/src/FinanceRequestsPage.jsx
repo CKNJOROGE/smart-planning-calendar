@@ -68,7 +68,7 @@ export default function FinanceRequestsPage() {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [approvedRequests, setApprovedRequests] = useState([]);
   const [clientPricing, setClientPricing] = useState([]);
-  const [pricingSaving, setPricingSaving] = useState({});
+  const [pricingSaving, setPricingSaving] = useState(false);
   const [showClientPricing, setShowClientPricing] = useState(false);
   const [activeSection, setActiveSection] = useState("cash_reimbursement");
 
@@ -268,23 +268,30 @@ export default function FinanceRequestsPage() {
     return remaining;
   }
 
-  async function saveClientPrice(row) {
-    const amount = Number(row.reimbursement_amount || 0);
-    if (Number.isNaN(amount) || amount < 0) {
+  async function saveAllClientPrices() {
+    setErr("");
+    const invalid = (clientPricing || []).find((row) => {
+      const amount = Number(row.reimbursement_amount || 0);
+      return Number.isNaN(amount) || amount < 0;
+    });
+    if (invalid) {
       setErr("Client reimbursement amount must be a number >= 0.");
       return;
     }
-    setPricingSaving((prev) => ({ ...prev, [row.id]: true }));
+    setPricingSaving(true);
     try {
-      await updateTaskClient(row.id, amount);
+      await Promise.all((clientPricing || []).map((row) => {
+        const amount = Number(row.reimbursement_amount || 0);
+        return updateTaskClient(row.id, amount);
+      }));
       await loadData();
-      showToast("Client visit reimbursement amount saved", "success");
+      showToast("Client visit reimbursement amounts saved", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
       showToast(msg, "error");
     } finally {
-      setPricingSaving((prev) => ({ ...prev, [row.id]: false }));
+      setPricingSaving(false);
     }
   }
 
@@ -343,7 +350,6 @@ export default function FinanceRequestsPage() {
                       <tr style={{ background: "#f8fafc" }}>
                         <th style={{ textAlign: "left", padding: 10 }}>Client</th>
                         <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
-                        <th style={{ textAlign: "left", padding: 10 }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -361,24 +367,21 @@ export default function FinanceRequestsPage() {
                               )))}
                             />
                           </td>
-                          <td style={{ padding: 10 }}>
-                            <button
-                              className="btn"
-                              type="button"
-                              onClick={() => saveClientPrice(row)}
-                              disabled={!!pricingSaving[row.id]}
-                            >
-                              {pricingSaving[row.id] ? "Saving..." : "Save"}
-                            </button>
-                          </td>
                         </tr>
                       ))}
                       {!clientPricing.length && (
-                        <tr><td colSpan={3} style={{ padding: 14 }} className="muted">No clients found.</td></tr>
+                        <tr><td colSpan={2} style={{ padding: 14 }} className="muted">No clients found.</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
+                {clientPricing.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <button className="btn btn-primary" type="button" onClick={saveAllClientPrices} disabled={pricingSaving}>
+                      {pricingSaving ? "Saving..." : "Save All"}
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>
