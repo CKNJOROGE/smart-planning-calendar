@@ -357,10 +357,18 @@ def _parse_manual_reimbursement_items(raw_json: str) -> list[CashReimbursementDr
             except Exception:
                 amount = None
 
+        src_event = None
+        if row.get("source_event_id") is not None:
+            try:
+                src_event = int(row.get("source_event_id"))
+            except Exception:
+                src_event = None
+
         out.append(CashReimbursementDraftManualItemOut(
             item_date=item_date,
             description=description,
             amount=amount,
+            source_event_id=src_event,
         ))
     return out
 
@@ -1139,11 +1147,36 @@ def get_cash_reimbursement_draft(
             )
         )
 
+    manual_items = _parse_manual_reimbursement_items(saved_draft.manual_items_json) if saved_draft else []
+    existing_manual_source_ids = {int(x.source_event_id) for x in manual_items if x.source_event_id is not None}
+    one_time_rows = (
+        db.query(Event)
+        .filter(
+            Event.user_id == current.id,
+            Event.type == "Client Visit",
+            Event.client_id.is_(None),
+            Event.one_time_client_name.isnot(None),
+            Event.start_ts >= datetime.combine(period_start, datetime.min.time()),
+            Event.start_ts < datetime.combine(period_end + timedelta(days=1), datetime.min.time()),
+        )
+        .order_by(Event.start_ts.asc(), Event.id.asc())
+        .all()
+    )
+    for e in one_time_rows:
+        if e.id in used_event_ids or e.id in existing_manual_source_ids:
+            continue
+        manual_items.append(CashReimbursementDraftManualItemOut(
+            item_date=e.start_ts.date(),
+            description=f"Client visit to and from {e.one_time_client_name}",
+            amount=None,
+            source_event_id=e.id,
+        ))
+
     return CashReimbursementDraftOut(
         period_start=period_start,
         period_end=period_end,
         auto_items=items,
-        manual_items=_parse_manual_reimbursement_items(saved_draft.manual_items_json) if saved_draft else [],
+        manual_items=manual_items,
         can_edit_manual=not already_submitted_for_period,
         can_submit=can_submit,
         submit_due_today=due_today,
@@ -1180,16 +1213,29 @@ def save_cash_reimbursement_draft(
     for row in payload.manual_items or []:
         description = (row.description or "").strip()
         amount = row.amount
+        source_event_id = row.source_event_id
         if description and len(description) > 1000:
             raise HTTPException(status_code=400, detail="Each manual reimbursement description must be <= 1000 characters")
         if amount is not None and amount < 0:
             raise HTTPException(status_code=400, detail="Manual reimbursement amount cannot be negative")
+        if source_event_id is not None:
+            src = db.query(Event).filter(Event.id == source_event_id).first()
+            if not src:
+                raise HTTPException(status_code=400, detail="Manual reimbursement source event not found")
+            if src.user_id != current.id:
+                raise HTTPException(status_code=403, detail="Manual reimbursement source event does not belong to you")
+            if not (
+                src.start_ts >= datetime.combine(period_start, datetime.min.time())
+                and src.start_ts < datetime.combine(period_end + timedelta(days=1), datetime.min.time())
+            ):
+                raise HTTPException(status_code=400, detail="Manual reimbursement source event is outside this reimbursement period")
         if row.item_date is None and not description and amount in (None, 0):
             continue
         normalized_items.append({
             "item_date": row.item_date.isoformat() if row.item_date else None,
             "description": description,
             "amount": amount,
+            "source_event_id": source_event_id,
         })
 
     if len(normalized_items) > 200:
@@ -1358,14 +1404,30 @@ def submit_cash_reimbursement(
         amount = Decimal(str(m.amount))
         if amount <= 0:
             raise HTTPException(status_code=400, detail="Manual reimbursement amount must be > 0")
+        source_event_id = m.source_event_id
+        if source_event_id is not None:
+            src = db.query(Event).filter(Event.id == source_event_id).first()
+            if not src:
+                raise HTTPException(status_code=400, detail="Manual reimbursement source event not found")
+            if src.user_id != current.id:
+                raise HTTPException(status_code=403, detail="Manual reimbursement source event does not belong to you")
+            if not (
+                src.start_ts >= datetime.combine(period_start, datetime.min.time())
+                and src.start_ts < datetime.combine(period_end + timedelta(days=1), datetime.min.time())
+            ):
+                raise HTTPException(status_code=400, detail="Manual reimbursement source event is outside this reimbursement period")
+            if source_event_id in used_event_ids:
+                raise HTTPException(status_code=400, detail="Manual reimbursement source event already claimed")
         all_items.append({
             "item_date": m.item_date,
             "description": desc,
             "amount": amount,
             "client_id": None,
-            "source_event_id": None,
+            "source_event_id": source_event_id,
         })
         total += amount
+        if source_event_id is not None:
+            used_event_ids.add(source_event_id)
 
     if not all_items:
         raise HTTPException(status_code=400, detail="No reimbursement items to submit for this period")
@@ -2009,13 +2071,19 @@ async def create_event(
     normalized_type = (payload.type or "").strip()
     is_client_visit = normalized_type.lower() == "client visit"
     client_id: Optional[int] = payload.client_id if is_client_visit else None
+    one_time_client_name: Optional[str] = (payload.one_time_client_name or "").strip() if is_client_visit else None
+    if one_time_client_name == "":
+        one_time_client_name = None
 
     if is_client_visit:
-        if client_id is None:
-            raise HTTPException(status_code=400, detail="client_id is required for Client Visit")
-        exists = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
-        if not exists:
-            raise HTTPException(status_code=404, detail="Client not found")
+        if bool(client_id) == bool(one_time_client_name):
+            raise HTTPException(status_code=400, detail="Provide either client_id or one_time_client_name for Client Visit")
+        if client_id is not None:
+            exists = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
+            if not exists:
+                raise HTTPException(status_code=404, detail="Client not found")
+        if one_time_client_name and len(one_time_client_name) > 255:
+            raise HTTPException(status_code=400, detail="one_time_client_name must be <= 255 characters")
 
     # Leave enforcement (only for Leave)
     if normalized_type == "Leave":
@@ -2032,6 +2100,7 @@ async def create_event(
         all_day=payload.all_day,
         type=payload.type,
         client_id=client_id,
+        one_time_client_name=one_time_client_name,
         note=payload.note,
         status="pending" if is_leave else "approved",
         requested_by_id=user.id if is_leave else None,
@@ -2064,16 +2133,27 @@ async def update_event(
     new_end = payload.end_ts if payload.end_ts is not None else e.end_ts
     new_type = payload.type if payload.type is not None else e.type
     new_client_id = payload.client_id if payload.client_id is not None else e.client_id
+    new_one_time_client_name = (
+        (payload.one_time_client_name or "").strip()
+        if payload.one_time_client_name is not None
+        else (e.one_time_client_name or "")
+    )
+    if new_one_time_client_name == "":
+        new_one_time_client_name = None
 
     is_client_visit = (new_type or "").strip().lower() == "client visit"
     if is_client_visit:
-        if new_client_id is None:
-            raise HTTPException(status_code=400, detail="client_id is required for Client Visit")
-        exists = db.query(ClientAccount).filter(ClientAccount.id == new_client_id).first()
-        if not exists:
-            raise HTTPException(status_code=404, detail="Client not found")
+        if bool(new_client_id) == bool(new_one_time_client_name):
+            raise HTTPException(status_code=400, detail="Provide either client_id or one_time_client_name for Client Visit")
+        if new_client_id is not None:
+            exists = db.query(ClientAccount).filter(ClientAccount.id == new_client_id).first()
+            if not exists:
+                raise HTTPException(status_code=404, detail="Client not found")
+        if new_one_time_client_name and len(new_one_time_client_name) > 255:
+            raise HTTPException(status_code=400, detail="one_time_client_name must be <= 255 characters")
     else:
         new_client_id = None
+        new_one_time_client_name = None
 
     if (new_type or "").strip() == "Leave":
         # enforce leave for the owner of the event (not necessarily the current admin)
@@ -2095,6 +2175,7 @@ async def update_event(
     if payload.type is not None:
         e.type = payload.type
     e.client_id = new_client_id
+    e.one_time_client_name = new_one_time_client_name
     if payload.note is not None:
         e.note = payload.note or None
 

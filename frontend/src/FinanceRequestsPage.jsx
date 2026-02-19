@@ -53,7 +53,7 @@ function decisionLabel(decision) {
 }
 
 function emptyManual() {
-  return { item_date: toDateInput(new Date()), description: "", amount: "" };
+  return { item_date: toDateInput(new Date()), description: "", amount: "", source_event_id: null };
 }
 
 export default function FinanceRequestsPage() {
@@ -108,6 +108,7 @@ export default function FinanceRequestsPage() {
         item_date: x.item_date ? toDateInput(x.item_date) : "",
         description: String(x.description || ""),
         amount: x.amount == null ? "" : String(x.amount),
+        source_event_id: x.source_event_id ?? null,
       }));
       setManualItems(savedManualRows.length ? savedManualRows : [emptyManual()]);
       setMyRequests(mine || []);
@@ -166,6 +167,7 @@ export default function FinanceRequestsPage() {
         item_date: x.item_date,
         description: (x.description || "").trim(),
         amount: Number(x.amount || 0),
+        source_event_id: x.source_event_id ?? null,
       }))
       .filter((x) => x.description || x.amount > 0);
 
@@ -205,6 +207,7 @@ export default function FinanceRequestsPage() {
         item_date: x.item_date || null,
         description: (x.description || "").trim(),
         amount: amount === "" ? null : Number(amount),
+        source_event_id: x.source_event_id ?? null,
       };
     });
     if (payload.some((x) => x.amount != null && Number.isNaN(x.amount))) {
@@ -217,6 +220,7 @@ export default function FinanceRequestsPage() {
         item_date: x.item_date ? toDateInput(x.item_date) : "",
         description: String(x.description || ""),
         amount: x.amount == null ? "" : String(x.amount),
+        source_event_id: x.source_event_id ?? null,
       }));
       setDraft(saved || draft);
       setManualItems(savedManualRows.length ? savedManualRows : [emptyManual()]);

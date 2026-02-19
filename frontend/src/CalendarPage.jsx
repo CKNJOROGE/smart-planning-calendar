@@ -113,7 +113,9 @@ export default function CalendarPage() {
     endDate: "",
     allDay: true,
     type: "Leave",
+    clientSource: "managed",
     clientId: "",
+    oneTimeClientName: "",
     note: "",
   });
 
@@ -124,7 +126,9 @@ export default function CalendarPage() {
     startDate: "",
     endDate: "",
     type: "Leave",
+    clientSource: "managed",
     clientId: "",
+    oneTimeClientName: "",
     note: "",
   });
   const minDate = useMemo(() => toLocalDateInput(new Date()), []);
@@ -319,7 +323,9 @@ export default function CalendarPage() {
       endDate: d,
       allDay: true,
       type: "Leave",
+      clientSource: "managed",
       clientId: "",
+      oneTimeClientName: "",
       note: "",
     };
     setForm(next);
@@ -421,7 +427,9 @@ export default function CalendarPage() {
       startDate: startD,
       endDate: endD,
       type: e.type || "Other",
+      clientSource: e.one_time_client_name ? "one_time" : "managed",
       clientId: e.client_id ? String(e.client_id) : "",
+      oneTimeClientName: e.one_time_client_name || "",
       note: e.note || "",
     });
     setEditOpen(true);
@@ -486,9 +494,15 @@ export default function CalendarPage() {
     end.setDate(end.getDate() + 1);
     const endISO = end.toISOString().slice(0, 19);
     const isClientVisit = (form.type || "").toLowerCase() === "client visit";
-    if (isClientVisit && !form.clientId) {
-      setError("Please choose a client for Client Visit.");
-      return;
+    if (isClientVisit) {
+      if (form.clientSource === "managed" && !form.clientId) {
+        setError("Please choose a client for Client Visit.");
+        return;
+      }
+      if (form.clientSource === "one_time" && !(form.oneTimeClientName || "").trim()) {
+        setError("Please enter a one-time client name for Client Visit.");
+        return;
+      }
     }
 
     try {
@@ -505,7 +519,8 @@ export default function CalendarPage() {
           end_ts: endISO,
           all_day: true,
           type: form.type,
-          client_id: isClientVisit ? Number(form.clientId) : null,
+          client_id: isClientVisit && form.clientSource === "managed" ? Number(form.clientId) : null,
+          one_time_client_name: isClientVisit && form.clientSource === "one_time" ? (form.oneTimeClientName || "").trim() : null,
           note: form.note || null,
         });
       }
@@ -536,9 +551,15 @@ export default function CalendarPage() {
     end.setDate(end.getDate() + 1);
     const endISO = end.toISOString().slice(0, 19);
     const isClientVisit = (editForm.type || "").toLowerCase() === "client visit";
-    if (isClientVisit && !editForm.clientId) {
-      setError("Please choose a client for Client Visit.");
-      return;
+    if (isClientVisit) {
+      if (editForm.clientSource === "managed" && !editForm.clientId) {
+        setError("Please choose a client for Client Visit.");
+        return;
+      }
+      if (editForm.clientSource === "one_time" && !(editForm.oneTimeClientName || "").trim()) {
+        setError("Please enter a one-time client name for Client Visit.");
+        return;
+      }
     }
 
     try {
@@ -547,7 +568,8 @@ export default function CalendarPage() {
         end_ts: endISO,
         all_day: true,
         type: editForm.type,
-        client_id: isClientVisit ? Number(editForm.clientId) : null,
+        client_id: isClientVisit && editForm.clientSource === "managed" ? Number(editForm.clientId) : null,
+        one_time_client_name: isClientVisit && editForm.clientSource === "one_time" ? (editForm.oneTimeClientName || "").trim() : null,
         note: editForm.note || null,
       });
       setEditOpen(false);
@@ -747,7 +769,7 @@ export default function CalendarPage() {
               {(popup.apiEvent.type || "").toLowerCase() === "client visit" && (
                 <div className="calendar-popup-field">
                   <div className="calendar-popup-label">Client</div>
-                  <div className="calendar-popup-value">{clientNameById(popup.apiEvent.client_id)}</div>
+                  <div className="calendar-popup-value">{popup.apiEvent.one_time_client_name || clientNameById(popup.apiEvent.client_id)}</div>
                 </div>
               )}
               {popup.apiEvent.rejection_reason && (
@@ -823,7 +845,13 @@ export default function CalendarPage() {
                     value={form.type}
                     onChange={(e) => {
                       const t = e.target.value;
-                      setForm((f) => ({ ...f, type: t, clientId: t === "Client Visit" ? f.clientId : "" }));
+                      setForm((f) => ({
+                        ...f,
+                        type: t,
+                        clientSource: t === "Client Visit" ? f.clientSource : "managed",
+                        clientId: t === "Client Visit" ? f.clientId : "",
+                        oneTimeClientName: t === "Client Visit" ? f.oneTimeClientName : "",
+                      }));
                       if (t === "Leave" && form.startDate) refreshLeaveBalance(form.startDate);
                       else setLeaveBalance(null);
                     }}
@@ -846,21 +874,44 @@ export default function CalendarPage() {
               </div>
 
               {form.type === "Client Visit" && (
-                <div className="field">
-                  <label>Client</label>
-                  <select
-                    value={form.clientId}
-                    onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}
-                  >
-                    <option value="">Select client</option>
-                    {taskClients.map((c) => (
-                      <option key={c.id} value={String(c.id)}>{c.name}</option>
-                    ))}
-                  </select>
-                  {!taskClients.length && (
-                    <div className="helper">No clients found. Add clients in Client Task Manager first.</div>
+                <>
+                  <div className="field">
+                    <label>Client Type</label>
+                    <select
+                      value={form.clientSource}
+                      onChange={(e) => setForm((f) => ({ ...f, clientSource: e.target.value, clientId: "", oneTimeClientName: "" }))}
+                    >
+                      <option value="managed">Managed Client</option>
+                      <option value="one_time">One-time Client</option>
+                    </select>
+                  </div>
+                  {form.clientSource === "managed" ? (
+                    <div className="field">
+                      <label>Client</label>
+                      <select
+                        value={form.clientId}
+                        onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value }))}
+                      >
+                        <option value="">Select client</option>
+                        {taskClients.map((c) => (
+                          <option key={c.id} value={String(c.id)}>{c.name}</option>
+                        ))}
+                      </select>
+                      {!taskClients.length && (
+                        <div className="helper">No clients found. Add clients in Client Task Manager first.</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="field">
+                      <label>One-time Client Name</label>
+                      <input
+                        value={form.oneTimeClientName}
+                        onChange={(e) => setForm((f) => ({ ...f, oneTimeClientName: e.target.value }))}
+                        placeholder="Enter one-time client name"
+                      />
+                    </div>
                   )}
-                </div>
+                </>
               )}
 
               {/* Leave balance */}
@@ -939,7 +990,13 @@ export default function CalendarPage() {
                     value={editForm.type}
                     onChange={(e) => {
                       const t = e.target.value;
-                      setEditForm((f) => ({ ...f, type: t, clientId: t === "Client Visit" ? f.clientId : "" }));
+                      setEditForm((f) => ({
+                        ...f,
+                        type: t,
+                        clientSource: t === "Client Visit" ? f.clientSource : "managed",
+                        clientId: t === "Client Visit" ? f.clientId : "",
+                        oneTimeClientName: t === "Client Visit" ? f.oneTimeClientName : "",
+                      }));
                       if (t === "Leave" && editForm.startDate) refreshLeaveBalance(editForm.startDate);
                       else setLeaveBalance(null);
                     }}
@@ -954,21 +1011,44 @@ export default function CalendarPage() {
               </div>
 
               {editForm.type === "Client Visit" && (
-                <div className="field">
-                  <label>Client</label>
-                  <select
-                    value={editForm.clientId}
-                    onChange={(e) => setEditForm((f) => ({ ...f, clientId: e.target.value }))}
-                  >
-                    <option value="">Select client</option>
-                    {taskClients.map((c) => (
-                      <option key={c.id} value={String(c.id)}>{c.name}</option>
-                    ))}
-                  </select>
-                  {!taskClients.length && (
-                    <div className="helper">No clients found. Add clients in Client Task Manager first.</div>
+                <>
+                  <div className="field">
+                    <label>Client Type</label>
+                    <select
+                      value={editForm.clientSource}
+                      onChange={(e) => setEditForm((f) => ({ ...f, clientSource: e.target.value, clientId: "", oneTimeClientName: "" }))}
+                    >
+                      <option value="managed">Managed Client</option>
+                      <option value="one_time">One-time Client</option>
+                    </select>
+                  </div>
+                  {editForm.clientSource === "managed" ? (
+                    <div className="field">
+                      <label>Client</label>
+                      <select
+                        value={editForm.clientId}
+                        onChange={(e) => setEditForm((f) => ({ ...f, clientId: e.target.value }))}
+                      >
+                        <option value="">Select client</option>
+                        {taskClients.map((c) => (
+                          <option key={c.id} value={String(c.id)}>{c.name}</option>
+                        ))}
+                      </select>
+                      {!taskClients.length && (
+                        <div className="helper">No clients found. Add clients in Client Task Manager first.</div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="field">
+                      <label>One-time Client Name</label>
+                      <input
+                        value={editForm.oneTimeClientName}
+                        onChange={(e) => setEditForm((f) => ({ ...f, oneTimeClientName: e.target.value }))}
+                        placeholder="Enter one-time client name"
+                      />
+                    </div>
                   )}
-                </div>
+                </>
               )}
 
               {editForm.type === "Leave" && leaveBalance && (

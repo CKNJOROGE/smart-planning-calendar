@@ -136,6 +136,7 @@ class EventCreate(BaseModel):
     all_day: bool = True
     type: str
     client_id: Optional[int] = None
+    one_time_client_name: Optional[str] = None
     note: Optional[str] = None
 
 
@@ -156,6 +157,7 @@ class EventUpdate(BaseModel):
     all_day: Optional[bool] = None
     type: Optional[str] = None
     client_id: Optional[int] = None
+    one_time_client_name: Optional[str] = None
     note: Optional[str] = None
 
 
@@ -167,6 +169,7 @@ class EventOut(BaseModel):
     all_day: bool
     type: str
     client_id: Optional[int] = None
+    one_time_client_name: Optional[str] = None
     note: Optional[str]
     status: str
     requested_by_id: Optional[int] = None
@@ -345,6 +348,7 @@ class CashReimbursementItemIn(BaseModel):
     item_date: date
     description: str
     amount: float
+    source_event_id: Optional[int] = None
 
 
 class CashReimbursementDraftItemOut(BaseModel):
@@ -375,12 +379,14 @@ class CashReimbursementDraftManualItemIn(BaseModel):
     item_date: Optional[date] = None
     description: Optional[str] = None
     amount: Optional[float] = None
+    source_event_id: Optional[int] = None
 
 
 class CashReimbursementDraftManualItemOut(BaseModel):
     item_date: Optional[date] = None
     description: str = ""
     amount: Optional[float] = None
+    source_event_id: Optional[int] = None
 
 
 class CashReimbursementDraftSaveIn(BaseModel):
