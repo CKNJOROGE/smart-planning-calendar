@@ -605,7 +605,7 @@ export default function FinanceRequestsPage() {
                     <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead>
                         <tr style={{ background: "#f8fafc" }}>
-                          <th style={{ textAlign: "left", padding: 10 }}>Requester</th>
+                          <th style={{ textAlign: "left", padding: 10 }}>Requested by</th>
                           <th style={{ textAlign: "left", padding: 10 }}>Period</th>
                           <th style={{ textAlign: "left", padding: 10 }}>Total</th>
                           <th style={{ textAlign: "left", padding: 10 }}>Status</th>

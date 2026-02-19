@@ -22,6 +22,7 @@ import { useToast } from "./ToastProvider";
 import Avatar from "./Avatar";
 
 function typeLabel(t) {
+  if ((t || "").toLowerCase() === "hospital") return "Sick Leave";
   return t || "Unavailable";
 }
 
@@ -618,7 +619,7 @@ export default function CalendarPage() {
               >
                 <option value="">All</option>
                 <option value="Leave">Leave</option>
-                <option value="Hospital">Hospital</option>
+                <option value="Hospital">Sick Leave</option>
                 <option value="Client Visit">Client Visit</option>
                 <option value="Training">Training</option>
                 <option value="Other">Other</option>
@@ -662,7 +663,7 @@ export default function CalendarPage() {
         <div className="legend">
           <span className="pill"><span className="dot" style={{ background: "#2e7d32" }} /> Leave</span>
           <span className="pill"><span className="dot" style={{ background: "#dc2626" }} /> Pending Approval</span>
-          <span className="pill"><span className="dot" style={{ background: "#c62828" }} /> Hospital</span>
+          <span className="pill"><span className="dot" style={{ background: "#c62828" }} /> Sick Leave</span>
           <span className="pill"><span className="dot" style={{ background: "#6a1b9a" }} /> Client Visit</span>
           <span className="pill"><span className="dot" style={{ background: "#ef6c00" }} /> Training</span>
           <span className="pill"><span className="dot" style={{ background: "#1565c0" }} /> Other</span>
@@ -828,7 +829,7 @@ export default function CalendarPage() {
                     }}
                   >
                     <option>Leave</option>
-                    <option>Hospital</option>
+                    <option value="Hospital">Sick Leave</option>
                     <option>Client Visit</option>
                     <option>Training</option>
                     <option>Other</option>
@@ -944,7 +945,7 @@ export default function CalendarPage() {
                     }}
                   >
                     <option>Leave</option>
-                    <option>Hospital</option>
+                    <option value="Hospital">Sick Leave</option>
                     <option>Client Visit</option>
                     <option>Training</option>
                     <option>Other</option>
