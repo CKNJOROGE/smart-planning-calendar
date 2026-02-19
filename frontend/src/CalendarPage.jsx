@@ -514,6 +514,7 @@ export default function CalendarPage() {
 
     try {
       let created = null;
+      const noteFile = createSickNoteFile;
       if ((form.type || "").toLowerCase() === "leave") {
         await createLeaveRequest({
           start_ts: startISO,
@@ -531,15 +532,25 @@ export default function CalendarPage() {
           one_time_client_name: isClientVisit && form.clientSource === "one_time" ? (form.oneTimeClientName || "").trim() : null,
           note: form.note || null,
         });
-        if (isSickLeave && createSickNoteFile && created?.id) {
-          await uploadEventSickNote(created.id, createSickNoteFile);
-        }
       }
       setCreateOpen(false);
       setCreateSickNoteFile(null);
       setLeaveBalance(null);
       await refresh();
       showToast("Entry created", "success");
+      if (isSickLeave && noteFile && created?.id) {
+        (async () => {
+          try {
+            await uploadEventSickNote(created.id, noteFile);
+            await refresh();
+            showToast("Sick note uploaded", "success");
+          } catch (uploadErr) {
+            const msg = String(uploadErr?.message || uploadErr);
+            setError(`Entry saved, but sick note upload failed: ${msg}`);
+            showToast("Entry saved, but sick note upload failed", "error");
+          }
+        })();
+      }
     } catch (e) {
       setError(String(e.message || e));
       showToast(String(e.message || e), "error");
@@ -576,6 +587,7 @@ export default function CalendarPage() {
     }
 
     try {
+      const noteFile = editSickNoteFile;
       const updated = await updateEvent(editForm.id, {
         start_ts: startISO,
         end_ts: endISO,
@@ -585,16 +597,28 @@ export default function CalendarPage() {
         one_time_client_name: isClientVisit && editForm.clientSource === "one_time" ? (editForm.oneTimeClientName || "").trim() : null,
         note: editForm.note || null,
       });
-      if (isSickLeave && editSickNoteFile && updated?.id) {
-        await uploadEventSickNote(updated.id, editSickNoteFile);
-      }
       setEditOpen(false);
       setEditSickNoteFile(null);
       setPopup(null);
       setLeaveBalance(null);
       await refresh();
+      showToast("Entry updated", "success");
+      if (isSickLeave && noteFile && updated?.id) {
+        (async () => {
+          try {
+            await uploadEventSickNote(updated.id, noteFile);
+            await refresh();
+            showToast("Sick note uploaded", "success");
+          } catch (uploadErr) {
+            const msg = String(uploadErr?.message || uploadErr);
+            setError(`Changes saved, but sick note upload failed: ${msg}`);
+            showToast("Changes saved, but sick note upload failed", "error");
+          }
+        })();
+      }
     } catch (e) {
       setError(String(e.message || e));
+      showToast(String(e.message || e), "error");
     }
   }
 
