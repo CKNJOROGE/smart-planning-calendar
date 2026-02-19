@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
-import { me, listUsers, adminGetUserProfile, adminUpdateUserProfile, adminUploadUserDocument, openProtectedFile } from "./api";
+import { me, listUsers, adminGetUserProfile, adminUpdateUserProfile, adminUploadUserDocument, adminGetUserLeaveBalance, openProtectedFile } from "./api";
 import { useToast } from "./ToastProvider";
 
 const PROFILE_DOCUMENTS = [
@@ -23,6 +23,7 @@ export default function UserProfilePage() {
   const [uploadingDocs, setUploadingDocs] = useState({});
   const [adminUsers, setAdminUsers] = useState([]);
   const [supervisorUsers, setSupervisorUsers] = useState([]);
+  const [leaveBalance, setLeaveBalance] = useState(null);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const { showToast } = useToast();
@@ -34,6 +35,8 @@ export default function UserProfilePage() {
       setCurrent(u);
       const p = await adminGetUserProfile(userId);
       setProfile(p);
+      const lb = await adminGetUserLeaveBalance(userId);
+      setLeaveBalance(lb);
       const allUsers = await listUsers();
       setAdminUsers(allUsers.filter((x) => x.role === "admin" || x.role === "ceo"));
       setSupervisorUsers(allUsers.filter((x) => x.role === "supervisor"));
@@ -241,6 +244,16 @@ export default function UserProfilePage() {
 
         <div className="profile-section">
           <div className="section-title">Leave Policy</div>
+          {leaveBalance && (
+            <div className="profile-grid" style={{ marginBottom: 10 }}>
+              <div className="pill">Accrued: <b>{leaveBalance.accrued}</b></div>
+              <div className="pill">Used: <b>{leaveBalance.used}</b></div>
+              <div className="pill">Remaining: <b>{leaveBalance.remaining}</b></div>
+              <div className="helper" style={{ gridColumn: "1 / -1" }}>
+                Period: {leaveBalance.period_start} - {leaveBalance.period_end} (as of {leaveBalance.as_of})
+              </div>
+            </div>
+          )}
           <div className="profile-grid" style={{ marginBottom: 10 }}>
             <Field
               label="Start Date"

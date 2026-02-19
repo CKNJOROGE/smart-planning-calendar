@@ -248,6 +248,11 @@ export function getLeaveBalance(asOfYYYYMMDD) {
   return request(`/leave/balance${qs}`);
 }
 
+export function adminGetUserLeaveBalance(userId, asOfYYYYMMDD) {
+  const qs = asOfYYYYMMDD ? `?as_of=${encodeURIComponent(asOfYYYYMMDD)}` : "";
+  return request(`/admin/users/${userId}/leave/balance${qs}`);
+}
+
 // WebSocket URL helper
 export function getWsUrl() {
   const token = (getToken() || "").trim();

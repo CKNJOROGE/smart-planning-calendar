@@ -1864,6 +1864,31 @@ def get_leave_balance(
     )
 
 
+@app.get("/admin/users/{user_id}/leave/balance", response_model=LeaveBalanceOut)
+def admin_get_user_leave_balance(
+    user_id: int,
+    as_of: Optional[date] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    d = as_of or date.today()
+    bal = compute_leave_balance(db, target, as_of=d)
+    return LeaveBalanceOut(
+        user_id=bal.user_id,
+        as_of=bal.as_of,
+        period_start=bal.period_start,
+        period_end=bal.period_end,
+        months_accrued=bal.months_accrued,
+        accrued=bal.accrued,
+        used=bal.used,
+        remaining=bal.remaining,
+    )
+
+
 # -------------------------
 # Events (+ filtering + WS broadcasts + leave enforcement)
 # -------------------------
