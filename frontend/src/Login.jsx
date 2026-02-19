@@ -21,9 +21,15 @@ export default function Login({ onLoggedIn }) {
     const particles = [];
     const mouse = { x: -9999, y: -9999 };
     let raf = null;
+    let particleCount = 0;
 
-    const baseCount = Math.min(110, Math.max(60, Math.floor(window.innerWidth / 16)));
-    const count = baseCount * 5;
+    function getParticleCount(width) {
+      if (width >= 1280) return 1000; // laptop/desktop: max density
+      if (width >= 1024) return 820;
+      if (width >= 768) return 620;
+      if (width >= 480) return 420;
+      return 260;
+    }
 
     function resize() {
       canvas.width = Math.floor(window.innerWidth * dpr);
@@ -31,11 +37,16 @@ export default function Login({ onLoggedIn }) {
       canvas.style.width = `${window.innerWidth}px`;
       canvas.style.height = `${window.innerHeight}px`;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const nextCount = getParticleCount(window.innerWidth);
+      if (nextCount !== particleCount) {
+        particleCount = nextCount;
+        seed();
+      }
     }
 
     function seed() {
       particles.length = 0;
-      for (let i = 0; i < count; i += 1) {
+      for (let i = 0; i < particleCount; i += 1) {
         particles.push({
           x: Math.random() * window.innerWidth,
           y: Math.random() * window.innerHeight,
@@ -111,7 +122,6 @@ export default function Login({ onLoggedIn }) {
     }
 
     resize();
-    seed();
     draw();
 
     window.addEventListener("resize", resize);
