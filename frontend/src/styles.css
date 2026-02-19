@@ -74,6 +74,7 @@ textarea{ resize: vertical; min-height: 90px; }
 
 .event-chip{
   display:flex; align-items:center; gap:8px;
+  border: 1px solid #ffffff;
 }
 .avatar-img{
   border-radius: 50%;
