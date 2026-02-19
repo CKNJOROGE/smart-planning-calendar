@@ -37,6 +37,9 @@ class User(Base):
 
     # NEW: hire date for leave accrual
     hire_date = Column(Date, nullable=True)
+    leave_opening_as_of = Column(Date, nullable=True)
+    leave_opening_accrued = Column(Numeric(8, 2), nullable=True)
+    leave_opening_used = Column(Numeric(8, 2), nullable=True)
 
     # admin-only notes
     notes_private = Column(Text, nullable=True)

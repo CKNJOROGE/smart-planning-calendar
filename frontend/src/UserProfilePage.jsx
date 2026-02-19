@@ -87,6 +87,9 @@ export default function UserProfilePage() {
         require_two_step_leave_approval: !!profile.require_two_step_leave_approval,
         first_approver_id: profile.first_approver_id ? Number(profile.first_approver_id) : null,
         second_approver_id: profile.second_approver_id ? Number(profile.second_approver_id) : null,
+        leave_opening_as_of: profile.leave_opening_as_of || null,
+        leave_opening_accrued: toNullableNumber(profile.leave_opening_accrued),
+        leave_opening_used: toNullableNumber(profile.leave_opening_used),
       });
       setProfile(updated);
       setMsg("Saved.");
@@ -238,6 +241,26 @@ export default function UserProfilePage() {
 
         <div className="profile-section">
           <div className="section-title">Leave Policy</div>
+          <div className="profile-grid" style={{ marginBottom: 10 }}>
+            <Field
+              label="Opening leave as of"
+              type="date"
+              value={profile.leave_opening_as_of || ""}
+              onChange={(v) => setProfile((p) => ({ ...p, leave_opening_as_of: v }))}
+            />
+            <Field
+              label="Opening accrued days"
+              type="number"
+              value={profile.leave_opening_accrued ?? ""}
+              onChange={(v) => setProfile((p) => ({ ...p, leave_opening_accrued: v }))}
+            />
+            <Field
+              label="Opening used days"
+              type="number"
+              value={profile.leave_opening_used ?? ""}
+              onChange={(v) => setProfile((p) => ({ ...p, leave_opening_used: v }))}
+            />
+          </div>
           <div className="field" style={{ gridColumn: "1 / -1" }}>
             <label>Leave approval workflow</label>
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -285,6 +308,9 @@ export default function UserProfilePage() {
             <div className="helper">
               Two-step order is fixed: supervisor first, admin second.
             </div>
+            <div className="helper">
+              Opening values are for employees with existing leave history before this system.
+            </div>
           </div>
         </div>
 
@@ -322,4 +348,10 @@ function Field({ label, value, onChange, disabled, type = "text" }) {
       />
     </div>
   );
+}
+
+function toNullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
 }

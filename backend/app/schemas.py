@@ -113,6 +113,9 @@ class AdminUserProfileOut(UserProfileOut):
     require_two_step_leave_approval: bool = False
     first_approver_id: Optional[int] = None
     second_approver_id: Optional[int] = None
+    leave_opening_as_of: Optional[date] = None
+    leave_opening_accrued: Optional[float] = None
+    leave_opening_used: Optional[float] = None
 
 
 class AdminUserProfileUpdate(UserProfileUpdate):
@@ -125,6 +128,9 @@ class AdminUserProfileUpdate(UserProfileUpdate):
     require_two_step_leave_approval: Optional[bool] = None
     first_approver_id: Optional[int] = None
     second_approver_id: Optional[int] = None
+    leave_opening_as_of: Optional[date] = None
+    leave_opening_accrued: Optional[float] = None
+    leave_opening_used: Optional[float] = None
 
 
 # -------------------------

@@ -762,6 +762,21 @@ def admin_update_user_profile(
             raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, finance, admin, ceo")
         incoming["role"] = role
 
+    for leave_num_field in ("leave_opening_accrued", "leave_opening_used"):
+        if leave_num_field in incoming:
+            value = incoming[leave_num_field]
+            if value is None:
+                continue
+            if value < 0:
+                raise HTTPException(status_code=400, detail=f"{leave_num_field} cannot be negative")
+            incoming[leave_num_field] = round(float(value), 2)
+
+    effective_opening_as_of = incoming.get("leave_opening_as_of", u.leave_opening_as_of)
+    effective_opening_accrued = incoming.get("leave_opening_accrued", u.leave_opening_accrued) or 0
+    effective_opening_used = incoming.get("leave_opening_used", u.leave_opening_used) or 0
+    if effective_opening_as_of is None and (effective_opening_accrued > 0 or effective_opening_used > 0):
+        raise HTTPException(status_code=400, detail="leave_opening_as_of is required when opening leave values are set")
+
     first_approver_id = incoming.get("first_approver_id", u.first_approver_id)
     second_approver_id = incoming.get("second_approver_id", u.second_approver_id)
     requires_two_step = incoming.get(

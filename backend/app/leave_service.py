@@ -87,14 +87,26 @@ def compute_leave_balance(
     exclude_event_id: Optional[int] = None,
 ) -> LeaveBalance:
     hire = user.hire_date or (user.created_at.date() if user.created_at else as_of)
+    opening_as_of = getattr(user, "leave_opening_as_of", None)
+    opening_accrued = float(getattr(user, "leave_opening_accrued", 0) or 0)
+    opening_used = float(getattr(user, "leave_opening_used", 0) or 0)
 
     period_start = _anniversary_on_or_before(hire, as_of)
     period_end = _add_year(period_start)
 
-    months_accrued = _full_months_between(period_start, as_of)
-    accrued = min(ANNUAL_CAP, round(months_accrued * ACCRUAL_RATE_PER_MONTH, 2))
+    accrual_anchor = period_start
+    if opening_as_of and period_start <= opening_as_of <= as_of:
+        accrual_anchor = opening_as_of
 
-    # Sum leave used within this entitlement window
+    months_accrued = _full_months_between(accrual_anchor, as_of)
+    accrued_since_anchor = round(months_accrued * ACCRUAL_RATE_PER_MONTH, 2)
+    accrued = min(ANNUAL_CAP, round(opening_accrued + accrued_since_anchor, 2))
+
+    usage_window_start = period_start
+    if opening_as_of and period_start <= opening_as_of < period_end:
+        usage_window_start = opening_as_of
+
+    # Sum leave used within this entitlement window (or opening baseline date)
     q = (
         db.query(Event)
         .filter(
@@ -102,7 +114,7 @@ def compute_leave_balance(
             Event.type == "Leave",
             Event.status == "approved",
             Event.start_ts < datetime.combine(period_end, datetime.min.time()),
-            Event.end_ts > datetime.combine(period_start, datetime.min.time()),
+            Event.end_ts > datetime.combine(usage_window_start, datetime.min.time()),
         )
     )
     if exclude_event_id is not None:
@@ -110,12 +122,10 @@ def compute_leave_balance(
 
     used = 0.0
     for e in q.all():
-        used += _event_leave_days_within_window(e.start_ts, e.end_ts, period_start, period_end)
+        used += _event_leave_days_within_window(e.start_ts, e.end_ts, usage_window_start, period_end)
 
-    used = round(used, 2)
-    # Policy: remaining entitlement is annual cap minus used leave in the period.
-    # We still expose monthly accrued as informational data.
-    remaining = max(0.0, round(ANNUAL_CAP - used, 2))
+    used = round(opening_used + used, 2)
+    remaining = max(0.0, round(accrued - used, 2))
 
     return LeaveBalance(
         user_id=user.id,
