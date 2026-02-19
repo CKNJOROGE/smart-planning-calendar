@@ -119,6 +119,23 @@ export function updateEvent(id, payload) {
   return request(`/events/${id}`, { method: "PATCH", body: payload });
 }
 
+export async function uploadEventSickNote(eventId, file) {
+  const token = getToken();
+  const form = new FormData();
+  form.append("file", file);
+
+  const res = await fetch(`${API_BASE}/events/${eventId}/sick-note`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return res.json();
+}
+
 export async function deleteEvent(id) {
   const token = getToken();
   const res = await fetch(`${API_BASE}/events/${id}`, {

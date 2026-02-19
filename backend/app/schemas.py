@@ -170,6 +170,7 @@ class EventOut(BaseModel):
     type: str
     client_id: Optional[int] = None
     one_time_client_name: Optional[str] = None
+    sick_note_url: Optional[str] = None
     note: Optional[str]
     status: str
     requested_by_id: Optional[int] = None

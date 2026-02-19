@@ -76,6 +76,7 @@ UPLOADS_DIR = Path(__file__).resolve().parents[1] / "uploads"
 AVATARS_DIR = UPLOADS_DIR / "avatars"
 DOCUMENTS_DIR = UPLOADS_DIR / "documents"
 LIBRARY_DIR = UPLOADS_DIR / "library"
+SICK_NOTES_DIR = UPLOADS_DIR / "sick_notes"
 
 PROFILE_DOCUMENT_FIELDS = {
     "id_copy": "id_copy_url",
@@ -99,6 +100,7 @@ LIBRARY_CATEGORIES = {
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
 LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
+SICK_NOTES_DIR.mkdir(parents=True, exist_ok=True)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -198,6 +200,29 @@ def get_library_document_file(
     return _serve_local_or_object(path, _library_key(file_name))
 
 
+@app.get("/files/sick-notes/{file_name}")
+def get_sick_note_file(
+    file_name: str,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    e = (
+        db.query(Event)
+        .filter(
+            Event.sick_note_url.like(f"%/uploads/sick_notes/{file_name}")
+            | Event.sick_note_url.like(f"%/files/sick-notes/{file_name}")
+        )
+        .first()
+    )
+    if not e:
+        raise HTTPException(status_code=404, detail="File not found")
+    if not _is_admin_like(current.role) and e.user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    path = SICK_NOTES_DIR / file_name
+    return _serve_local_or_object(path, _sick_note_key(file_name))
+
+
 @app.get("/avatars/{file_name}")
 def get_avatar_file(file_name: str):
     path = AVATARS_DIR / file_name
@@ -260,6 +285,10 @@ def _document_key(file_name: str) -> str:
 
 def _library_key(file_name: str) -> str:
     return f"library/{file_name}"
+
+
+def _sick_note_key(file_name: str) -> str:
+    return f"sick_notes/{file_name}"
 
 
 def _extract_file_name_from_url(url: str, prefixes: list[str]) -> Optional[str]:
@@ -2188,6 +2217,71 @@ async def update_event(
     return e
 
 
+@app.post("/events/{event_id}/sick-note", response_model=EventOut)
+async def upload_event_sick_note(
+    event_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    e = db.query(Event).filter(Event.id == event_id).first()
+    if not e:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if not _is_admin_like(current.role) and e.user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if (e.type or "").strip().lower() != "hospital":
+        raise HTTPException(status_code=400, detail="Sick note can only be uploaded for Sick Leave entries")
+
+    ext = Path(file.filename or "").suffix.lower()
+    allowed_ext = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
+    if ext not in allowed_ext:
+        ext = ".pdf"
+    allowed_types = {
+        "application/pdf",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+    }
+    if file.content_type and file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Unsupported sick note content type")
+
+    content = await file.read()
+    if len(content) > settings.PROFILE_DOC_MAX_BYTES:
+        raise HTTPException(status_code=400, detail=f"Sick note must be <= {settings.PROFILE_DOC_MAX_BYTES // (1024 * 1024)}MB")
+
+    filename = f"sick_note_{e.id}_{uuid4().hex}{ext}"
+    object_storage.upload_bytes(_sick_note_key(filename), content, file.content_type)
+    if not object_storage.enabled:
+        destination = SICK_NOTES_DIR / filename
+        destination.write_bytes(content)
+
+    base_url = str(request.base_url).rstrip("/")
+    new_url = f"{base_url}/files/sick-notes/{filename}"
+    old_url = e.sick_note_url or ""
+    e.sick_note_url = new_url
+    e.updated_at = datetime.utcnow()
+
+    old_prefixes = [
+        f"{base_url}/uploads/sick_notes/",
+        f"{base_url}/files/sick-notes/",
+        "/uploads/sick_notes/",
+        "/files/sick-notes/",
+    ]
+    old_name = _extract_file_name_from_url(old_url, old_prefixes)
+    if old_name:
+        object_storage.delete_object(_sick_note_key(old_name))
+        old_file = SICK_NOTES_DIR / old_name
+        if old_file.exists() and old_file.is_file():
+            old_file.unlink()
+
+    db.commit()
+    db.refresh(e)
+    _ = e.user
+    await broadcast_events_changed("updated", e.id)
+    return e
+
+
 @app.delete("/events/{event_id}")
 async def delete_event(
     event_id: int,
@@ -2200,6 +2294,18 @@ async def delete_event(
 
     if not _is_admin_like(user.role) and e.user_id != user.id:
         raise HTTPException(status_code=403, detail="Not allowed")
+
+    old_sick_note_url = e.sick_note_url or ""
+    old_prefixes = [
+        "/uploads/sick_notes/",
+        "/files/sick-notes/",
+    ]
+    old_name = _extract_file_name_from_url(old_sick_note_url, old_prefixes)
+    if old_name:
+        object_storage.delete_object(_sick_note_key(old_name))
+        old_file = SICK_NOTES_DIR / old_name
+        if old_file.exists() and old_file.is_file():
+            old_file.unlink()
 
     db.delete(e)
     db.commit()

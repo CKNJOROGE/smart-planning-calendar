@@ -14,9 +14,11 @@ import {
   approveLeaveRequest,
   rejectLeaveRequest,
   updateEvent,
+  uploadEventSickNote,
   deleteEvent,
   getLeaveBalance,
   getWsUrl,
+  openProtectedFile,
 } from "./api";
 import { useToast } from "./ToastProvider";
 import Avatar from "./Avatar";
@@ -118,6 +120,7 @@ export default function CalendarPage() {
     oneTimeClientName: "",
     note: "",
   });
+  const [createSickNoteFile, setCreateSickNoteFile] = useState(null);
 
   // edit modal state
   const [editOpen, setEditOpen] = useState(false);
@@ -131,6 +134,7 @@ export default function CalendarPage() {
     oneTimeClientName: "",
     note: "",
   });
+  const [editSickNoteFile, setEditSickNoteFile] = useState(null);
   const minDate = useMemo(() => toLocalDateInput(new Date()), []);
 
   const popupLayout = useMemo(() => {
@@ -329,6 +333,7 @@ export default function CalendarPage() {
       note: "",
     };
     setForm(next);
+    setCreateSickNoteFile(null);
     setCreateOpen(true);
     refreshLeaveBalance(d); // show leave balance by default in create modal
   }
@@ -432,6 +437,7 @@ export default function CalendarPage() {
       oneTimeClientName: e.one_time_client_name || "",
       note: e.note || "",
     });
+    setEditSickNoteFile(null);
     setEditOpen(true);
     if ((e.type || "").toLowerCase() === "leave") refreshLeaveBalance(startD);
     else setLeaveBalance(null);
@@ -494,6 +500,7 @@ export default function CalendarPage() {
     end.setDate(end.getDate() + 1);
     const endISO = end.toISOString().slice(0, 19);
     const isClientVisit = (form.type || "").toLowerCase() === "client visit";
+    const isSickLeave = (form.type || "").toLowerCase() === "hospital";
     if (isClientVisit) {
       if (form.clientSource === "managed" && !form.clientId) {
         setError("Please choose a client for Client Visit.");
@@ -506,6 +513,7 @@ export default function CalendarPage() {
     }
 
     try {
+      let created = null;
       if ((form.type || "").toLowerCase() === "leave") {
         await createLeaveRequest({
           start_ts: startISO,
@@ -514,7 +522,7 @@ export default function CalendarPage() {
           note: form.note || null,
         });
       } else {
-        await createEvent({
+        created = await createEvent({
           start_ts: startISO,
           end_ts: endISO,
           all_day: true,
@@ -523,8 +531,12 @@ export default function CalendarPage() {
           one_time_client_name: isClientVisit && form.clientSource === "one_time" ? (form.oneTimeClientName || "").trim() : null,
           note: form.note || null,
         });
+        if (isSickLeave && createSickNoteFile && created?.id) {
+          await uploadEventSickNote(created.id, createSickNoteFile);
+        }
       }
       setCreateOpen(false);
+      setCreateSickNoteFile(null);
       setLeaveBalance(null);
       await refresh();
       showToast("Entry created", "success");
@@ -551,6 +563,7 @@ export default function CalendarPage() {
     end.setDate(end.getDate() + 1);
     const endISO = end.toISOString().slice(0, 19);
     const isClientVisit = (editForm.type || "").toLowerCase() === "client visit";
+    const isSickLeave = (editForm.type || "").toLowerCase() === "hospital";
     if (isClientVisit) {
       if (editForm.clientSource === "managed" && !editForm.clientId) {
         setError("Please choose a client for Client Visit.");
@@ -563,7 +576,7 @@ export default function CalendarPage() {
     }
 
     try {
-      await updateEvent(editForm.id, {
+      const updated = await updateEvent(editForm.id, {
         start_ts: startISO,
         end_ts: endISO,
         all_day: true,
@@ -572,7 +585,11 @@ export default function CalendarPage() {
         one_time_client_name: isClientVisit && editForm.clientSource === "one_time" ? (editForm.oneTimeClientName || "").trim() : null,
         note: editForm.note || null,
       });
+      if (isSickLeave && editSickNoteFile && updated?.id) {
+        await uploadEventSickNote(updated.id, editSickNoteFile);
+      }
       setEditOpen(false);
+      setEditSickNoteFile(null);
       setPopup(null);
       setLeaveBalance(null);
       await refresh();
@@ -784,6 +801,20 @@ export default function CalendarPage() {
                   <div className="calendar-popup-value">{popup.apiEvent.note}</div>
                 </div>
               )}
+              {(popup.apiEvent.type || "").toLowerCase() === "hospital" && popup.apiEvent.sick_note_url && (
+                <div className="calendar-popup-field">
+                  <div className="calendar-popup-label">Doctor/Sick Note</div>
+                  <div className="calendar-popup-value">
+                    <button
+                      className="btn"
+                      type="button"
+                      onClick={() => openProtectedFile(popup.apiEvent.sick_note_url)}
+                    >
+                      View Attachment
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="calendar-popup-actions">
@@ -912,6 +943,18 @@ export default function CalendarPage() {
                     </div>
                   )}
                 </>
+              )}
+
+              {form.type === "Hospital" && (
+                <div className="field">
+                  <label>Doctor/Sick Note</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={(e) => setCreateSickNoteFile(e.target.files?.[0] || null)}
+                  />
+                  <div className="helper">Optional: upload doctor/sick note for Sick Leave.</div>
+                </div>
               )}
 
               {/* Leave balance */}
@@ -1049,6 +1092,18 @@ export default function CalendarPage() {
                     </div>
                   )}
                 </>
+              )}
+
+              {editForm.type === "Hospital" && (
+                <div className="field">
+                  <label>Doctor/Sick Note</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={(e) => setEditSickNoteFile(e.target.files?.[0] || null)}
+                  />
+                  <div className="helper">Optional: upload a new doctor/sick note to replace existing.</div>
+                </div>
               )}
 
               {editForm.type === "Leave" && leaveBalance && (

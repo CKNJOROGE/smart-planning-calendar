@@ -68,6 +68,7 @@ class Event(Base):
     type = Column(String(50), nullable=False)
     client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=True, index=True)
     one_time_client_name = Column(String(255), nullable=True)
+    sick_note_url = Column(String(500), nullable=True)
     note = Column(Text, nullable=True)
     status = Column(String(20), nullable=False, default="approved")
     requested_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
