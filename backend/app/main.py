@@ -1888,12 +1888,12 @@ async def approve_leave_request(
     db: Session = Depends(get_db),
     approver: User = Depends(require_leave_approver),
 ):
-    e = db.query(Event).filter(Event.id == event_id, Event.type == "Leave").first()
+    e = db.query(Event).filter(Event.id == event_id, Event.type.in_(["Leave", "Hospital"])).first()
     if not e:
-        raise HTTPException(status_code=404, detail="Leave request not found")
+        raise HTTPException(status_code=404, detail="Request not found")
 
     if e.status != "pending":
-        raise HTTPException(status_code=400, detail="Only pending leave can be approved")
+        raise HTTPException(status_code=400, detail="Only pending requests can be approved")
 
     owner = db.query(User).filter(User.id == e.user_id).first()
     if not owner:
@@ -1915,7 +1915,7 @@ async def approve_leave_request(
             raise HTTPException(status_code=400, detail="Leave owner has invalid approval setup: second approver must be admin/ceo")
 
         if approver.id not in {first_approver_id, second_approver_id}:
-            raise HTTPException(status_code=403, detail="You are not assigned to approve this leave")
+            raise HTTPException(status_code=403, detail="You are not assigned to approve this request")
         if approver.id == first_approver_id and approver.role != "supervisor":
             raise HTTPException(status_code=403, detail="First approval must be done by the assigned supervisor")
         if approver.id == second_approver_id and not _is_admin_like(approver.role):
@@ -1978,12 +1978,12 @@ async def reject_leave_request(
     db: Session = Depends(get_db),
     approver: User = Depends(require_leave_approver),
 ):
-    e = db.query(Event).filter(Event.id == event_id, Event.type == "Leave").first()
+    e = db.query(Event).filter(Event.id == event_id, Event.type.in_(["Leave", "Hospital"])).first()
     if not e:
-        raise HTTPException(status_code=404, detail="Leave request not found")
+        raise HTTPException(status_code=404, detail="Request not found")
 
     if e.status != "pending":
-        raise HTTPException(status_code=400, detail="Only pending leave can be rejected")
+        raise HTTPException(status_code=400, detail="Only pending requests can be rejected")
 
     owner = db.query(User).filter(User.id == e.user_id).first()
     if not owner:
@@ -2023,7 +2023,7 @@ def list_leave_requests(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    q = db.query(Event).filter(Event.type == "Leave")
+    q = db.query(Event).filter(Event.type.in_(["Leave", "Hospital"]))
 
     if status:
         q = q.filter(Event.status == status)
@@ -2121,7 +2121,7 @@ async def create_event(
         except ValueError as ve:
             raise HTTPException(status_code=400, detail=str(ve))
 
-    is_leave = normalized_type.lower() == "leave"
+    is_leave_like = normalized_type.lower() in {"leave", "hospital"}
     e = Event(
         user_id=user.id,
         start_ts=payload.start_ts,
@@ -2131,8 +2131,8 @@ async def create_event(
         client_id=client_id,
         one_time_client_name=one_time_client_name,
         note=payload.note,
-        status="pending" if is_leave else "approved",
-        requested_by_id=user.id if is_leave else None,
+        status="pending" if is_leave_like else "approved",
+        requested_by_id=user.id if is_leave_like else None,
     )
     db.add(e)
     db.commit()

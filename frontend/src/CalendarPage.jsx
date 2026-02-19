@@ -358,7 +358,7 @@ export default function CalendarPage() {
   async function loadPopupApprovalConfig(apiEvent) {
     setPopupApprovalConfig(null);
     if (!user || (user.role !== "admin" && user.role !== "ceo")) return;
-    if ((apiEvent?.type || "").toLowerCase() !== "leave") return;
+    if (!["leave", "hospital"].includes((apiEvent?.type || "").toLowerCase())) return;
     try {
       const p = await adminGetUserProfile(apiEvent.user_id);
       setPopupApprovalConfig({
@@ -389,9 +389,9 @@ export default function CalendarPage() {
     if (user.role === "admin" || user.role === "ceo") return true;
     if (popup.apiEvent.user_id !== user.id) return false;
 
-    const isLeave = (popup.apiEvent.type || "").toLowerCase() === "leave";
+    const isLeaveLike = ["leave", "hospital"].includes((popup.apiEvent.type || "").toLowerCase());
     const status = normalizeStatus(popup.apiEvent.status);
-    if (user.role === "employee" && isLeave && (status === "approved" || status === "rejected")) {
+    if (user.role === "employee" && isLeaveLike && (status === "approved" || status === "rejected")) {
       return false;
     }
     return true;
@@ -406,7 +406,7 @@ export default function CalendarPage() {
     if (!popup || !user) return false;
     return (
       (user.role === "admin" || user.role === "ceo") &&
-      (popup.apiEvent.type || "").toLowerCase() === "leave" &&
+      ["leave", "hospital"].includes((popup.apiEvent.type || "").toLowerCase()) &&
       (popup.apiEvent.status || "").toLowerCase() === "pending"
     );
   }, [popup, user]);
@@ -462,7 +462,7 @@ export default function CalendarPage() {
       await approveLeaveRequest(popup.apiEvent.id);
       setPopup(null);
       await refresh();
-      showToast("Leave approved", "success");
+      showToast("Request approved", "success");
     } catch (e) {
       setError(String(e.message || e));
       showToast(String(e.message || e), "error");
@@ -476,7 +476,7 @@ export default function CalendarPage() {
       await rejectLeaveRequest(popup.apiEvent.id, reason);
       setPopup(null);
       await refresh();
-      showToast("Leave rejected", "success");
+      showToast("Request rejected", "success");
     } catch (e) {
       setError(String(e.message || e));
       showToast(String(e.message || e), "error");
@@ -749,7 +749,7 @@ export default function CalendarPage() {
             eventContent={(arg) => {
               const api = arg.event.extendedProps.api;
               const isPendingLeave =
-                (api?.type || "").toLowerCase() === "leave" &&
+                ["leave", "hospital"].includes((api?.type || "").toLowerCase()) &&
                 (api?.status || "").toLowerCase() === "pending";
               const label = `${api?.user?.name || "User"} • ${typeLabel(api?.type)}`;
               return (
