@@ -17,11 +17,20 @@ export default function Login({ onLoggedIn }) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));
     const particles = [];
     const mouse = { x: -9999, y: -9999 };
     let raf = null;
     let particleCount = 0;
+    const linkDistance = 110;
+    const linkDistanceSq = linkDistance * linkDistance;
+    const cellSize = 120;
+    const maxLinksPerParticle = 10;
+    const neighborOffsets = [
+      [-1, -1], [0, -1], [1, -1],
+      [-1, 0], [0, 0], [1, 0],
+      [-1, 1], [0, 1], [1, 1],
+    ];
 
     function getParticleCount(width) {
       if (width >= 1280) return 1000; // laptop/desktop: max density
@@ -89,22 +98,47 @@ export default function Login({ onLoggedIn }) {
         ctx.fill();
       }
 
+      const grid = new Map();
       for (let i = 0; i < particles.length; i += 1) {
-        for (let j = i + 1; j < particles.length; j += 1) {
-          const a = particles[i];
-          const b = particles[j];
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < 110) {
-            const alpha = (1 - d / 110) * 0.22;
+        const p = particles[i];
+        const gx = Math.floor(p.x / cellSize);
+        const gy = Math.floor(p.y / cellSize);
+        const key = `${gx},${gy}`;
+        const bucket = grid.get(key);
+        if (bucket) bucket.push(i);
+        else grid.set(key, [i]);
+      }
+
+      for (let i = 0; i < particles.length; i += 1) {
+        const a = particles[i];
+        const gx = Math.floor(a.x / cellSize);
+        const gy = Math.floor(a.y / cellSize);
+        let links = 0;
+
+        for (const [ox, oy] of neighborOffsets) {
+          const bucket = grid.get(`${gx + ox},${gy + oy}`);
+          if (!bucket) continue;
+          for (const j of bucket) {
+            if (j <= i) continue;
+            const b = particles[j];
+            const dx = a.x - b.x;
+            const dy = a.y - b.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq >= linkDistanceSq) continue;
+
+            const d = Math.sqrt(distSq);
+            const alpha = (1 - d / linkDistance) * 0.22;
             ctx.beginPath();
             ctx.strokeStyle = `rgba(100, 2, 119, ${alpha})`;
             ctx.lineWidth = 1;
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
             ctx.stroke();
+
+            links += 1;
+            if (links >= maxLinksPerParticle) break;
           }
+          if (links >= maxLinksPerParticle) break;
         }
       }
 
