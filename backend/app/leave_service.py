@@ -125,7 +125,7 @@ def compute_leave_balance(
         used += _event_leave_days_within_window(e.start_ts, e.end_ts, usage_window_start, period_end)
 
     used = round(opening_used + used, 2)
-    remaining = max(0.0, round(accrued - used, 2))
+    remaining = round(accrued - used, 2)
 
     return LeaveBalance(
         user_id=user.id,
@@ -148,19 +148,10 @@ def validate_leave_request(
 ) -> None:
     """
     Policy choice:
-    - We allow booking future leave against future accrual up to the event start date.
-      (So as_of = min(today, event_start_date) would be more conservative;
-       we use as_of = event_start_date for flexibility.)
+    - Leave requests are allowed even if balance is zero/negative.
+    - Balance is reflected after approval via compute_leave_balance.
+    - This validator only enforces valid duration.
     """
-    as_of = start_ts.date()
-    bal = compute_leave_balance(db, user, as_of=as_of, exclude_event_id=exclude_event_id)
-
     requested_days = float((end_ts.date() - start_ts.date()).days)
     if requested_days <= 0:
         raise ValueError("Invalid leave duration")
-
-    if requested_days > bal.remaining + 1e-9:
-        raise ValueError(
-            f"Insufficient leave balance for this period. "
-            f"Requested {requested_days} day(s), remaining {bal.remaining}."
-        )
