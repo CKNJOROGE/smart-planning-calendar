@@ -694,7 +694,7 @@ export default function CalendarPage() {
                   <Avatar
                     name={api?.user?.name}
                     url={api?.user?.avatar_url}
-                    size={18}
+                    size={24}
                     className="event-avatar"
                   />
                   {isPendingLeave && <span className="pending-dot" title="Pending approval" />}
