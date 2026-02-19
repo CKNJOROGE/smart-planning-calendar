@@ -411,6 +411,11 @@ export default function CalendarPage() {
     );
   }, [popup, user]);
 
+  const canViewSickNote = useMemo(() => {
+    if (!user) return false;
+    return user.role === "admin" || user.role === "ceo";
+  }, [user]);
+
   const popupStatus = useMemo(() => {
     if (!popup?.apiEvent) return "approved";
     return normalizeStatus(popup.apiEvent.status);
@@ -825,7 +830,7 @@ export default function CalendarPage() {
                   <div className="calendar-popup-value">{popup.apiEvent.note}</div>
                 </div>
               )}
-              {(popup.apiEvent.type || "").toLowerCase() === "hospital" && popup.apiEvent.sick_note_url && (
+              {(popup.apiEvent.type || "").toLowerCase() === "hospital" && popup.apiEvent.sick_note_url && canViewSickNote && (
                 <div className="calendar-popup-field">
                   <div className="calendar-popup-label">Doctor/Sick Note</div>
                   <div className="calendar-popup-value">

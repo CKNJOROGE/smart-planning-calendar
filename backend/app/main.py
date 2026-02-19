@@ -216,8 +216,8 @@ def get_sick_note_file(
     )
     if not e:
         raise HTTPException(status_code=404, detail="File not found")
-    if not _is_admin_like(current.role) and e.user_id != current.id:
-        raise HTTPException(status_code=403, detail="Not allowed")
+    if not _is_admin_like(current.role):
+        raise HTTPException(status_code=403, detail="Only admin/ceo can view sick notes")
 
     path = SICK_NOTES_DIR / file_name
     return _serve_local_or_object(path, _sick_note_key(file_name))
