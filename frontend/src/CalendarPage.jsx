@@ -679,7 +679,6 @@ export default function CalendarPage() {
               right: "dayGridMonth,timeGridWeek,timeGridDay",
             }}
             events={events}
-            validRange={{ start: minDate }}
             datesSet={onDatesSet}
             dateClick={onDateClick}
             eventClick={onEventClick}
