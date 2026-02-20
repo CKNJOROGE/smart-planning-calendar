@@ -472,6 +472,36 @@ export function markCashRequisitionDisbursed(requestId, note) {
   });
 }
 
+export function submitAuthorityToIncurRequest(payload) {
+  return request("/finance/authority-to-incur", { method: "POST", body: payload });
+}
+
+export function listMyAuthorityToIncurRequests() {
+  return request("/finance/authority-to-incur/my");
+}
+
+export function listPendingAuthorityToIncurRequests() {
+  return request("/finance/authority-to-incur/pending");
+}
+
+export function listApprovedAuthorityToIncurRequests() {
+  return request("/finance/authority-to-incur/approved");
+}
+
+export function decideAuthorityToIncurRequest(requestId, approve, comment) {
+  return request(`/finance/authority-to-incur/${requestId}/decision`, {
+    method: "POST",
+    body: { approve: !!approve, comment: comment || null },
+  });
+}
+
+export function markAuthorityToIncurIncurred(requestId, note) {
+  return request(`/finance/authority-to-incur/${requestId}/incur`, {
+    method: "POST",
+    body: { note: note || null },
+  });
+}
+
 export function submitSalaryAdvanceRequest(payload) {
   return request("/finance/salary-advances", { method: "POST", body: payload });
 }

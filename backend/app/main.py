@@ -28,6 +28,7 @@ from .models import (
     CashReimbursementItem,
     CashReimbursementDraft,
     CashRequisitionRequest,
+    AuthorityToIncurRequest,
     SalaryAdvanceRequest,
 )
 from .schemas import (
@@ -70,6 +71,10 @@ from .schemas import (
     CashRequisitionDecisionIn,
     CashRequisitionDisburseIn,
     CashRequisitionRequestOut,
+    AuthorityToIncurCreateIn,
+    AuthorityToIncurDecisionIn,
+    AuthorityToIncurIncurIn,
+    AuthorityToIncurRequestOut,
     SalaryAdvanceCreateIn,
     SalaryAdvanceDecisionIn,
     SalaryAdvanceDisburseIn,
@@ -1949,6 +1954,190 @@ def mark_cash_requisition_disbursed(
     req.disbursed_at = datetime.utcnow()
     req.disbursed_note = note or None
     req.disbursed_by_id = current.id
+    req.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    return req
+
+
+def _load_authority_to_incur_request(db: Session, request_id: int) -> Optional[AuthorityToIncurRequest]:
+    req = db.query(AuthorityToIncurRequest).filter(AuthorityToIncurRequest.id == request_id).first()
+    if not req:
+        return None
+    _ = req.user
+    return req
+
+
+@app.post("/finance/authority-to-incur", response_model=AuthorityToIncurRequestOut)
+def submit_authority_to_incur_request(
+    payload: AuthorityToIncurCreateIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    amount = Decimal(str(payload.amount or 0))
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be > 0")
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    if len(title) > 255:
+        raise HTTPException(status_code=400, detail="title must be <= 255 characters")
+    payee = (payload.payee or "").strip()
+    if len(payee) > 255:
+        raise HTTPException(status_code=400, detail="payee must be <= 255 characters")
+    details = (payload.details or "").strip()
+    if len(details) > 2000:
+        raise HTTPException(status_code=400, detail="details must be <= 2000 characters")
+
+    req = AuthorityToIncurRequest(
+        user_id=current.id,
+        amount=amount,
+        title=title,
+        payee=payee or None,
+        details=details or None,
+        needed_by=payload.needed_by,
+        status="pending_finance_review",
+        submitted_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    return req
+
+
+@app.get("/finance/authority-to-incur/my", response_model=List[AuthorityToIncurRequestOut])
+def list_my_authority_to_incur_requests(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(AuthorityToIncurRequest)
+        .filter(AuthorityToIncurRequest.user_id == current.id)
+        .order_by(AuthorityToIncurRequest.submitted_at.desc(), AuthorityToIncurRequest.id.desc())
+        .all()
+    )
+    for r in rows:
+        _ = r.user
+    return rows
+
+
+@app.get("/finance/authority-to-incur/pending", response_model=List[AuthorityToIncurRequestOut])
+def list_pending_authority_to_incur_requests(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    q = db.query(AuthorityToIncurRequest)
+    if role == "finance":
+        q = q.filter(AuthorityToIncurRequest.status == "pending_finance_review")
+    else:
+        q = q.filter(AuthorityToIncurRequest.status == "pending_ceo_approval")
+
+    rows = q.order_by(AuthorityToIncurRequest.submitted_at.asc(), AuthorityToIncurRequest.id.asc()).all()
+    for r in rows:
+        _ = r.user
+    return rows
+
+
+@app.get("/finance/authority-to-incur/approved", response_model=List[AuthorityToIncurRequestOut])
+def list_approved_authority_to_incur_requests(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    rows = (
+        db.query(AuthorityToIncurRequest)
+        .filter(AuthorityToIncurRequest.status.in_(["pending_incurrence", "incurred", "rejected"]))
+        .order_by(AuthorityToIncurRequest.submitted_at.desc(), AuthorityToIncurRequest.id.desc())
+        .all()
+    )
+    for r in rows:
+        _ = r.user
+    return rows
+
+
+@app.post("/finance/authority-to-incur/{request_id}/decision", response_model=AuthorityToIncurRequestOut)
+def decide_authority_to_incur_request(
+    request_id: int,
+    payload: AuthorityToIncurDecisionIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    req = _load_authority_to_incur_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Authority to incur request not found")
+    if req.status in {"incurred", "rejected"}:
+        raise HTTPException(status_code=400, detail=f"Request already {req.status}")
+
+    role = (current.role or "").strip().lower()
+    now = datetime.utcnow()
+    decision = "approved" if payload.approve else "rejected"
+    comment = (payload.comment or "").strip()
+    if decision == "rejected" and not comment:
+        raise HTTPException(status_code=400, detail="comment is required when rejecting")
+
+    if role == "finance":
+        if req.status != "pending_finance_review":
+            raise HTTPException(status_code=400, detail="Finance can only decide pending finance review requests")
+        req.finance_decision = decision
+        req.finance_comment = comment or None
+        req.finance_decided_at = now
+        req.finance_decided_by_id = current.id
+        req.status = "pending_ceo_approval" if decision == "approved" else "rejected"
+    elif role in {"admin", "ceo"}:
+        if req.status != "pending_ceo_approval":
+            raise HTTPException(status_code=400, detail="CEO/Admin can only decide pending CEO approval requests")
+        req.ceo_decision = decision
+        req.ceo_comment = comment or None
+        req.ceo_decided_at = now
+        req.ceo_decided_by_id = current.id
+        req.status = "pending_incurrence" if decision == "approved" else "rejected"
+    else:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    req.updated_at = now
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    return req
+
+
+@app.post("/finance/authority-to-incur/{request_id}/incur", response_model=AuthorityToIncurRequestOut)
+def mark_authority_to_incur_incurred(
+    request_id: int,
+    payload: AuthorityToIncurIncurIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        raise HTTPException(status_code=403, detail="Only finance/admin/ceo can mark incurred")
+
+    req = _load_authority_to_incur_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Authority to incur request not found")
+    if req.status == "incurred":
+        raise HTTPException(status_code=400, detail="Request already incurred")
+    if req.status != "pending_incurrence":
+        raise HTTPException(status_code=400, detail="Only approved requests can be marked incurred")
+
+    note = (payload.note or "").strip()
+    if len(note) > 1000:
+        raise HTTPException(status_code=400, detail="incurrence note must be <= 1000 characters")
+
+    req.status = "incurred"
+    req.incurred_at = datetime.utcnow()
+    req.incurred_note = note or None
+    req.incurred_by_id = current.id
     req.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(req)

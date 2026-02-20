@@ -15,6 +15,12 @@ import {
   listApprovedCashRequisitions,
   decideCashRequisition,
   markCashRequisitionDisbursed,
+  submitAuthorityToIncurRequest,
+  listMyAuthorityToIncurRequests,
+  listPendingAuthorityToIncurRequests,
+  listApprovedAuthorityToIncurRequests,
+  decideAuthorityToIncurRequest,
+  markAuthorityToIncurIncurred,
   submitSalaryAdvanceRequest,
   listMySalaryAdvanceRequests,
   listPendingSalaryAdvanceRequests,
@@ -43,8 +49,10 @@ function fmtCurrency(v) {
 function statusPillClass(status) {
   const s = (status || "").toLowerCase();
   if (s === "amount_reimbursed") return "dashboard-status-ok";
+  if (s === "disbursed" || s === "incurred") return "dashboard-status-ok";
   if (s === "pending_reimbursement") return "dashboard-status-warn";
   if (s === "pending_approval") return "dashboard-status-warn";
+  if (s === "pending_finance_review" || s === "pending_ceo_approval" || s === "pending_disbursement" || s === "pending_incurrence") return "dashboard-status-warn";
   if (s === "rejected") return "dashboard-status-danger";
   return "dashboard-status-warn";
 }
@@ -85,6 +93,16 @@ function salaryAdvanceStatusLabel(status) {
   return status || "-";
 }
 
+function authorityStatusLabel(status) {
+  const s = (status || "").toLowerCase();
+  if (s === "pending_finance_review") return "pending finance review";
+  if (s === "pending_ceo_approval") return "pending CEO approval";
+  if (s === "pending_incurrence") return "approved, awaiting incurrence";
+  if (s === "incurred") return "incurred";
+  if (s === "rejected") return "rejected";
+  return status || "-";
+}
+
 function emptyManual() {
   return { item_date: toDateInput(new Date()), description: "", amount: "", source_event_id: null };
 }
@@ -113,6 +131,16 @@ export default function FinanceRequestsPage() {
   const [myRequisitions, setMyRequisitions] = useState([]);
   const [pendingRequisitions, setPendingRequisitions] = useState([]);
   const [approvedRequisitions, setApprovedRequisitions] = useState([]);
+  const [atiForm, setAtiForm] = useState({
+    amount: "",
+    title: "",
+    payee: "",
+    details: "",
+    needed_by: "",
+  });
+  const [myAtiRequests, setMyAtiRequests] = useState([]);
+  const [pendingAtiRequests, setPendingAtiRequests] = useState([]);
+  const [approvedAtiRequests, setApprovedAtiRequests] = useState([]);
   const [saForm, setSaForm] = useState({
     amount: "",
     reason: "",
@@ -165,6 +193,8 @@ export default function FinanceRequestsPage() {
       setMyRequests(mine || []);
       const myReqs = await listMyCashRequisitions();
       setMyRequisitions(myReqs || []);
+      const myAti = await listMyAuthorityToIncurRequests();
+      setMyAtiRequests(myAti || []);
       const mySas = await listMySalaryAdvanceRequests();
       setMySalaryAdvances(mySas || []);
       if (user.role === "admin" || user.role === "ceo") {
@@ -178,11 +208,13 @@ export default function FinanceRequestsPage() {
         setClientPricing([]);
       }
       if (user.role === "finance" || user.role === "admin" || user.role === "ceo") {
-        const [pending, approved, pendingReqs, approvedReqs, pendingSas, approvedSas] = await Promise.all([
+        const [pending, approved, pendingReqs, approvedReqs, pendingAti, approvedAti, pendingSas, approvedSas] = await Promise.all([
           listPendingCashReimbursements(),
           listApprovedCashReimbursements(),
           listPendingCashRequisitions(),
           listApprovedCashRequisitions(),
+          listPendingAuthorityToIncurRequests(),
+          listApprovedAuthorityToIncurRequests(),
           listPendingSalaryAdvanceRequests(),
           listApprovedSalaryAdvanceRequests(),
         ]);
@@ -190,6 +222,8 @@ export default function FinanceRequestsPage() {
         setApprovedRequests(approved || []);
         setPendingRequisitions(pendingReqs || []);
         setApprovedRequisitions(approvedReqs || []);
+        setPendingAtiRequests(pendingAti || []);
+        setApprovedAtiRequests(approvedAti || []);
         setPendingSalaryAdvances(pendingSas || []);
         setApprovedSalaryAdvances(approvedSas || []);
       } else {
@@ -197,6 +231,8 @@ export default function FinanceRequestsPage() {
         setApprovedRequests([]);
         setPendingRequisitions([]);
         setApprovedRequisitions([]);
+        setPendingAtiRequests([]);
+        setApprovedAtiRequests([]);
         setPendingSalaryAdvances([]);
         setApprovedSalaryAdvances([]);
       }
@@ -395,11 +431,86 @@ export default function FinanceRequestsPage() {
     return false;
   }
 
+  function canCurrentRoleDecideAuthority(r) {
+    const role = (current?.role || "").toLowerCase();
+    if (role === "finance") return (r.status || "").toLowerCase() === "pending_finance_review";
+    if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
+    return false;
+  }
+
   function canCurrentRoleDecideSalaryAdvance(r) {
     const role = (current?.role || "").toLowerCase();
     if (role === "finance") return (r.status || "").toLowerCase() === "pending_finance_review";
     if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
     return false;
+  }
+
+  async function submitAuthorityToIncur() {
+    setErr("");
+    const amount = Number(atiForm.amount || 0);
+    const title = (atiForm.title || "").trim();
+    const payee = (atiForm.payee || "").trim();
+    const details = (atiForm.details || "").trim();
+    if (!(amount > 0)) {
+      setErr("Authority amount must be greater than 0.");
+      return;
+    }
+    if (!title) {
+      setErr("Title is required.");
+      return;
+    }
+    try {
+      await submitAuthorityToIncurRequest({
+        amount,
+        title,
+        payee: payee || null,
+        details: details || null,
+        needed_by: atiForm.needed_by || null,
+      });
+      setAtiForm({
+        amount: "",
+        title: "",
+        payee: "",
+        details: "",
+        needed_by: "",
+      });
+      await loadData();
+      showToast("Authority to incur request submitted", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function takeAuthorityDecision(requestId, approve) {
+    const comment = approve ? "" : (prompt("Reason for rejection (required):") || "").trim();
+    if (!approve && !comment) {
+      setErr("Rejection comment is required.");
+      return;
+    }
+    try {
+      await decideAuthorityToIncurRequest(requestId, approve, comment);
+      await loadData();
+      showToast(approve ? "Authority request approved" : "Authority request rejected", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function markAuthorityIncurred(requestId) {
+    const note = (prompt("Incurrence note (optional):") || "").trim();
+    try {
+      await markAuthorityToIncurIncurred(requestId, note);
+      await loadData();
+      showToast("Request marked incurred", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
   }
 
   async function submitSalaryAdvance() {
@@ -1065,10 +1176,201 @@ export default function FinanceRequestsPage() {
         </>
       )}
       {activeSection === "authority_to_incur" && (
-        <div className="card">
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>Authority To Incur Expenditure</div>
-          <div className="muted">This module is not implemented yet.</div>
-        </div>
+        <>
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>Authority To Incur Expenditure</div>
+            <div className="muted" style={{ marginBottom: 10 }}>
+              Workflow: Finance review {"->"} CEO/Admin approval {"->"} Mark expenditure incurred.
+            </div>
+            <div className="row">
+              <div className="field" style={{ flex: "1 1 180px" }}>
+                <label>Amount</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={atiForm.amount}
+                  onChange={(e) => setAtiForm((f) => ({ ...f, amount: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="field" style={{ flex: "1 1 220px" }}>
+                <label>Needed By (optional)</label>
+                <input
+                  type="date"
+                  value={atiForm.needed_by}
+                  onChange={(e) => setAtiForm((f) => ({ ...f, needed_by: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="field">
+              <label>Title</label>
+              <input
+                value={atiForm.title}
+                onChange={(e) => setAtiForm((f) => ({ ...f, title: e.target.value }))}
+                placeholder="Expenditure title/purpose"
+              />
+            </div>
+            <div className="field">
+              <label>Vendor/Payee (optional)</label>
+              <input
+                value={atiForm.payee}
+                onChange={(e) => setAtiForm((f) => ({ ...f, payee: e.target.value }))}
+                placeholder="Supplier/vendor/payee name"
+              />
+            </div>
+            <div className="field">
+              <label>Details (optional)</label>
+              <textarea
+                value={atiForm.details}
+                onChange={(e) => setAtiForm((f) => ({ ...f, details: e.target.value }))}
+                placeholder="Scope, expected output, budget notes, etc."
+              />
+            </div>
+            <button className="btn btn-primary" type="button" onClick={submitAuthorityToIncur}>
+              Submit Authority Request
+            </button>
+          </div>
+
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>My Authority Requests</div>
+            <div style={{ width: "100%", overflowX: "auto" }}>
+              <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ textAlign: "left", padding: 10 }}>Submitted</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Title</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Needed By</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Comments</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(myAtiRequests || []).map((r) => (
+                    <tr key={`my_ati_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <td style={{ padding: 10 }}>{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "-"}</td>
+                      <td style={{ padding: 10 }}>
+                        <div style={{ fontWeight: 700 }}>{r.title}</div>
+                        {r.payee && <div className="muted" style={{ fontSize: 12 }}>Payee: {r.payee}</div>}
+                        {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
+                      </td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                      <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
+                      <td style={{ padding: 10 }}>
+                        <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{authorityStatusLabel(r.status)}</span>
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <div>Finance: {decisionLabel(r.finance_decision)}</div>
+                        <div>CEO: {decisionLabel(r.ceo_decision)}</div>
+                        {r.finance_comment && <div className="muted">Finance comment: {r.finance_comment}</div>}
+                        {r.ceo_comment && <div className="muted">CEO comment: {r.ceo_comment}</div>}
+                        {r.incurred_note && <div className="muted">Incurrence note: {r.incurred_note}</div>}
+                      </td>
+                    </tr>
+                  ))}
+                  {!myAtiRequests.length && (
+                    <tr><td colSpan={6} style={{ padding: 14 }} className="muted">No authority requests submitted yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {canReview && (
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div style={{ fontWeight: 900, marginBottom: 8 }}>Pending Authority Approvals</div>
+              <div style={{ width: "100%", overflowX: "auto" }}>
+                <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <th style={{ textAlign: "left", padding: 10 }}>Requester</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Title</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Needed By</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(pendingAtiRequests || []).map((r) => (
+                      <tr key={`pending_ati_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
+                        <td style={{ padding: 10 }}>
+                          <div style={{ fontWeight: 700 }}>{r.title}</div>
+                          {r.payee && <div className="muted" style={{ fontSize: 12 }}>Payee: {r.payee}</div>}
+                          {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
+                        </td>
+                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
+                        <td style={{ padding: 10 }}>
+                          {canCurrentRoleDecideAuthority(r) ? (
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button className="btn btn-primary" onClick={() => takeAuthorityDecision(r.id, true)}>Approve</button>
+                              <button className="btn btn-danger" onClick={() => takeAuthorityDecision(r.id, false)}>Reject</button>
+                            </div>
+                          ) : (
+                            <span className="muted">Not actionable for your role.</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {!pendingAtiRequests.length && (
+                      <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No pending authority approvals.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {canReview && (
+            <div className="card">
+              <div style={{ fontWeight: 900, marginBottom: 8 }}>Approved / Incurred Authority Requests</div>
+              <div style={{ width: "100%", overflowX: "auto" }}>
+                <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <th style={{ textAlign: "left", padding: 10 }}>Requester</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Title</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Final Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(approvedAtiRequests || []).map((r) => (
+                      <tr key={`approved_ati_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
+                        <td style={{ padding: 10 }}>
+                          <div style={{ fontWeight: 700 }}>{r.title}</div>
+                          {r.payee && <div className="muted" style={{ fontSize: 12 }}>Payee: {r.payee}</div>}
+                        </td>
+                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>
+                          <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{authorityStatusLabel(r.status)}</span>
+                        </td>
+                        <td style={{ padding: 10 }}>
+                          {(r.status || "").toLowerCase() === "pending_incurrence" ? (
+                            <button className="btn btn-primary" type="button" onClick={() => markAuthorityIncurred(r.id)}>
+                              Mark Incurred
+                            </button>
+                          ) : (r.status || "").toLowerCase() === "incurred" ? (
+                            <span className="muted">Incurred on {r.incurred_at ? new Date(r.incurred_at).toLocaleString() : "-"}</span>
+                          ) : (
+                            <span className="muted">No final action</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {!approvedAtiRequests.length && (
+                      <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No approved/incurred authority requests.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
       {activeSection === "salary_advance" && (
         <>
