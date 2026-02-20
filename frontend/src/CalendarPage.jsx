@@ -66,6 +66,14 @@ function normalizeStatus(status) {
   return "approved";
 }
 
+function toCsvCell(value) {
+  const s = String(value ?? "");
+  if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
+    return `"${s.replace(/"/g, "\"\"")}"`;
+  }
+  return s;
+}
+
 function isPastCurrentDayEvent(apiEvent) {
   if (!apiEvent?.end_ts) return false;
   const end = new Date(apiEvent.end_ts);
@@ -131,6 +139,8 @@ export default function CalendarPage() {
     type: "",         // Leave/Hospital/...
     user_id: "",      // admin only
     department: "",   // admin only
+    start_date: "",
+    end_date: "",
   });
 
   const departments = useMemo(() => {
@@ -233,6 +243,23 @@ export default function CalendarPage() {
   }
 
   async function loadEvents(startISO, endISO) {
+    if (filters.start_date && filters.end_date && filters.start_date > filters.end_date) {
+      setError("Filter error: Start Date cannot be after End Date.");
+      setEvents([]);
+      return;
+    }
+
+    let queryStart = startISO;
+    let queryEnd = endISO;
+    if (filters.start_date) {
+      queryStart = `${filters.start_date}T00:00:00`;
+    }
+    if (filters.end_date) {
+      const d = new Date(`${filters.end_date}T00:00:00`);
+      d.setDate(d.getDate() + 1);
+      queryEnd = d.toISOString().slice(0, 19);
+    }
+
     const f = {};
     if (filters.type) f.type = filters.type;
     if (user?.role === "admin") {
@@ -240,7 +267,7 @@ export default function CalendarPage() {
       if (filters.department) f.department = filters.department;
     }
 
-    const data = await listEvents(startISO, endISO, f);
+    const data = await listEvents(queryStart, queryEnd, f);
 
     const mapped = data.map((e) => ({
       id: String(e.id),
@@ -355,7 +382,7 @@ export default function CalendarPage() {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [range.start, range.end, filters.type, filters.user_id, filters.department, user?.role]);
+  }, [range.start, range.end, filters.type, filters.user_id, filters.department, filters.start_date, filters.end_date, user?.role]);
 
   function onDatesSet(arg) {
     setRange({ start: arg.startStr, end: arg.endStr });
@@ -519,6 +546,44 @@ export default function CalendarPage() {
       setError(String(e.message || e));
       showToast(String(e.message || e), "error");
     }
+  }
+
+  function handleExportFiltered() {
+    if (!events.length) {
+      showToast("No filtered events to export", "error");
+      return;
+    }
+
+    const rows = events
+      .map((ev) => ev.extendedProps?.api)
+      .filter(Boolean)
+      .slice()
+      .sort((a, b) => Number(new Date(a.start_ts)) - Number(new Date(b.start_ts)));
+
+    const header = ["User", "Type", "Start", "End", "Status", "Department", "Note"];
+    const lines = [header.join(",")];
+    for (const e of rows) {
+      lines.push([
+        toCsvCell(e.user?.name || ""),
+        toCsvCell(typeLabel(e.type)),
+        toCsvCell(formatEventBoundary(e.start_ts, e.all_day, false)),
+        toCsvCell(formatEventBoundary(e.end_ts, e.all_day, true)),
+        toCsvCell(normalizeStatus(e.status)),
+        toCsvCell(e.user?.department || ""),
+        toCsvCell(e.note || ""),
+      ].join(","));
+    }
+
+    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `calendar_filtered_export_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast("Filtered export downloaded", "success");
   }
 
   async function submitCreate() {
@@ -703,12 +768,15 @@ export default function CalendarPage() {
         <div className="card" style={{ marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div style={{ fontWeight: 900 }}>Filters</div>
-            <button
-              className="btn"
-              onClick={() => setFilters({ type: "", user_id: "", department: "" })}
-            >
-              Clear
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn" onClick={handleExportFiltered}>Export</button>
+              <button
+                className="btn"
+                onClick={() => setFilters({ type: "", user_id: "", department: "", start_date: "", end_date: "" })}
+              >
+                Clear
+              </button>
+            </div>
           </div>
 
           <div className="row" style={{ marginTop: 10 }}>
@@ -725,6 +793,24 @@ export default function CalendarPage() {
                 <option value="Training">Training</option>
                 <option value="Other">Other</option>
               </select>
+            </div>
+
+            <div className="field" style={{ flex: "1 1 180px" }}>
+              <label>Start Date</label>
+              <input
+                type="date"
+                value={filters.start_date}
+                onChange={(e) => setFilters((f) => ({ ...f, start_date: e.target.value }))}
+              />
+            </div>
+
+            <div className="field" style={{ flex: "1 1 180px" }}>
+              <label>End Date</label>
+              <input
+                type="date"
+                value={filters.end_date}
+                onChange={(e) => setFilters((f) => ({ ...f, end_date: e.target.value }))}
+              />
             </div>
 
             {(user?.role === "admin" || user?.role === "ceo") && (
