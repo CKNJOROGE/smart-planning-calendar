@@ -458,3 +458,46 @@ class CashReimbursementRequestOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CashRequisitionCreateIn(BaseModel):
+    amount: float
+    purpose: str
+    details: Optional[str] = None
+    needed_by: Optional[date] = None
+
+
+class CashRequisitionDecisionIn(BaseModel):
+    approve: bool
+    comment: Optional[str] = None
+
+
+class CashRequisitionDisburseIn(BaseModel):
+    note: Optional[str] = None
+
+
+class CashRequisitionRequestOut(BaseModel):
+    id: int
+    user_id: int
+    amount: float
+    purpose: str
+    details: Optional[str] = None
+    needed_by: Optional[date] = None
+    status: str
+    submitted_at: datetime
+    finance_decision: Optional[str] = None
+    finance_comment: Optional[str] = None
+    finance_decided_at: Optional[datetime] = None
+    finance_decided_by_id: Optional[int] = None
+    ceo_decision: Optional[str] = None
+    ceo_comment: Optional[str] = None
+    ceo_decided_at: Optional[datetime] = None
+    ceo_decided_by_id: Optional[int] = None
+    disbursed_at: Optional[datetime] = None
+    disbursed_note: Optional[str] = None
+    disbursed_by_id: Optional[int] = None
+    updated_at: datetime
+    user: UserOut
+
+    class Config:
+        from_attributes = True

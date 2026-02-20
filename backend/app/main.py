@@ -27,6 +27,7 @@ from .models import (
     CashReimbursementRequest,
     CashReimbursementItem,
     CashReimbursementDraft,
+    CashRequisitionRequest,
 )
 from .schemas import (
     TokenResponse,
@@ -64,6 +65,10 @@ from .schemas import (
     CashReimbursementDecisionIn,
     CashReimbursementDraftSaveIn,
     CashReimbursementDraftManualItemOut,
+    CashRequisitionCreateIn,
+    CashRequisitionDecisionIn,
+    CashRequisitionDisburseIn,
+    CashRequisitionRequestOut,
 )
 from .security import verify_password, create_access_token, hash_password
 from .deps import get_current_user, require_admin, require_leave_approver
@@ -1763,6 +1768,186 @@ def mark_cash_reimbursement_paid(
     db.refresh(req)
     _ = req.user
     _ = req.items
+    return req
+
+
+def _load_cash_requisition_request(db: Session, request_id: int) -> Optional[CashRequisitionRequest]:
+    req = db.query(CashRequisitionRequest).filter(CashRequisitionRequest.id == request_id).first()
+    if not req:
+        return None
+    _ = req.user
+    return req
+
+
+@app.post("/finance/requisitions", response_model=CashRequisitionRequestOut)
+def submit_cash_requisition(
+    payload: CashRequisitionCreateIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    amount = Decimal(str(payload.amount or 0))
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be > 0")
+    purpose = (payload.purpose or "").strip()
+    if not purpose:
+        raise HTTPException(status_code=400, detail="purpose is required")
+    if len(purpose) > 255:
+        raise HTTPException(status_code=400, detail="purpose must be <= 255 characters")
+    details = (payload.details or "").strip()
+    if len(details) > 2000:
+        raise HTTPException(status_code=400, detail="details must be <= 2000 characters")
+
+    req = CashRequisitionRequest(
+        user_id=current.id,
+        amount=amount,
+        purpose=purpose,
+        details=details or None,
+        needed_by=payload.needed_by,
+        status="pending_finance_review",
+        submitted_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    return req
+
+
+@app.get("/finance/requisitions/my", response_model=List[CashRequisitionRequestOut])
+def list_my_cash_requisitions(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(CashRequisitionRequest)
+        .filter(CashRequisitionRequest.user_id == current.id)
+        .order_by(CashRequisitionRequest.submitted_at.desc(), CashRequisitionRequest.id.desc())
+        .all()
+    )
+    for r in rows:
+        _ = r.user
+    return rows
+
+
+@app.get("/finance/requisitions/pending", response_model=List[CashRequisitionRequestOut])
+def list_pending_cash_requisitions(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    q = db.query(CashRequisitionRequest)
+    if role == "finance":
+        q = q.filter(CashRequisitionRequest.status == "pending_finance_review")
+    else:
+        q = q.filter(CashRequisitionRequest.status == "pending_ceo_approval")
+
+    rows = q.order_by(CashRequisitionRequest.submitted_at.asc(), CashRequisitionRequest.id.asc()).all()
+    for r in rows:
+        _ = r.user
+    return rows
+
+
+@app.get("/finance/requisitions/approved", response_model=List[CashRequisitionRequestOut])
+def list_approved_cash_requisitions(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    rows = (
+        db.query(CashRequisitionRequest)
+        .filter(CashRequisitionRequest.status.in_(["pending_disbursement", "disbursed", "rejected"]))
+        .order_by(CashRequisitionRequest.submitted_at.desc(), CashRequisitionRequest.id.desc())
+        .all()
+    )
+    for r in rows:
+        _ = r.user
+    return rows
+
+
+@app.post("/finance/requisitions/{request_id}/decision", response_model=CashRequisitionRequestOut)
+def decide_cash_requisition(
+    request_id: int,
+    payload: CashRequisitionDecisionIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    req = _load_cash_requisition_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Cash requisition request not found")
+    if req.status in {"disbursed", "rejected"}:
+        raise HTTPException(status_code=400, detail=f"Request already {req.status}")
+
+    role = (current.role or "").strip().lower()
+    now = datetime.utcnow()
+    decision = "approved" if payload.approve else "rejected"
+    comment = (payload.comment or "").strip()
+    if decision == "rejected" and not comment:
+        raise HTTPException(status_code=400, detail="comment is required when rejecting")
+
+    if role == "finance":
+        if req.status != "pending_finance_review":
+            raise HTTPException(status_code=400, detail="Finance can only decide pending finance review requests")
+        req.finance_decision = decision
+        req.finance_comment = comment or None
+        req.finance_decided_at = now
+        req.finance_decided_by_id = current.id
+        req.status = "pending_ceo_approval" if decision == "approved" else "rejected"
+    elif role in {"admin", "ceo"}:
+        if req.status != "pending_ceo_approval":
+            raise HTTPException(status_code=400, detail="CEO/Admin can only decide pending CEO approval requests")
+        req.ceo_decision = decision
+        req.ceo_comment = comment or None
+        req.ceo_decided_at = now
+        req.ceo_decided_by_id = current.id
+        req.status = "pending_disbursement" if decision == "approved" else "rejected"
+    else:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    req.updated_at = now
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    return req
+
+
+@app.post("/finance/requisitions/{request_id}/disburse", response_model=CashRequisitionRequestOut)
+def mark_cash_requisition_disbursed(
+    request_id: int,
+    payload: CashRequisitionDisburseIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        raise HTTPException(status_code=403, detail="Only finance/admin/ceo can mark disbursed")
+
+    req = _load_cash_requisition_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Cash requisition request not found")
+    if req.status == "disbursed":
+        raise HTTPException(status_code=400, detail="Request already disbursed")
+    if req.status != "pending_disbursement":
+        raise HTTPException(status_code=400, detail="Only approved requisitions can be marked disbursed")
+
+    note = (payload.note or "").strip()
+    if len(note) > 1000:
+        raise HTTPException(status_code=400, detail="disbursement note must be <= 1000 characters")
+
+    req.status = "disbursed"
+    req.disbursed_at = datetime.utcnow()
+    req.disbursed_note = note or None
+    req.disbursed_by_id = current.id
+    req.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(req)
+    _ = req.user
     return req
 
 

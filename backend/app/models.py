@@ -226,3 +226,37 @@ class CashReimbursementDraft(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", foreign_keys=[user_id])
+
+
+class CashRequisitionRequest(Base):
+    __tablename__ = "cash_requisition_requests"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    amount = Column(Numeric(12, 2), nullable=False, default=0)
+    purpose = Column(String(255), nullable=False)
+    details = Column(Text, nullable=True)
+    needed_by = Column(Date, nullable=True, index=True)
+    status = Column(String(40), nullable=False, default="pending_finance_review")
+    submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    finance_decision = Column(String(20), nullable=True)
+    finance_comment = Column(Text, nullable=True)
+    finance_decided_at = Column(DateTime, nullable=True)
+    finance_decided_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    ceo_decision = Column(String(20), nullable=True)
+    ceo_comment = Column(Text, nullable=True)
+    ceo_decided_at = Column(DateTime, nullable=True)
+    ceo_decided_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    disbursed_at = Column(DateTime, nullable=True)
+    disbursed_note = Column(Text, nullable=True)
+    disbursed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", foreign_keys=[user_id])
+    finance_decided_by = relationship("User", foreign_keys=[finance_decided_by_id])
+    ceo_decided_by = relationship("User", foreign_keys=[ceo_decided_by_id])
+    disbursed_by = relationship("User", foreign_keys=[disbursed_by_id])

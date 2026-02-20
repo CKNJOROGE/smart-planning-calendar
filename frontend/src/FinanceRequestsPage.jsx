@@ -9,6 +9,12 @@ import {
   listApprovedCashReimbursements,
   decideCashReimbursement,
   markCashReimbursed,
+  submitCashRequisition,
+  listMyCashRequisitions,
+  listPendingCashRequisitions,
+  listApprovedCashRequisitions,
+  decideCashRequisition,
+  markCashRequisitionDisbursed,
   listTaskClients,
   updateTaskClient,
 } from "./api";
@@ -52,6 +58,16 @@ function decisionLabel(decision) {
   return "Pending";
 }
 
+function requisitionStatusLabel(status) {
+  const s = (status || "").toLowerCase();
+  if (s === "pending_finance_review") return "pending finance review";
+  if (s === "pending_ceo_approval") return "pending CEO approval";
+  if (s === "pending_disbursement") return "approved, awaiting disbursement";
+  if (s === "disbursed") return "disbursed";
+  if (s === "rejected") return "rejected";
+  return status || "-";
+}
+
 function emptyManual() {
   return { item_date: toDateInput(new Date()), description: "", amount: "", source_event_id: null };
 }
@@ -71,6 +87,15 @@ export default function FinanceRequestsPage() {
   const [pricingSaving, setPricingSaving] = useState(false);
   const [showClientPricing, setShowClientPricing] = useState(false);
   const [activeSection, setActiveSection] = useState("cash_reimbursement");
+  const [reqForm, setReqForm] = useState({
+    amount: "",
+    purpose: "",
+    details: "",
+    needed_by: "",
+  });
+  const [myRequisitions, setMyRequisitions] = useState([]);
+  const [pendingRequisitions, setPendingRequisitions] = useState([]);
+  const [approvedRequisitions, setApprovedRequisitions] = useState([]);
 
   const canReview = useMemo(() => {
     const role = (current?.role || "").toLowerCase();
@@ -112,6 +137,8 @@ export default function FinanceRequestsPage() {
       }));
       setManualItems(savedManualRows.length ? savedManualRows : [emptyManual()]);
       setMyRequests(mine || []);
+      const myReqs = await listMyCashRequisitions();
+      setMyRequisitions(myReqs || []);
       if (user.role === "admin" || user.role === "ceo") {
         const clients = await listTaskClients(new Date().getFullYear());
         setClientPricing((clients || []).map((c) => ({
@@ -123,15 +150,21 @@ export default function FinanceRequestsPage() {
         setClientPricing([]);
       }
       if (user.role === "finance" || user.role === "admin" || user.role === "ceo") {
-        const [pending, approved] = await Promise.all([
+        const [pending, approved, pendingReqs, approvedReqs] = await Promise.all([
           listPendingCashReimbursements(),
           listApprovedCashReimbursements(),
+          listPendingCashRequisitions(),
+          listApprovedCashRequisitions(),
         ]);
         setPendingRequests(pending || []);
         setApprovedRequests(approved || []);
+        setPendingRequisitions(pendingReqs || []);
+        setApprovedRequisitions(approvedReqs || []);
       } else {
         setPendingRequests([]);
         setApprovedRequests([]);
+        setPendingRequisitions([]);
+        setApprovedRequisitions([]);
       }
     } catch (e) {
       setErr(String(e.message || e));
@@ -259,6 +292,73 @@ export default function FinanceRequestsPage() {
       setErr(msg);
       showToast(msg, "error");
     }
+  }
+
+  async function submitRequisition() {
+    setErr("");
+    const amount = Number(reqForm.amount || 0);
+    const purpose = (reqForm.purpose || "").trim();
+    const details = (reqForm.details || "").trim();
+    if (!(amount > 0)) {
+      setErr("Requisition amount must be greater than 0.");
+      return;
+    }
+    if (!purpose) {
+      setErr("Purpose is required.");
+      return;
+    }
+    try {
+      await submitCashRequisition({
+        amount,
+        purpose,
+        details: details || null,
+        needed_by: reqForm.needed_by || null,
+      });
+      setReqForm({ amount: "", purpose: "", details: "", needed_by: "" });
+      await loadData();
+      showToast("Cash requisition submitted", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function takeRequisitionDecision(requestId, approve) {
+    const comment = approve ? "" : (prompt("Reason for rejection (required):") || "").trim();
+    if (!approve && !comment) {
+      setErr("Rejection comment is required.");
+      return;
+    }
+    try {
+      await decideCashRequisition(requestId, approve, comment);
+      await loadData();
+      showToast(approve ? "Requisition approved" : "Requisition rejected", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function markRequisitionDisbursed(requestId) {
+    const note = (prompt("Disbursement note (optional):") || "").trim();
+    try {
+      await markCashRequisitionDisbursed(requestId, note);
+      await loadData();
+      showToast("Requisition marked disbursed", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  function canCurrentRoleDecideRequisition(r) {
+    const role = (current?.role || "").toLowerCase();
+    if (role === "finance") return (r.status || "").toLowerCase() === "pending_finance_review";
+    if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
+    return false;
   }
 
   function remainingApprovers(r) {
@@ -653,10 +753,191 @@ export default function FinanceRequestsPage() {
           )}
 
       {activeSection === "cash_requisition" && (
-        <div className="card">
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Requisition</div>
-          <div className="muted">This module is not implemented yet.</div>
-        </div>
+        <>
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Requisition</div>
+            <div className="muted" style={{ marginBottom: 10 }}>
+              Workflow: Finance review {"->"} CEO/Admin approval {"->"} Disbursement.
+            </div>
+            <div className="row">
+              <div className="field" style={{ flex: "1 1 180px" }}>
+                <label>Amount</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={reqForm.amount}
+                  onChange={(e) => setReqForm((f) => ({ ...f, amount: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="field" style={{ flex: "1 1 220px" }}>
+                <label>Needed By (optional)</label>
+                <input
+                  type="date"
+                  value={reqForm.needed_by}
+                  onChange={(e) => setReqForm((f) => ({ ...f, needed_by: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="field">
+              <label>Purpose</label>
+              <input
+                value={reqForm.purpose}
+                onChange={(e) => setReqForm((f) => ({ ...f, purpose: e.target.value }))}
+                placeholder="What is this cash needed for?"
+              />
+            </div>
+            <div className="field">
+              <label>Details (optional)</label>
+              <textarea
+                value={reqForm.details}
+                onChange={(e) => setReqForm((f) => ({ ...f, details: e.target.value }))}
+                placeholder="Add context, expected usage, beneficiaries, etc."
+              />
+            </div>
+            <button className="btn btn-primary" type="button" onClick={submitRequisition}>
+              Submit Cash Requisition
+            </button>
+          </div>
+
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>My Cash Requisitions</div>
+            <div style={{ width: "100%", overflowX: "auto" }}>
+              <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ textAlign: "left", padding: 10 }}>Submitted</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Purpose</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Needed By</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Comments</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(myRequisitions || []).map((r) => (
+                    <tr key={`my_req_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <td style={{ padding: 10 }}>{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "-"}</td>
+                      <td style={{ padding: 10 }}>
+                        <div style={{ fontWeight: 700 }}>{r.purpose}</div>
+                        {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
+                      </td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                      <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
+                      <td style={{ padding: 10 }}>
+                        <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{requisitionStatusLabel(r.status)}</span>
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <div>Finance: {decisionLabel(r.finance_decision)}</div>
+                        <div>CEO: {decisionLabel(r.ceo_decision)}</div>
+                        {r.finance_comment && <div className="muted">Finance comment: {r.finance_comment}</div>}
+                        {r.ceo_comment && <div className="muted">CEO comment: {r.ceo_comment}</div>}
+                        {r.disbursed_note && <div className="muted">Disbursement note: {r.disbursed_note}</div>}
+                      </td>
+                    </tr>
+                  ))}
+                  {!myRequisitions.length && (
+                    <tr><td colSpan={6} style={{ padding: 14 }} className="muted">No cash requisitions submitted yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {canReview && (
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div style={{ fontWeight: 900, marginBottom: 8 }}>Pending Requisition Approvals</div>
+              <div style={{ width: "100%", overflowX: "auto" }}>
+                <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <th style={{ textAlign: "left", padding: 10 }}>Requester</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Purpose</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Needed By</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(pendingRequisitions || []).map((r) => (
+                      <tr key={`pending_req_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
+                        <td style={{ padding: 10 }}>
+                          <div style={{ fontWeight: 700 }}>{r.purpose}</div>
+                          {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
+                        </td>
+                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
+                        <td style={{ padding: 10 }}>
+                          {canCurrentRoleDecideRequisition(r) ? (
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button className="btn btn-primary" onClick={() => takeRequisitionDecision(r.id, true)}>Approve</button>
+                              <button className="btn btn-danger" onClick={() => takeRequisitionDecision(r.id, false)}>Reject</button>
+                            </div>
+                          ) : (
+                            <span className="muted">Not actionable for your role.</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {!pendingRequisitions.length && (
+                      <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No pending requisition approvals.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {canReview && (
+            <div className="card">
+              <div style={{ fontWeight: 900, marginBottom: 8 }}>Approved / Disbursed Requisitions</div>
+              <div style={{ width: "100%", overflowX: "auto" }}>
+                <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <th style={{ textAlign: "left", padding: 10 }}>Requester</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Purpose</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Disbursement</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(approvedRequisitions || []).map((r) => (
+                      <tr key={`approved_req_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
+                        <td style={{ padding: 10 }}>
+                          <div style={{ fontWeight: 700 }}>{r.purpose}</div>
+                          {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
+                        </td>
+                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>
+                          <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{requisitionStatusLabel(r.status)}</span>
+                        </td>
+                        <td style={{ padding: 10 }}>
+                          {(r.status || "").toLowerCase() === "pending_disbursement" ? (
+                            <button className="btn btn-primary" type="button" onClick={() => markRequisitionDisbursed(r.id)}>
+                              Mark Disbursed
+                            </button>
+                          ) : (r.status || "").toLowerCase() === "disbursed" ? (
+                            <span className="muted">Disbursed on {r.disbursed_at ? new Date(r.disbursed_at).toLocaleString() : "-"}</span>
+                          ) : (
+                            <span className="muted">No disbursement action</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {!approvedRequisitions.length && (
+                      <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No approved/disbursed requisitions.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
       {activeSection === "authority_to_incur" && (
         <div className="card">

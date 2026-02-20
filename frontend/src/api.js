@@ -442,6 +442,36 @@ export function markCashReimbursed(requestId) {
   });
 }
 
+export function submitCashRequisition(payload) {
+  return request("/finance/requisitions", { method: "POST", body: payload });
+}
+
+export function listMyCashRequisitions() {
+  return request("/finance/requisitions/my");
+}
+
+export function listPendingCashRequisitions() {
+  return request("/finance/requisitions/pending");
+}
+
+export function listApprovedCashRequisitions() {
+  return request("/finance/requisitions/approved");
+}
+
+export function decideCashRequisition(requestId, approve, comment) {
+  return request(`/finance/requisitions/${requestId}/decision`, {
+    method: "POST",
+    body: { approve: !!approve, comment: comment || null },
+  });
+}
+
+export function markCashRequisitionDisbursed(requestId, note) {
+  return request(`/finance/requisitions/${requestId}/disburse`, {
+    method: "POST",
+    body: { note: note || null },
+  });
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);
