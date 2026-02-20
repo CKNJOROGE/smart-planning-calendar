@@ -1991,7 +1991,7 @@ def submit_salary_advance_request(
         reason=reason,
         details=details or None,
         repayment_months=repayment_months,
-        deduction_start_date=payload.deduction_start_date,
+        deduction_start_date=None,
         status="pending_finance_review",
         submitted_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
@@ -2128,11 +2128,38 @@ def mark_salary_advance_disbursed(
     note = (payload.note or "").strip()
     if len(note) > 1000:
         raise HTTPException(status_code=400, detail="disbursement note must be <= 1000 characters")
+    if req.deduction_start_date is None:
+        raise HTTPException(status_code=400, detail="Set deduction_start_date before marking disbursed")
 
     req.status = "disbursed"
     req.disbursed_at = datetime.utcnow()
     req.disbursed_note = note or None
     req.disbursed_by_id = current.id
+    req.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    return req
+
+
+@app.post("/finance/salary-advances/{request_id}/deduction-start", response_model=SalaryAdvanceRequestOut)
+def set_salary_advance_deduction_start(
+    request_id: int,
+    deduction_start_date: date = Form(...),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        raise HTTPException(status_code=403, detail="Only finance/admin/ceo can set deduction start date")
+
+    req = _load_salary_advance_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Salary advance request not found")
+    if req.status not in {"pending_ceo_approval", "pending_disbursement"}:
+        raise HTTPException(status_code=400, detail="Deduction start date can only be set after finance approval")
+
+    req.deduction_start_date = deduction_start_date
     req.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(req)

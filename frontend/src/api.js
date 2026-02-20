@@ -502,6 +502,22 @@ export function markSalaryAdvanceDisbursed(requestId, note) {
   });
 }
 
+export async function setSalaryAdvanceDeductionStart(requestId, deductionStartDate) {
+  const token = getToken();
+  const form = new FormData();
+  form.append("deduction_start_date", deductionStartDate);
+  const res = await fetch(`${API_BASE}/finance/salary-advances/${requestId}/deduction-start`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return res.json();
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);

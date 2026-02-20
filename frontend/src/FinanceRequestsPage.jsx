@@ -21,6 +21,7 @@ import {
   listApprovedSalaryAdvanceRequests,
   decideSalaryAdvanceRequest,
   markSalaryAdvanceDisbursed,
+  setSalaryAdvanceDeductionStart,
   listTaskClients,
   updateTaskClient,
 } from "./api";
@@ -117,7 +118,6 @@ export default function FinanceRequestsPage() {
     reason: "",
     details: "",
     repayment_months: "1",
-    deduction_start_date: "",
   });
   const [mySalaryAdvances, setMySalaryAdvances] = useState([]);
   const [pendingSalaryAdvances, setPendingSalaryAdvances] = useState([]);
@@ -426,14 +426,12 @@ export default function FinanceRequestsPage() {
         reason,
         details: details || null,
         repayment_months: repaymentMonths,
-        deduction_start_date: saForm.deduction_start_date || null,
       });
       setSaForm({
         amount: "",
         reason: "",
         details: "",
         repayment_months: "1",
-        deduction_start_date: "",
       });
       await loadData();
       showToast("Salary advance request submitted", "success");
@@ -467,6 +465,20 @@ export default function FinanceRequestsPage() {
       await markSalaryAdvanceDisbursed(requestId, note);
       await loadData();
       showToast("Salary advance marked disbursed", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function setDeductionStartDate(requestId) {
+    const value = (prompt("Set deduction start date (YYYY-MM-DD):") || "").trim();
+    if (!value) return;
+    try {
+      await setSalaryAdvanceDeductionStart(requestId, value);
+      await loadData();
+      showToast("Deduction start date updated", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
@@ -1088,14 +1100,6 @@ export default function FinanceRequestsPage() {
                   onChange={(e) => setSaForm((f) => ({ ...f, repayment_months: e.target.value }))}
                 />
               </div>
-              <div className="field" style={{ flex: "1 1 220px" }}>
-                <label>Deduction Start Date (optional)</label>
-                <input
-                  type="date"
-                  value={saForm.deduction_start_date}
-                  onChange={(e) => setSaForm((f) => ({ ...f, deduction_start_date: e.target.value }))}
-                />
-              </div>
             </div>
             <div className="field">
               <label>Reason</label>
@@ -1241,9 +1245,14 @@ export default function FinanceRequestsPage() {
                         </td>
                         <td style={{ padding: 10 }}>
                           {(r.status || "").toLowerCase() === "pending_disbursement" ? (
-                            <button className="btn btn-primary" type="button" onClick={() => markSalaryAdvancePaid(r.id)}>
-                              Mark Disbursed
-                            </button>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button className="btn" type="button" onClick={() => setDeductionStartDate(r.id)}>
+                                {r.deduction_start_date ? "Update Deduction Start" : "Set Deduction Start"}
+                              </button>
+                              <button className="btn btn-primary" type="button" onClick={() => markSalaryAdvancePaid(r.id)}>
+                                Mark Disbursed
+                              </button>
+                            </div>
                           ) : (r.status || "").toLowerCase() === "disbursed" ? (
                             <span className="muted">Disbursed on {r.disbursed_at ? new Date(r.disbursed_at).toLocaleString() : "-"}</span>
                           ) : (
