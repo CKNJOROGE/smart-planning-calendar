@@ -338,6 +338,11 @@ def _is_leave_like_event(e: Event) -> bool:
     return (e.type or "").strip().lower() in {"leave", "hospital"}
 
 
+def _is_past_current_day_event(e: Event) -> bool:
+    # Events are stored with end_ts as exclusive boundary for all-day entries.
+    return e.end_ts.date() <= date.today()
+
+
 def _compute_leave_review_permissions(
     db: Session,
     current: User,
@@ -2317,8 +2322,10 @@ async def update_event(
     if not e:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if not _is_admin_like(user.role) and e.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not allowed")
+    if _is_past_current_day_event(e):
+        raise HTTPException(status_code=403, detail="Past-day events cannot be edited")
+    if e.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Only the requesting user can edit this event")
 
     # Prepare prospective values for leave validation
     new_start = payload.start_ts if payload.start_ts is not None else e.start_ts
@@ -2457,8 +2464,10 @@ async def delete_event(
     if not e:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if not _is_admin_like(user.role) and e.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not allowed")
+    if _is_past_current_day_event(e):
+        raise HTTPException(status_code=403, detail="Past-day events cannot be deleted")
+    if e.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Only the requesting user can delete this event")
 
     old_sick_note_url = e.sick_note_url or ""
     old_prefixes = [

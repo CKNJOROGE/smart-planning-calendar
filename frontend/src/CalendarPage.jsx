@@ -66,6 +66,15 @@ function normalizeStatus(status) {
   return "approved";
 }
 
+function isPastCurrentDayEvent(apiEvent) {
+  if (!apiEvent?.end_ts) return false;
+  const end = new Date(apiEvent.end_ts);
+  end.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return end <= today;
+}
+
 function getReviewBlockReason(apiEvent, currentUser) {
   if (!apiEvent || !currentUser) return "";
   const role = String(currentUser.role || "").toLowerCase();
@@ -405,20 +414,14 @@ export default function CalendarPage() {
 
   const canEdit = useMemo(() => {
     if (!popup || !user) return false;
-    if (user.role === "admin" || user.role === "ceo") return true;
-    if (popup.apiEvent.user_id !== user.id) return false;
-
-    const isLeaveLike = ["leave", "hospital"].includes((popup.apiEvent.type || "").toLowerCase());
-    const status = normalizeStatus(popup.apiEvent.status);
-    if (user.role === "employee" && isLeaveLike && (status === "approved" || status === "rejected")) {
-      return false;
-    }
-    return true;
+    if (isPastCurrentDayEvent(popup.apiEvent)) return false;
+    return popup.apiEvent.user_id === user.id;
   }, [popup, user]);
 
   const canDelete = useMemo(() => {
     if (!popup || !user) return false;
-    return user.role === "admin" || user.role === "ceo" || popup.apiEvent.user_id === user.id;
+    if (isPastCurrentDayEvent(popup.apiEvent)) return false;
+    return popup.apiEvent.user_id === user.id;
   }, [popup, user]);
 
   const canApproveLeave = useMemo(() => {
