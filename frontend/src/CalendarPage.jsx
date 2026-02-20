@@ -7,7 +7,6 @@ import {
   me,
   listUsers,
   listTaskClients,
-  adminGetUserProfile,
   listEvents,
   createEvent,
   createLeaveRequest,
@@ -51,11 +50,6 @@ function toLocalDateInput(d) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function formatDateTime(v) {
-  if (!v) return "N/A";
-  return new Date(v).toLocaleString();
-}
-
 function formatEventBoundary(v, allDay, isEnd = false) {
   if (!v) return "N/A";
   const d = new Date(v);
@@ -70,6 +64,43 @@ function normalizeStatus(status) {
   const s = (status || "approved").toLowerCase();
   if (s === "pending" || s === "approved" || s === "rejected") return s;
   return "approved";
+}
+
+function getReviewBlockReason(apiEvent, currentUser) {
+  if (!apiEvent || !currentUser) return "";
+  const role = String(currentUser.role || "").toLowerCase();
+  if (!["admin", "ceo", "supervisor"].includes(role)) return "";
+  if (!["leave", "hospital"].includes((apiEvent.type || "").toLowerCase())) return "";
+  if ((apiEvent.status || "").toLowerCase() !== "pending") return "";
+  if (apiEvent.can_current_user_approve || apiEvent.can_current_user_reject) return "";
+
+  const requiresTwoStep = !!apiEvent.require_two_step_leave_approval;
+  const firstApproverId = apiEvent.first_approver_id ?? null;
+  const secondApproverId = apiEvent.second_approver_id ?? null;
+  const firstApproved = !!apiEvent.first_approved_by_id;
+
+  if (requiresTwoStep) {
+    if (firstApproverId == null || secondApproverId == null) {
+      return "Approval setup is incomplete. Contact admin.";
+    }
+    if (currentUser.id === secondApproverId && !firstApproved) {
+      return "Waiting for first approver.";
+    }
+    if (firstApproved && currentUser.id !== secondApproverId) {
+      return "Waiting for assigned second approver.";
+    }
+    if (currentUser.id !== firstApproverId && currentUser.id !== secondApproverId) {
+      return "You are not an assigned approver for this request.";
+    }
+    return "You cannot act on this request right now.";
+  }
+
+  if (firstApproverId != null || secondApproverId != null) {
+    if (currentUser.id !== firstApproverId && currentUser.id !== secondApproverId) {
+      return "You are not an assigned approver for this request.";
+    }
+  }
+  return "You cannot act on this request right now.";
 }
 
 export default function CalendarPage() {
@@ -352,29 +383,17 @@ export default function CalendarPage() {
       y: jsEvent.clientY,
       apiEvent,
     });
-    loadPopupApprovalConfig(apiEvent);
-  }
-
-  async function loadPopupApprovalConfig(apiEvent) {
-    setPopupApprovalConfig(null);
-    if (!user || (user.role !== "admin" && user.role !== "ceo")) return;
-    if (!["leave", "hospital"].includes((apiEvent?.type || "").toLowerCase())) return;
-    try {
-      const p = await adminGetUserProfile(apiEvent.user_id);
-      setPopupApprovalConfig({
-        requireTwoStep: !!p.require_two_step_leave_approval,
-        firstApproverId: p.first_approver_id ?? null,
-        secondApproverId: p.second_approver_id ?? null,
-      });
-    } catch {
-      setPopupApprovalConfig(null);
-    }
+    setPopupApprovalConfig({
+      requireTwoStep: !!apiEvent?.require_two_step_leave_approval,
+      firstApproverId: apiEvent?.first_approver_id ?? null,
+      secondApproverId: apiEvent?.second_approver_id ?? null,
+    });
   }
 
   function approverLabel(id) {
     if (!id) return "Unassigned";
     const found = users.find((u) => u.id === id);
-    return found ? `${found.name} (ID ${found.id})` : `Admin #${id}`;
+    return found ? `${found.name} (ID ${found.id})` : `User #${id}`;
   }
 
   function clientNameById(id) {
@@ -402,13 +421,14 @@ export default function CalendarPage() {
     return user.role === "admin" || user.role === "ceo" || popup.apiEvent.user_id === user.id;
   }, [popup, user]);
 
-  const canReviewLeave = useMemo(() => {
+  const canApproveLeave = useMemo(() => {
     if (!popup || !user) return false;
-    return (
-      (user.role === "admin" || user.role === "ceo") &&
-      ["leave", "hospital"].includes((popup.apiEvent.type || "").toLowerCase()) &&
-      (popup.apiEvent.status || "").toLowerCase() === "pending"
-    );
+    return !!popup.apiEvent.can_current_user_approve;
+  }, [popup, user]);
+
+  const canRejectLeave = useMemo(() => {
+    if (!popup || !user) return false;
+    return !!popup.apiEvent.can_current_user_reject;
   }, [popup, user]);
 
   const canViewSickNote = useMemo(() => {
@@ -420,6 +440,11 @@ export default function CalendarPage() {
     if (!popup?.apiEvent) return "approved";
     return normalizeStatus(popup.apiEvent.status);
   }, [popup]);
+
+  const reviewBlockReason = useMemo(() => {
+    if (!popup || !user) return "";
+    return getReviewBlockReason(popup.apiEvent, user);
+  }, [popup, user]);
 
   function openEditFromPopup() {
     if (!popup) return;
@@ -850,11 +875,11 @@ export default function CalendarPage() {
               <button className="btn" onClick={() => { setPopup(null); setPopupApprovalConfig(null); }}>Close</button>
 
               <div className="calendar-popup-action-group">
-                {canReviewLeave && (
-                  <>
-                    <button className="btn btn-primary" onClick={handleApproveLeave}>Approve</button>
-                    <button className="btn btn-danger" onClick={handleRejectLeave}>Reject</button>
-                  </>
+                {canApproveLeave && (
+                  <button className="btn btn-primary" onClick={handleApproveLeave}>Approve</button>
+                )}
+                {canRejectLeave && (
+                  <button className="btn btn-danger" onClick={handleRejectLeave}>Reject</button>
                 )}
                 {canEdit && (
                   <button className="btn btn-primary" onClick={openEditFromPopup}>Edit</button>
@@ -864,6 +889,11 @@ export default function CalendarPage() {
                 )}
               </div>
             </div>
+            {reviewBlockReason && (
+              <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
+                {reviewBlockReason}
+              </div>
+            )}
 
             {popupApprovalConfig?.requireTwoStep && (
               <div className="calendar-popup-approval">

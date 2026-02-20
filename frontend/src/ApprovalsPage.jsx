@@ -9,6 +9,43 @@ function fmtDateRange(e) {
   return `${from} - ${to}`;
 }
 
+function getReviewBlockReason(e, currentUser) {
+  if (!e || !currentUser) return "";
+  const role = String(currentUser.role || "").toLowerCase();
+  if (!["admin", "ceo", "supervisor"].includes(role)) return "";
+  if (!["leave", "hospital"].includes((e.type || "").toLowerCase())) return "";
+  if ((e.status || "").toLowerCase() !== "pending") return "Request is no longer pending.";
+  if (e.can_current_user_approve || e.can_current_user_reject) return "";
+
+  const requiresTwoStep = !!e.require_two_step_leave_approval;
+  const firstApproverId = e.first_approver_id ?? null;
+  const secondApproverId = e.second_approver_id ?? null;
+  const firstApproved = !!e.first_approved_by_id;
+
+  if (requiresTwoStep) {
+    if (firstApproverId == null || secondApproverId == null) {
+      return "Approval setup is incomplete. Contact admin.";
+    }
+    if (currentUser.id === secondApproverId && !firstApproved) {
+      return "Waiting for first approver.";
+    }
+    if (firstApproved && currentUser.id !== secondApproverId) {
+      return "Waiting for assigned second approver.";
+    }
+    if (currentUser.id !== firstApproverId && currentUser.id !== secondApproverId) {
+      return "You are not an assigned approver.";
+    }
+    return "You cannot act on this request right now.";
+  }
+
+  if (firstApproverId != null || secondApproverId != null) {
+    if (currentUser.id !== firstApproverId && currentUser.id !== secondApproverId) {
+      return "You are not an assigned approver.";
+    }
+  }
+  return "You cannot act on this request right now.";
+}
+
 export default function ApprovalsPage() {
   const [current, setCurrent] = useState(null);
   const [items, setItems] = useState([]);
@@ -116,10 +153,18 @@ export default function ApprovalsPage() {
                   </td>
                   <td style={{ padding: 12 }}>
                     {e.status === "pending" ? (
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button className="btn btn-primary" onClick={() => approve(e.id)}>Approve</button>
-                        <button className="btn btn-danger" onClick={() => reject(e.id)}>Reject</button>
-                      </div>
+                      (e.can_current_user_approve || e.can_current_user_reject) ? (
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {e.can_current_user_approve && (
+                            <button className="btn btn-primary" onClick={() => approve(e.id)}>Approve</button>
+                          )}
+                          {e.can_current_user_reject && (
+                            <button className="btn btn-danger" onClick={() => reject(e.id)}>Reject</button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="muted">{getReviewBlockReason(e, current) || "Not assigned"}</span>
+                      )
                     ) : (
                       <span className="muted">-</span>
                     )}

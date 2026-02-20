@@ -185,6 +185,11 @@ class EventOut(BaseModel):
     second_approved_by_id: Optional[int] = None
     approved_at: Optional[datetime] = None
     rejection_reason: Optional[str] = None
+    require_two_step_leave_approval: bool = False
+    first_approver_id: Optional[int] = None
+    second_approver_id: Optional[int] = None
+    can_current_user_approve: bool = False
+    can_current_user_reject: bool = False
     user: UserOut
 
     class Config:

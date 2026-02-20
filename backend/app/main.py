@@ -334,6 +334,84 @@ def _is_finance_reviewer(role: Optional[str]) -> bool:
     return (role or "").strip().lower() in {"finance", "admin", "ceo"}
 
 
+def _is_leave_like_event(e: Event) -> bool:
+    return (e.type or "").strip().lower() in {"leave", "hospital"}
+
+
+def _compute_leave_review_permissions(
+    db: Session,
+    current: User,
+    e: Event,
+    owner: User,
+) -> tuple[bool, bool]:
+    if not _is_leave_like_event(e) or (e.status or "").strip().lower() != "pending":
+        return False, False
+
+    requires_two_step = bool(owner.require_two_step_leave_approval)
+    first_approver_id = owner.first_approver_id
+    second_approver_id = owner.second_approver_id
+
+    if requires_two_step:
+        if first_approver_id is None or second_approver_id is None:
+            return False, False
+        if not _is_supervisor_user(db, first_approver_id):
+            return False, False
+        if not _is_admin_user(db, second_approver_id):
+            return False, False
+
+        if current.id == first_approver_id and current.role == "supervisor":
+            can_approve = e.first_approved_by_id is None
+            return can_approve, True
+
+        if current.id == second_approver_id and _is_admin_like(current.role):
+            can_approve = e.first_approved_by_id is not None and e.second_approved_by_id is None
+            return can_approve, True
+
+        return False, False
+
+    designated_approvers: set[int] = set()
+    if first_approver_id is not None and _is_supervisor_user(db, first_approver_id):
+        designated_approvers.add(first_approver_id)
+    if second_approver_id is not None and _is_admin_user(db, second_approver_id):
+        designated_approvers.add(second_approver_id)
+
+    if designated_approvers:
+        if current.id not in designated_approvers:
+            return False, False
+        if current.id == first_approver_id and current.role != "supervisor":
+            return False, False
+        if current.id == second_approver_id and not _is_admin_like(current.role):
+            return False, False
+        return True, True
+
+    can = _is_admin_like(current.role)
+    return can, can
+
+
+def _attach_leave_review_metadata(
+    db: Session,
+    e: Event,
+    current: User,
+    owner: Optional[User] = None,
+) -> None:
+    owner_obj = owner or e.user or db.query(User).filter(User.id == e.user_id).first()
+    if owner_obj is None:
+        setattr(e, "require_two_step_leave_approval", False)
+        setattr(e, "first_approver_id", None)
+        setattr(e, "second_approver_id", None)
+        setattr(e, "can_current_user_approve", False)
+        setattr(e, "can_current_user_reject", False)
+        return
+
+    setattr(e, "require_two_step_leave_approval", bool(owner_obj.require_two_step_leave_approval))
+    setattr(e, "first_approver_id", owner_obj.first_approver_id)
+    setattr(e, "second_approver_id", owner_obj.second_approver_id)
+
+    can_approve, can_reject = _compute_leave_review_permissions(db, current, e, owner_obj)
+    setattr(e, "can_current_user_approve", can_approve)
+    setattr(e, "can_current_user_reject", can_reject)
+
+
 def _biweekly_period_for(d: date) -> tuple[date, date]:
     # Anchor to a Monday to keep 14-day windows stable.
     anchor = date(2025, 1, 6)
@@ -1917,6 +1995,7 @@ async def create_leave_request(
     db.commit()
     db.refresh(e)
     _ = e.user
+    _attach_leave_review_metadata(db, e, user, user)
 
     await broadcast_events_changed("created", e.id)
     return e
@@ -1974,6 +2053,20 @@ async def approve_leave_request(
             if e.second_approved_by_id is not None:
                 raise HTTPException(status_code=400, detail="Second approval already recorded")
             e.second_approved_by_id = approver.id
+    else:
+        designated_approvers: set[int] = set()
+        if first_approver_id is not None and _is_supervisor_user(db, first_approver_id):
+            designated_approvers.add(first_approver_id)
+        if second_approver_id is not None and _is_admin_user(db, second_approver_id):
+            designated_approvers.add(second_approver_id)
+
+        if designated_approvers:
+            if approver.id not in designated_approvers:
+                raise HTTPException(status_code=403, detail="You are not assigned to approve this request")
+            if approver.id == first_approver_id and approver.role != "supervisor":
+                raise HTTPException(status_code=403, detail="Assigned first approver must be supervisor")
+            if approver.id == second_approver_id and not _is_admin_like(approver.role):
+                raise HTTPException(status_code=403, detail="Assigned second approver must be admin/ceo")
 
     try:
         validate_leave_request(db, owner, e.start_ts, e.end_ts, exclude_event_id=e.id)
@@ -1990,7 +2083,15 @@ async def approve_leave_request(
             # Keep pending until both approvals are completed.
             e.status = "pending"
     else:
-        if not _is_admin_like(approver.role):
+        designated_approvers: set[int] = set()
+        if first_approver_id is not None and _is_supervisor_user(db, first_approver_id):
+            designated_approvers.add(first_approver_id)
+        if second_approver_id is not None and _is_admin_user(db, second_approver_id):
+            designated_approvers.add(second_approver_id)
+        if designated_approvers:
+            if approver.id not in designated_approvers:
+                raise HTTPException(status_code=403, detail="You are not assigned to approve this request")
+        elif not _is_admin_like(approver.role):
             raise HTTPException(status_code=403, detail="Only admin/ceo can approve single-step leave")
         e.status = "approved"
         e.approved_by_id = approver.id
@@ -2006,6 +2107,7 @@ async def approve_leave_request(
     db.commit()
     db.refresh(e)
     _ = e.user
+    _attach_leave_review_metadata(db, e, approver, owner)
 
     await broadcast_events_changed("updated", e.id)
     return e
@@ -2029,7 +2131,11 @@ async def reject_leave_request(
     if not owner:
         raise HTTPException(status_code=400, detail="Event owner not found")
 
-    if owner.require_two_step_leave_approval:
+    requires_two_step = bool(owner.require_two_step_leave_approval)
+    first_approver_id = owner.first_approver_id
+    second_approver_id = owner.second_approver_id
+
+    if requires_two_step:
         allowed = {owner.first_approver_id, owner.second_approver_id}
         if approver.id not in allowed:
             raise HTTPException(status_code=403, detail="You are not assigned to reject this leave")
@@ -2037,8 +2143,21 @@ async def reject_leave_request(
             raise HTTPException(status_code=403, detail="First approver must be supervisor")
         if approver.id == owner.second_approver_id and not _is_admin_like(approver.role):
             raise HTTPException(status_code=403, detail="Second approver must be admin")
-    elif not _is_admin_like(approver.role):
-        raise HTTPException(status_code=403, detail="Only admin/ceo can reject single-step leave")
+    else:
+        designated_approvers: set[int] = set()
+        if first_approver_id is not None and _is_supervisor_user(db, first_approver_id):
+            designated_approvers.add(first_approver_id)
+        if second_approver_id is not None and _is_admin_user(db, second_approver_id):
+            designated_approvers.add(second_approver_id)
+        if designated_approvers:
+            if approver.id not in designated_approvers:
+                raise HTTPException(status_code=403, detail="You are not assigned to reject this leave")
+            if approver.id == first_approver_id and approver.role != "supervisor":
+                raise HTTPException(status_code=403, detail="Assigned first approver must be supervisor")
+            if approver.id == second_approver_id and not _is_admin_like(approver.role):
+                raise HTTPException(status_code=403, detail="Assigned second approver must be admin/ceo")
+        elif not _is_admin_like(approver.role):
+            raise HTTPException(status_code=403, detail="Only admin/ceo can reject single-step leave")
 
     e.status = "rejected"
     e.approved_by_id = approver.id
@@ -2049,6 +2168,7 @@ async def reject_leave_request(
     db.commit()
     db.refresh(e)
     _ = e.user
+    _attach_leave_review_metadata(db, e, approver, owner)
 
     await broadcast_events_changed("updated", e.id)
     return e
@@ -2091,6 +2211,7 @@ def list_leave_requests(
     items = q.order_by(Event.start_ts.desc()).all()
     for e in items:
         _ = e.user
+        _attach_leave_review_metadata(db, e, current, e.user)
     return items
 
 
@@ -2128,6 +2249,7 @@ def list_events(
     events = q.order_by(Event.start_ts.asc()).all()
     for e in events:
         _ = e.user
+        _attach_leave_review_metadata(db, e, current, e.user)
     return events
 
 
@@ -2178,6 +2300,7 @@ async def create_event(
     db.commit()
     db.refresh(e)
     _ = e.user
+    _attach_leave_review_metadata(db, e, user, e.user)
 
     await broadcast_events_changed("created", e.id)
     return e
@@ -2252,6 +2375,7 @@ async def update_event(
     db.commit()
     db.refresh(e)
     _ = e.user
+    _attach_leave_review_metadata(db, e, user, e.user)
 
     await broadcast_events_changed("updated", e.id)
     return e
@@ -2318,6 +2442,7 @@ async def upload_event_sick_note(
     db.commit()
     db.refresh(e)
     _ = e.user
+    _attach_leave_review_metadata(db, e, current, e.user)
     await broadcast_events_changed("updated", e.id)
     return e
 
