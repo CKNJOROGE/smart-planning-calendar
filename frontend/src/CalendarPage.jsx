@@ -555,22 +555,36 @@ export default function CalendarPage() {
     }
 
     const rows = events
-      .map((ev) => ev.extendedProps?.api)
-      .filter(Boolean)
+      .map((ev) => {
+        const api = ev.extendedProps?.api || {};
+        const allDay = typeof api.all_day === "boolean" ? api.all_day : !!ev.allDay;
+        const startRaw = api.start_ts || ev.start || "";
+        const endRaw = api.end_ts || ev.end || "";
+        return {
+          userName: api.user?.name || "",
+          eventType: api.type || "",
+          startRaw,
+          endRaw,
+          allDay,
+          status: api.status || "",
+          department: api.user?.department || "",
+          note: api.note || "",
+        };
+      })
       .slice()
-      .sort((a, b) => Number(new Date(a.start_ts)) - Number(new Date(b.start_ts)));
+      .sort((a, b) => Number(new Date(a.startRaw)) - Number(new Date(b.startRaw)));
 
     const header = ["User", "Type", "Start", "End", "Status", "Department", "Note"];
     const lines = [header.join(",")];
     for (const e of rows) {
       lines.push([
-        toCsvCell(e.user?.name || ""),
-        toCsvCell(typeLabel(e.type)),
-        toCsvCell(formatEventBoundary(e.start_ts, e.all_day, false)),
-        toCsvCell(formatEventBoundary(e.end_ts, e.all_day, true)),
+        toCsvCell(e.userName),
+        toCsvCell(typeLabel(e.eventType)),
+        toCsvCell(formatEventBoundary(e.startRaw, e.allDay, false)),
+        toCsvCell(formatEventBoundary(e.endRaw, e.allDay, true)),
         toCsvCell(normalizeStatus(e.status)),
-        toCsvCell(e.user?.department || ""),
-        toCsvCell(e.note || ""),
+        toCsvCell(e.department),
+        toCsvCell(e.note),
       ].join(","));
     }
 
