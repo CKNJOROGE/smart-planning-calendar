@@ -272,6 +272,17 @@ export function listLibraryDocuments(category = "") {
   return request(`/library/documents${qs}`);
 }
 
+export function listLibraryCategories() {
+  return request("/library/categories");
+}
+
+export function createLibraryCategory(name) {
+  return request("/library/categories", {
+    method: "POST",
+    body: { name },
+  });
+}
+
 export async function uploadLibraryDocument({ title, category, file }) {
   const token = getToken();
   const form = new FormData();

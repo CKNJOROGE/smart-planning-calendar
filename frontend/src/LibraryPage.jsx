@@ -1,34 +1,43 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { me, listLibraryDocuments, uploadLibraryDocument, deleteLibraryDocument, openProtectedFile } from "./api";
+import {
+  me,
+  listLibraryDocuments,
+  listLibraryCategories,
+  createLibraryCategory,
+  uploadLibraryDocument,
+  deleteLibraryDocument,
+  openProtectedFile,
+} from "./api";
 import { useToast } from "./ToastProvider";
-
-const CATEGORIES = [
-  "Contract",
-  "Recruitment",
-  "Onboarding",
-  "Performance Management",
-  "Disciplinary Management",
-  "Training Template",
-];
 
 export default function LibraryPage() {
   const [user, setUser] = useState(null);
   const [docs, setDocs] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [form, setForm] = useState({
     title: "",
-    category: CATEGORIES[0],
+    category: "",
     file: null,
   });
   const { showToast } = useToast();
+  const isLibraryManager = user?.role === "admin" || user?.role === "ceo";
 
   useEffect(() => {
     (async () => {
       const u = await me();
       setUser(u);
-      const items = await listLibraryDocuments();
-      setDocs(items);
+      const [items, categoryRows] = await Promise.all([
+        listLibraryDocuments(),
+        listLibraryCategories(),
+      ]);
+      setDocs(items || []);
+      const catList = (categoryRows || []).slice().sort((a, b) => String(a).localeCompare(String(b)));
+      setCategories(catList);
+      setForm((prev) => ({ ...prev, category: prev.category || catList[0] || "" }));
       setLoading(false);
     })().catch((e) => {
       showToast(String(e.message || e), "error");
@@ -36,25 +45,42 @@ export default function LibraryPage() {
     });
   }, [showToast]);
 
+  const allCategories = useMemo(() => {
+    const set = new Set(categories || []);
+    for (const d of docs || []) {
+      if (d?.category) set.add(d.category);
+    }
+    return Array.from(set).sort((a, b) => String(a).localeCompare(String(b)));
+  }, [categories, docs]);
+
   const grouped = useMemo(() => {
     const map = new Map();
-    for (const c of CATEGORIES) map.set(c, []);
+    for (const c of allCategories) map.set(c, []);
     for (const d of docs) {
       if (!map.has(d.category)) map.set(d.category, []);
       map.get(d.category).push(d);
     }
     return map;
-  }, [docs]);
+  }, [allCategories, docs]);
 
   async function refresh() {
-    const items = await listLibraryDocuments();
-    setDocs(items);
+    const [items, categoryRows] = await Promise.all([
+      listLibraryDocuments(),
+      listLibraryCategories(),
+    ]);
+    setDocs(items || []);
+    const catList = (categoryRows || []).slice().sort((a, b) => String(a).localeCompare(String(b)));
+    setCategories(catList);
+    setForm((prev) => ({
+      ...prev,
+      category: catList.includes(prev.category) ? prev.category : (catList[0] || ""),
+    }));
   }
 
   async function submitUpload(e) {
     e.preventDefault();
-    if (!form.title.trim() || !form.file) {
-      showToast("Please provide title and file", "error");
+    if (!form.title.trim() || !form.file || !form.category) {
+      showToast("Please provide title, category, and file", "error");
       return;
     }
     setUploading(true);
@@ -64,13 +90,34 @@ export default function LibraryPage() {
         category: form.category,
         file: form.file,
       });
-      setForm({ title: "", category: CATEGORIES[0], file: null });
+      setForm((prev) => ({ title: "", category: prev.category, file: null }));
       await refresh();
       showToast("Document uploaded", "success");
     } catch (err) {
       showToast(String(err.message || err), "error");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function submitCategory(e) {
+    e.preventDefault();
+    const name = (newCategoryName || "").trim();
+    if (!name) {
+      showToast("Please enter a category name", "error");
+      return;
+    }
+    setAddingCategory(true);
+    try {
+      await createLibraryCategory(name);
+      setNewCategoryName("");
+      await refresh();
+      setForm((prev) => ({ ...prev, category: name }));
+      showToast("Category added", "success");
+    } catch (err) {
+      showToast(String(err.message || err), "error");
+    } finally {
+      setAddingCategory(false);
     }
   }
 
@@ -98,8 +145,25 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      {user?.role === "admin" && (
+      {isLibraryManager && (
         <div className="card" style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>Add Category</div>
+          <form className="row" onSubmit={submitCategory} style={{ marginBottom: 12 }}>
+            <div className="field" style={{ flex: "1 1 260px" }}>
+              <label>Category Name</label>
+              <input
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="e.g. Compliance"
+              />
+            </div>
+            <div style={{ alignSelf: "end" }}>
+              <button className="btn" type="submit" disabled={addingCategory}>
+                {addingCategory ? "Adding..." : "Add Category"}
+              </button>
+            </div>
+          </form>
+
           <div style={{ fontWeight: 900, marginBottom: 8 }}>Upload Document</div>
           <form className="row" onSubmit={submitUpload}>
             <div className="field" style={{ flex: "1 1 260px" }}>
@@ -116,7 +180,7 @@ export default function LibraryPage() {
                 value={form.category}
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
               >
-                {CATEGORIES.map((c) => (
+                {allCategories.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
@@ -138,7 +202,7 @@ export default function LibraryPage() {
       )}
 
       <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
-        {CATEGORIES.map((category) => {
+        {allCategories.map((category) => {
           const items = grouped.get(category) || [];
           return (
             <div key={category} className="card">
@@ -168,7 +232,7 @@ export default function LibraryPage() {
                         >
                           Open
                         </button>
-                        {user?.role === "admin" && (
+                        {isLibraryManager && (
                           <button className="btn btn-danger" onClick={() => removeDoc(d.id)}>Delete</button>
                         )}
                       </div>

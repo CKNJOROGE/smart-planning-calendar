@@ -20,6 +20,7 @@ from .models import (
     User,
     Event,
     CompanyDocument,
+    LibraryCategory,
     ClientAccount,
     ClientTask,
     DailyActivity,
@@ -43,6 +44,8 @@ from .schemas import (
     LeaveRejectRequest,
     LeaveBalanceOut,
     CompanyDocumentOut,
+    LibraryCategoryCreate,
+    LibraryCategoryOut,
     ClientAccountCreate,
     ClientAccountUpdate,
     ClientAccountOut,
@@ -88,7 +91,7 @@ PROFILE_DOCUMENT_FIELDS = {
     "bank_details_form": "bank_details_form_url",
 }
 
-LIBRARY_CATEGORIES = {
+DEFAULT_LIBRARY_CATEGORIES = {
     "Contract",
     "Recruitment",
     "Onboarding",
@@ -959,6 +962,52 @@ async def admin_upload_user_document(
 # -------------------------
 # Company Library
 # -------------------------
+def _normalize_library_category_name(raw: str) -> str:
+    return " ".join((raw or "").strip().split())
+
+
+def _library_category_names(db: Session) -> set[str]:
+    names = set(DEFAULT_LIBRARY_CATEGORIES)
+    for row in db.query(LibraryCategory).all():
+        n = _normalize_library_category_name(row.name)
+        if n:
+            names.add(n)
+    for row in db.query(CompanyDocument.category).distinct().all():
+        n = _normalize_library_category_name(row[0] if row else "")
+        if n:
+            names.add(n)
+    return names
+
+
+@app.get("/library/categories", response_model=List[str])
+def list_library_categories(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return sorted(_library_category_names(db), key=lambda x: x.lower())
+
+
+@app.post("/library/categories", response_model=LibraryCategoryOut)
+def create_library_category(
+    payload: LibraryCategoryCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    name = _normalize_library_category_name(payload.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="Category name is required")
+    if len(name) > 80:
+        raise HTTPException(status_code=400, detail="Category name must be <= 80 characters")
+    if any(existing.lower() == name.lower() for existing in _library_category_names(db)):
+        raise HTTPException(status_code=400, detail="Category already exists")
+
+    row = LibraryCategory(name=name, created_by_id=admin.id)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
 @app.get("/library/documents", response_model=List[CompanyDocumentOut])
 def list_company_documents(
     category: Optional[str] = None,
@@ -984,10 +1033,10 @@ async def upload_company_document(
     admin: User = Depends(require_admin),
 ):
     normalized_title = (title or "").strip()
-    normalized_category = (category or "").strip()
+    normalized_category = _normalize_library_category_name(category)
     if not normalized_title:
         raise HTTPException(status_code=400, detail="Title is required")
-    if normalized_category not in LIBRARY_CATEGORIES:
+    if normalized_category not in _library_category_names(db):
         raise HTTPException(status_code=400, detail="Invalid library category")
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing file")

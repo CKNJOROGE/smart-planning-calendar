@@ -105,6 +105,17 @@ class CompanyDocument(Base):
     uploaded_by = relationship("User", foreign_keys=[uploaded_by_id])
 
 
+class LibraryCategory(Base):
+    __tablename__ = "library_categories"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(80), nullable=False, unique=True, index=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+
+
 class ClientAccount(Base):
     __tablename__ = "client_accounts"
 

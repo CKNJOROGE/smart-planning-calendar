@@ -235,6 +235,20 @@ class CompanyDocumentOut(BaseModel):
         from_attributes = True
 
 
+class LibraryCategoryCreate(BaseModel):
+    name: str
+
+
+class LibraryCategoryOut(BaseModel):
+    id: int
+    name: str
+    created_by_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # -------------------------
 # Client Task Manager
 # -------------------------
