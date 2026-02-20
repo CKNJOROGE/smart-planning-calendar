@@ -15,6 +15,12 @@ import {
   listApprovedCashRequisitions,
   decideCashRequisition,
   markCashRequisitionDisbursed,
+  submitSalaryAdvanceRequest,
+  listMySalaryAdvanceRequests,
+  listPendingSalaryAdvanceRequests,
+  listApprovedSalaryAdvanceRequests,
+  decideSalaryAdvanceRequest,
+  markSalaryAdvanceDisbursed,
   listTaskClients,
   updateTaskClient,
 } from "./api";
@@ -68,6 +74,16 @@ function requisitionStatusLabel(status) {
   return status || "-";
 }
 
+function salaryAdvanceStatusLabel(status) {
+  const s = (status || "").toLowerCase();
+  if (s === "pending_finance_review") return "pending finance review";
+  if (s === "pending_ceo_approval") return "pending CEO approval";
+  if (s === "pending_disbursement") return "approved, awaiting disbursement";
+  if (s === "disbursed") return "disbursed";
+  if (s === "rejected") return "rejected";
+  return status || "-";
+}
+
 function emptyManual() {
   return { item_date: toDateInput(new Date()), description: "", amount: "", source_event_id: null };
 }
@@ -96,6 +112,16 @@ export default function FinanceRequestsPage() {
   const [myRequisitions, setMyRequisitions] = useState([]);
   const [pendingRequisitions, setPendingRequisitions] = useState([]);
   const [approvedRequisitions, setApprovedRequisitions] = useState([]);
+  const [saForm, setSaForm] = useState({
+    amount: "",
+    reason: "",
+    details: "",
+    repayment_months: "1",
+    deduction_start_date: "",
+  });
+  const [mySalaryAdvances, setMySalaryAdvances] = useState([]);
+  const [pendingSalaryAdvances, setPendingSalaryAdvances] = useState([]);
+  const [approvedSalaryAdvances, setApprovedSalaryAdvances] = useState([]);
 
   const canReview = useMemo(() => {
     const role = (current?.role || "").toLowerCase();
@@ -139,6 +165,8 @@ export default function FinanceRequestsPage() {
       setMyRequests(mine || []);
       const myReqs = await listMyCashRequisitions();
       setMyRequisitions(myReqs || []);
+      const mySas = await listMySalaryAdvanceRequests();
+      setMySalaryAdvances(mySas || []);
       if (user.role === "admin" || user.role === "ceo") {
         const clients = await listTaskClients(new Date().getFullYear());
         setClientPricing((clients || []).map((c) => ({
@@ -150,21 +178,27 @@ export default function FinanceRequestsPage() {
         setClientPricing([]);
       }
       if (user.role === "finance" || user.role === "admin" || user.role === "ceo") {
-        const [pending, approved, pendingReqs, approvedReqs] = await Promise.all([
+        const [pending, approved, pendingReqs, approvedReqs, pendingSas, approvedSas] = await Promise.all([
           listPendingCashReimbursements(),
           listApprovedCashReimbursements(),
           listPendingCashRequisitions(),
           listApprovedCashRequisitions(),
+          listPendingSalaryAdvanceRequests(),
+          listApprovedSalaryAdvanceRequests(),
         ]);
         setPendingRequests(pending || []);
         setApprovedRequests(approved || []);
         setPendingRequisitions(pendingReqs || []);
         setApprovedRequisitions(approvedReqs || []);
+        setPendingSalaryAdvances(pendingSas || []);
+        setApprovedSalaryAdvances(approvedSas || []);
       } else {
         setPendingRequests([]);
         setApprovedRequests([]);
         setPendingRequisitions([]);
         setApprovedRequisitions([]);
+        setPendingSalaryAdvances([]);
+        setApprovedSalaryAdvances([]);
       }
     } catch (e) {
       setErr(String(e.message || e));
@@ -359,6 +393,85 @@ export default function FinanceRequestsPage() {
     if (role === "finance") return (r.status || "").toLowerCase() === "pending_finance_review";
     if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
     return false;
+  }
+
+  function canCurrentRoleDecideSalaryAdvance(r) {
+    const role = (current?.role || "").toLowerCase();
+    if (role === "finance") return (r.status || "").toLowerCase() === "pending_finance_review";
+    if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
+    return false;
+  }
+
+  async function submitSalaryAdvance() {
+    setErr("");
+    const amount = Number(saForm.amount || 0);
+    const reason = (saForm.reason || "").trim();
+    const details = (saForm.details || "").trim();
+    const repaymentMonths = Number(saForm.repayment_months || 0);
+    if (!(amount > 0)) {
+      setErr("Salary advance amount must be greater than 0.");
+      return;
+    }
+    if (!reason) {
+      setErr("Reason is required.");
+      return;
+    }
+    if (!Number.isInteger(repaymentMonths) || repaymentMonths < 1 || repaymentMonths > 24) {
+      setErr("Repayment months must be between 1 and 24.");
+      return;
+    }
+    try {
+      await submitSalaryAdvanceRequest({
+        amount,
+        reason,
+        details: details || null,
+        repayment_months: repaymentMonths,
+        deduction_start_date: saForm.deduction_start_date || null,
+      });
+      setSaForm({
+        amount: "",
+        reason: "",
+        details: "",
+        repayment_months: "1",
+        deduction_start_date: "",
+      });
+      await loadData();
+      showToast("Salary advance request submitted", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function takeSalaryAdvanceDecision(requestId, approve) {
+    const comment = approve ? "" : (prompt("Reason for rejection (required):") || "").trim();
+    if (!approve && !comment) {
+      setErr("Rejection comment is required.");
+      return;
+    }
+    try {
+      await decideSalaryAdvanceRequest(requestId, approve, comment);
+      await loadData();
+      showToast(approve ? "Salary advance approved" : "Salary advance rejected", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function markSalaryAdvancePaid(requestId) {
+    const note = (prompt("Disbursement note (optional):") || "").trim();
+    try {
+      await markSalaryAdvanceDisbursed(requestId, note);
+      await loadData();
+      showToast("Salary advance marked disbursed", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
   }
 
   function remainingApprovers(r) {
@@ -946,10 +1059,208 @@ export default function FinanceRequestsPage() {
         </div>
       )}
       {activeSection === "salary_advance" && (
-        <div className="card">
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>Salary Advance Request</div>
-          <div className="muted">This module is not implemented yet.</div>
-        </div>
+        <>
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>Salary Advance Request</div>
+            <div className="muted" style={{ marginBottom: 10 }}>
+              Workflow: Finance review {"->"} CEO/Admin approval {"->"} Payroll disbursement.
+            </div>
+            <div className="row">
+              <div className="field" style={{ flex: "1 1 180px" }}>
+                <label>Amount</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={saForm.amount}
+                  onChange={(e) => setSaForm((f) => ({ ...f, amount: e.target.value }))}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="field" style={{ flex: "1 1 180px" }}>
+                <label>Repayment Months</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="24"
+                  step="1"
+                  value={saForm.repayment_months}
+                  onChange={(e) => setSaForm((f) => ({ ...f, repayment_months: e.target.value }))}
+                />
+              </div>
+              <div className="field" style={{ flex: "1 1 220px" }}>
+                <label>Deduction Start Date (optional)</label>
+                <input
+                  type="date"
+                  value={saForm.deduction_start_date}
+                  onChange={(e) => setSaForm((f) => ({ ...f, deduction_start_date: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="field">
+              <label>Reason</label>
+              <input
+                value={saForm.reason}
+                onChange={(e) => setSaForm((f) => ({ ...f, reason: e.target.value }))}
+                placeholder="Why do you need the salary advance?"
+              />
+            </div>
+            <div className="field">
+              <label>Details (optional)</label>
+              <textarea
+                value={saForm.details}
+                onChange={(e) => setSaForm((f) => ({ ...f, details: e.target.value }))}
+                placeholder="Additional details..."
+              />
+            </div>
+            <button className="btn btn-primary" type="button" onClick={submitSalaryAdvance}>
+              Submit Salary Advance
+            </button>
+          </div>
+
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>My Salary Advance Requests</div>
+            <div style={{ width: "100%", overflowX: "auto" }}>
+              <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    <th style={{ textAlign: "left", padding: 10 }}>Submitted</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Reason</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Repayment</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Comments</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(mySalaryAdvances || []).map((r) => (
+                    <tr key={`my_sa_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <td style={{ padding: 10 }}>{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "-"}</td>
+                      <td style={{ padding: 10 }}>
+                        <div style={{ fontWeight: 700 }}>{r.reason}</div>
+                        {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
+                      </td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                      <td style={{ padding: 10 }}>
+                        {r.repayment_months} month(s)
+                        {r.deduction_start_date ? `, start ${r.deduction_start_date}` : ""}
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{salaryAdvanceStatusLabel(r.status)}</span>
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <div>Finance: {decisionLabel(r.finance_decision)}</div>
+                        <div>CEO: {decisionLabel(r.ceo_decision)}</div>
+                        {r.finance_comment && <div className="muted">Finance comment: {r.finance_comment}</div>}
+                        {r.ceo_comment && <div className="muted">CEO comment: {r.ceo_comment}</div>}
+                        {r.disbursed_note && <div className="muted">Disbursement note: {r.disbursed_note}</div>}
+                      </td>
+                    </tr>
+                  ))}
+                  {!mySalaryAdvances.length && (
+                    <tr><td colSpan={6} style={{ padding: 14 }} className="muted">No salary advance requests submitted yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {canReview && (
+            <div className="card" style={{ marginBottom: 12 }}>
+              <div style={{ fontWeight: 900, marginBottom: 8 }}>Pending Salary Advance Approvals</div>
+              <div style={{ width: "100%", overflowX: "auto" }}>
+                <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <th style={{ textAlign: "left", padding: 10 }}>Requester</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Reason</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Repayment</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(pendingSalaryAdvances || []).map((r) => (
+                      <tr key={`pending_sa_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
+                        <td style={{ padding: 10 }}>
+                          <div style={{ fontWeight: 700 }}>{r.reason}</div>
+                          {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
+                        </td>
+                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>
+                          {r.repayment_months} month(s)
+                          {r.deduction_start_date ? `, start ${r.deduction_start_date}` : ""}
+                        </td>
+                        <td style={{ padding: 10 }}>
+                          {canCurrentRoleDecideSalaryAdvance(r) ? (
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button className="btn btn-primary" onClick={() => takeSalaryAdvanceDecision(r.id, true)}>Approve</button>
+                              <button className="btn btn-danger" onClick={() => takeSalaryAdvanceDecision(r.id, false)}>Reject</button>
+                            </div>
+                          ) : (
+                            <span className="muted">Not actionable for your role.</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {!pendingSalaryAdvances.length && (
+                      <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No pending salary advance approvals.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {canReview && (
+            <div className="card">
+              <div style={{ fontWeight: 900, marginBottom: 8 }}>Approved / Disbursed Salary Advances</div>
+              <div style={{ width: "100%", overflowX: "auto" }}>
+                <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <th style={{ textAlign: "left", padding: 10 }}>Requester</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Reason</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Disbursement</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(approvedSalaryAdvances || []).map((r) => (
+                      <tr key={`approved_sa_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
+                        <td style={{ padding: 10 }}>
+                          <div style={{ fontWeight: 700 }}>{r.reason}</div>
+                          {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
+                        </td>
+                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>
+                          <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{salaryAdvanceStatusLabel(r.status)}</span>
+                        </td>
+                        <td style={{ padding: 10 }}>
+                          {(r.status || "").toLowerCase() === "pending_disbursement" ? (
+                            <button className="btn btn-primary" type="button" onClick={() => markSalaryAdvancePaid(r.id)}>
+                              Mark Disbursed
+                            </button>
+                          ) : (r.status || "").toLowerCase() === "disbursed" ? (
+                            <span className="muted">Disbursed on {r.disbursed_at ? new Date(r.disbursed_at).toLocaleString() : "-"}</span>
+                          ) : (
+                            <span className="muted">No disbursement action</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {!approvedSalaryAdvances.length && (
+                      <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No approved/disbursed salary advances.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
         </div>
       </div>

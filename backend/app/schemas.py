@@ -501,3 +501,48 @@ class CashRequisitionRequestOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SalaryAdvanceCreateIn(BaseModel):
+    amount: float
+    reason: str
+    details: Optional[str] = None
+    repayment_months: int = 1
+    deduction_start_date: Optional[date] = None
+
+
+class SalaryAdvanceDecisionIn(BaseModel):
+    approve: bool
+    comment: Optional[str] = None
+
+
+class SalaryAdvanceDisburseIn(BaseModel):
+    note: Optional[str] = None
+
+
+class SalaryAdvanceRequestOut(BaseModel):
+    id: int
+    user_id: int
+    amount: float
+    reason: str
+    details: Optional[str] = None
+    repayment_months: int
+    deduction_start_date: Optional[date] = None
+    status: str
+    submitted_at: datetime
+    finance_decision: Optional[str] = None
+    finance_comment: Optional[str] = None
+    finance_decided_at: Optional[datetime] = None
+    finance_decided_by_id: Optional[int] = None
+    ceo_decision: Optional[str] = None
+    ceo_comment: Optional[str] = None
+    ceo_decided_at: Optional[datetime] = None
+    ceo_decided_by_id: Optional[int] = None
+    disbursed_at: Optional[datetime] = None
+    disbursed_note: Optional[str] = None
+    disbursed_by_id: Optional[int] = None
+    updated_at: datetime
+    user: UserOut
+
+    class Config:
+        from_attributes = True

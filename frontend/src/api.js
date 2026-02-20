@@ -472,6 +472,36 @@ export function markCashRequisitionDisbursed(requestId, note) {
   });
 }
 
+export function submitSalaryAdvanceRequest(payload) {
+  return request("/finance/salary-advances", { method: "POST", body: payload });
+}
+
+export function listMySalaryAdvanceRequests() {
+  return request("/finance/salary-advances/my");
+}
+
+export function listPendingSalaryAdvanceRequests() {
+  return request("/finance/salary-advances/pending");
+}
+
+export function listApprovedSalaryAdvanceRequests() {
+  return request("/finance/salary-advances/approved");
+}
+
+export function decideSalaryAdvanceRequest(requestId, approve, comment) {
+  return request(`/finance/salary-advances/${requestId}/decision`, {
+    method: "POST",
+    body: { approve: !!approve, comment: comment || null },
+  });
+}
+
+export function markSalaryAdvanceDisbursed(requestId, note) {
+  return request(`/finance/salary-advances/${requestId}/disburse`, {
+    method: "POST",
+    body: { note: note || null },
+  });
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);
