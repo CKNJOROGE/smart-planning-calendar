@@ -81,6 +81,7 @@ export default function UserProfilePage() {
         designation: profile.designation || null,
         gender: profile.gender || null,
         date_of_birth: profile.date_of_birth || null,
+        hire_date: profile.hire_date || null,
         address: profile.address || null,
         id_number: profile.id_number || null,
         nssf_number: profile.nssf_number || null,
@@ -184,6 +185,12 @@ export default function UserProfilePage() {
               onChange={(v) => setProfile((p) => ({ ...p, date_of_birth: v }))}
             />
             <Field
+              label="Date of Hire"
+              type="date"
+              value={profile.hire_date || ""}
+              onChange={(v) => setProfile((p) => ({ ...p, hire_date: v }))}
+            />
+            <Field
               label="Address"
               value={profile.address || ""}
               onChange={(v) => setProfile((p) => ({ ...p, address: v }))}
@@ -199,7 +206,7 @@ export default function UserProfilePage() {
               onChange={(v) => setProfile((p) => ({ ...p, nssf_number: v }))}
             />
             <Field
-              label="NHIF Number"
+              label="SHA Number"
               value={profile.nhif_number || ""}
               onChange={(v) => setProfile((p) => ({ ...p, nhif_number: v }))}
             />

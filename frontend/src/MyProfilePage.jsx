@@ -180,6 +180,12 @@ export default function MyProfilePage() {
               onChange={(v) => setProfile((p) => ({ ...p, date_of_birth: v }))}
             />
             <Field
+              label="Date of Hire"
+              type="date"
+              value={profile.hire_date || ""}
+              disabled
+            />
+            <Field
               label="Address"
               value={profile.address || ""}
               onChange={(v) => setProfile((p) => ({ ...p, address: v }))}
@@ -195,7 +201,7 @@ export default function MyProfilePage() {
               onChange={(v) => setProfile((p) => ({ ...p, nssf_number: v }))}
             />
             <Field
-              label="NHIF Number"
+              label="SHA Number"
               value={profile.nhif_number || ""}
               onChange={(v) => setProfile((p) => ({ ...p, nhif_number: v }))}
             />
