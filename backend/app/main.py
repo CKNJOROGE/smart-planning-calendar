@@ -448,6 +448,48 @@ def _reimbursement_due_message(today: date, can_submit: bool) -> str:
     return "Cash reimbursement can be submitted on the 15th and 30th of each month."
 
 
+def _parse_todo_entries(raw_text: Optional[str]) -> list[str]:
+    normalized = str(raw_text or "").replace("\r\n", "\n")
+    entries = [(line or "").strip() for line in normalized.split("\n")]
+    entries = [line for line in entries if line]
+    if len(entries) > 50:
+        raise HTTPException(status_code=400, detail="maximum 50 activities per post")
+    for line in entries:
+        if len(line) > 1000:
+            raise HTTPException(status_code=400, detail="each activity must be <= 1000 characters")
+    return entries
+
+
+def _sync_client_visit_todos(db: Session, e: Event) -> None:
+    group_id = f"event:{e.id}"
+    db.query(DailyActivity).filter(
+        DailyActivity.post_group_id == group_id,
+        DailyActivity.user_id == e.user_id,
+    ).delete(synchronize_session=False)
+
+    if (e.type or "").strip().lower() != "client visit":
+        return
+
+    entries = _parse_todo_entries(e.note)
+    if not entries:
+        return
+
+    visit_day = e.start_ts.date()
+    now = datetime.utcnow()
+    for line in entries:
+        db.add(
+            DailyActivity(
+                user_id=e.user_id,
+                post_group_id=group_id,
+                activity_date=visit_day,
+                activity=line,
+                completed=False,
+                completed_at=None,
+                created_at=now,
+            )
+        )
+
+
 def _parse_manual_reimbursement_items(raw_json: str) -> list[CashReimbursementDraftManualItemOut]:
     try:
         payload = json.loads(raw_json or "[]")
@@ -2310,6 +2352,8 @@ async def create_event(
         requested_by_id=user.id if is_leave_like else None,
     )
     db.add(e)
+    db.flush()
+    _sync_client_visit_todos(db, e)
     db.commit()
     db.refresh(e)
     _ = e.user
@@ -2387,6 +2431,7 @@ async def update_event(
         e.note = payload.note or None
 
     e.updated_at = datetime.utcnow()
+    _sync_client_visit_todos(db, e)
     db.commit()
     db.refresh(e)
     _ = e.user
@@ -2489,6 +2534,10 @@ async def delete_event(
         if old_file.exists() and old_file.is_file():
             old_file.unlink()
 
+    db.query(DailyActivity).filter(
+        DailyActivity.post_group_id == f"event:{e.id}",
+        DailyActivity.user_id == e.user_id,
+    ).delete(synchronize_session=False)
     db.delete(e)
     db.commit()
 

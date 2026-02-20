@@ -1066,7 +1066,7 @@ export default function CalendarPage() {
               </div>
 
               <div className="field">
-                <label>Notes (visible to everyone)</label>
+                <label>{form.type === "Client Visit" ? "To-Do List" : "Notes (visible to everyone)"}</label>
                 <textarea
                   value={form.note}
                   onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
@@ -1214,7 +1214,7 @@ export default function CalendarPage() {
               </div>
 
               <div className="field">
-                <label>Notes (visible to everyone)</label>
+                <label>{editForm.type === "Client Visit" ? "To-Do List" : "Notes (visible to everyone)"}</label>
                 <textarea
                   value={editForm.note}
                   onChange={(e) => setEditForm((f) => ({ ...f, note: e.target.value }))}
