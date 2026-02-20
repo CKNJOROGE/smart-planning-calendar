@@ -399,6 +399,14 @@ def _attach_leave_review_metadata(
     current: User,
     owner: Optional[User] = None,
 ) -> None:
+    if not _is_leave_like_event(e):
+        setattr(e, "require_two_step_leave_approval", False)
+        setattr(e, "first_approver_id", None)
+        setattr(e, "second_approver_id", None)
+        setattr(e, "can_current_user_approve", False)
+        setattr(e, "can_current_user_reject", False)
+        return
+
     owner_obj = owner or e.user or db.query(User).filter(User.id == e.user_id).first()
     if owner_obj is None:
         setattr(e, "require_two_step_leave_approval", False)

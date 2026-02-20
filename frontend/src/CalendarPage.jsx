@@ -75,6 +75,10 @@ function isPastCurrentDayEvent(apiEvent) {
   return end <= today;
 }
 
+function isLeaveLikeType(type) {
+  return ["leave", "hospital"].includes((type || "").toLowerCase());
+}
+
 function getReviewBlockReason(apiEvent, currentUser) {
   if (!apiEvent || !currentUser) return "";
   const role = String(currentUser.role || "").toLowerCase();
@@ -387,15 +391,16 @@ export default function CalendarPage() {
   function onEventClick(clickInfo) {
     const apiEvent = clickInfo.event.extendedProps.api;
     const jsEvent = clickInfo.jsEvent;
+    const leaveLike = isLeaveLikeType(apiEvent?.type);
     setPopup({
       x: jsEvent.clientX,
       y: jsEvent.clientY,
       apiEvent,
     });
     setPopupApprovalConfig({
-      requireTwoStep: !!apiEvent?.require_two_step_leave_approval,
-      firstApproverId: apiEvent?.first_approver_id ?? null,
-      secondApproverId: apiEvent?.second_approver_id ?? null,
+      requireTwoStep: leaveLike && !!apiEvent?.require_two_step_leave_approval,
+      firstApproverId: leaveLike ? (apiEvent?.first_approver_id ?? null) : null,
+      secondApproverId: leaveLike ? (apiEvent?.second_approver_id ?? null) : null,
     });
   }
 
