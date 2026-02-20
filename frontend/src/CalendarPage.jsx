@@ -60,6 +60,17 @@ function formatEventBoundary(v, allDay, isEnd = false) {
   return d.toLocaleString();
 }
 
+function formatExportBoundary(v, allDay, isEnd = false) {
+  if (!v) return "";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "";
+  if (allDay) {
+    if (isEnd) d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 function normalizeStatus(status) {
   const s = (status || "approved").toLowerCase();
   if (s === "pending" || s === "approved" || s === "rejected") return s;
@@ -580,8 +591,8 @@ export default function CalendarPage() {
       lines.push([
         toCsvCell(e.userName),
         toCsvCell(typeLabel(e.eventType)),
-        toCsvCell(formatEventBoundary(e.startRaw, e.allDay, false)),
-        toCsvCell(formatEventBoundary(e.endRaw, e.allDay, true)),
+        toCsvCell(formatExportBoundary(e.startRaw, e.allDay, false)),
+        toCsvCell(formatExportBoundary(e.endRaw, e.allDay, true)),
         toCsvCell(normalizeStatus(e.status)),
         toCsvCell(e.department),
         toCsvCell(e.note),
