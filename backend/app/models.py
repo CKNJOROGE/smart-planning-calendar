@@ -330,3 +330,61 @@ class SalaryAdvanceRequest(Base):
     finance_decided_by = relationship("User", foreign_keys=[finance_decided_by_id])
     ceo_decided_by = relationship("User", foreign_keys=[ceo_decided_by_id])
     disbursed_by = relationship("User", foreign_keys=[disbursed_by_id])
+
+
+class PerformanceCompanyGoal(Base):
+    __tablename__ = "performance_company_goals"
+
+    id = Column(Integer, primary_key=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    period_start = Column(Date, nullable=True, index=True)
+    period_end = Column(Date, nullable=True, index=True)
+    status = Column(String(30), nullable=False, default="active")
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+
+
+class PerformanceDepartmentGoal(Base):
+    __tablename__ = "performance_department_goals"
+
+    id = Column(Integer, primary_key=True)
+    company_goal_id = Column(Integer, ForeignKey("performance_company_goals.id"), nullable=False, index=True)
+    department = Column(String(120), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    period_start = Column(Date, nullable=True, index=True)
+    period_end = Column(Date, nullable=True, index=True)
+    status = Column(String(30), nullable=False, default="active")
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    company_goal = relationship("PerformanceCompanyGoal", foreign_keys=[company_goal_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])
+
+
+class PerformanceEmployeeGoal(Base):
+    __tablename__ = "performance_employee_goals"
+
+    id = Column(Integer, primary_key=True)
+    department_goal_id = Column(Integer, ForeignKey("performance_department_goals.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    progress_percent = Column(Integer, nullable=False, default=0)
+    status = Column(String(30), nullable=False, default="active")
+    self_comment = Column(Text, nullable=True)
+    manager_comment = Column(Text, nullable=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    department_goal = relationship("PerformanceDepartmentGoal", foreign_keys=[department_goal_id])
+    user = relationship("User", foreign_keys=[user_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    updated_by = relationship("User", foreign_keys=[updated_by_id])

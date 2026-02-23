@@ -30,6 +30,9 @@ from .models import (
     CashRequisitionRequest,
     AuthorityToIncurRequest,
     SalaryAdvanceRequest,
+    PerformanceCompanyGoal,
+    PerformanceDepartmentGoal,
+    PerformanceEmployeeGoal,
 )
 from .schemas import (
     TokenResponse,
@@ -79,6 +82,14 @@ from .schemas import (
     SalaryAdvanceDecisionIn,
     SalaryAdvanceDisburseIn,
     SalaryAdvanceRequestOut,
+    PerformanceCompanyGoalIn,
+    PerformanceCompanyGoalOut,
+    PerformanceDepartmentGoalIn,
+    PerformanceDepartmentGoalOut,
+    PerformanceEmployeeGoalIn,
+    PerformanceEmployeeGoalUpdateIn,
+    PerformanceEmployeeGoalOut,
+    PerformanceAssignableUserOut,
 )
 from .security import verify_password, create_access_token, hash_password
 from .deps import get_current_user, require_admin, require_leave_approver
@@ -2369,6 +2380,457 @@ def set_salary_advance_deduction_start(
     db.refresh(req)
     _ = req.user
     return req
+
+
+PERFORMANCE_GOAL_STATUSES = {"active", "on_track", "at_risk", "completed", "paused", "cancelled"}
+
+
+def _is_performance_manager(role: Optional[str]) -> bool:
+    return (role or "").strip().lower() in {"supervisor", "admin", "ceo"}
+
+
+def _normalize_performance_status(raw_status: Optional[str]) -> str:
+    status = (raw_status or "active").strip().lower().replace(" ", "_")
+    if status not in PERFORMANCE_GOAL_STATUSES:
+        raise HTTPException(status_code=400, detail=f"status must be one of: {', '.join(sorted(PERFORMANCE_GOAL_STATUSES))}")
+    return status
+
+
+def _validate_goal_date_range(period_start: Optional[date], period_end: Optional[date]) -> None:
+    if period_start and period_end and period_start > period_end:
+        raise HTTPException(status_code=400, detail="period_start cannot be after period_end")
+
+
+@app.get("/performance/users", response_model=List[PerformanceAssignableUserOut])
+def list_performance_users(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role in {"admin", "ceo"}:
+        rows = db.query(User).order_by(User.name.asc()).all()
+    elif role == "supervisor":
+        dept = (current.department or "").strip()
+        if not dept:
+            raise HTTPException(status_code=400, detail="Supervisor profile missing department")
+        rows = (
+            db.query(User)
+            .filter(User.department == dept)
+            .order_by(User.name.asc())
+            .all()
+        )
+    else:
+        rows = [current]
+
+    return [
+        PerformanceAssignableUserOut(
+            id=u.id,
+            name=u.name,
+            role=u.role,
+            department=u.department,
+        )
+        for u in rows
+    ]
+
+
+@app.get("/performance/company-goals", response_model=List[PerformanceCompanyGoalOut])
+def list_company_goals(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    rows = db.query(PerformanceCompanyGoal).order_by(PerformanceCompanyGoal.created_at.desc(), PerformanceCompanyGoal.id.desc()).all()
+    for row in rows:
+        _ = row.created_by
+    return rows
+
+
+@app.post("/performance/company-goals", response_model=PerformanceCompanyGoalOut)
+def create_company_goal(
+    payload: PerformanceCompanyGoalIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _is_admin_like(current.role):
+        raise HTTPException(status_code=403, detail="Only admin/ceo can create company goals")
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    if len(title) > 255:
+        raise HTTPException(status_code=400, detail="title must be <= 255 characters")
+    description = (payload.description or "").strip()
+    if len(description) > 3000:
+        raise HTTPException(status_code=400, detail="description must be <= 3000 characters")
+    _validate_goal_date_range(payload.period_start, payload.period_end)
+
+    row = PerformanceCompanyGoal(
+        title=title,
+        description=description or None,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        status=_normalize_performance_status(payload.status),
+        created_by_id=current.id,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _ = row.created_by
+    return row
+
+
+@app.patch("/performance/company-goals/{goal_id}", response_model=PerformanceCompanyGoalOut)
+def update_company_goal(
+    goal_id: int,
+    payload: PerformanceCompanyGoalIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _is_admin_like(current.role):
+        raise HTTPException(status_code=403, detail="Only admin/ceo can update company goals")
+    row = db.query(PerformanceCompanyGoal).filter(PerformanceCompanyGoal.id == goal_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Company goal not found")
+
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    if len(title) > 255:
+        raise HTTPException(status_code=400, detail="title must be <= 255 characters")
+    description = (payload.description or "").strip()
+    if len(description) > 3000:
+        raise HTTPException(status_code=400, detail="description must be <= 3000 characters")
+    _validate_goal_date_range(payload.period_start, payload.period_end)
+
+    row.title = title
+    row.description = description or None
+    row.period_start = payload.period_start
+    row.period_end = payload.period_end
+    row.status = _normalize_performance_status(payload.status)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    _ = row.created_by
+    return row
+
+
+@app.get("/performance/department-goals", response_model=List[PerformanceDepartmentGoalOut])
+def list_department_goals(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    q = db.query(PerformanceDepartmentGoal)
+    if role == "employee":
+        dept = (current.department or "").strip()
+        if dept:
+            q = q.filter(PerformanceDepartmentGoal.department == dept)
+        else:
+            q = q.filter(PerformanceDepartmentGoal.id == -1)
+    elif role == "supervisor":
+        dept = (current.department or "").strip()
+        if dept:
+            q = q.filter(PerformanceDepartmentGoal.department == dept)
+        else:
+            q = q.filter(PerformanceDepartmentGoal.id == -1)
+
+    rows = q.order_by(PerformanceDepartmentGoal.created_at.desc(), PerformanceDepartmentGoal.id.desc()).all()
+    for row in rows:
+        _ = row.created_by
+        _ = row.company_goal
+        _ = row.company_goal.created_by
+    return rows
+
+
+@app.post("/performance/department-goals", response_model=PerformanceDepartmentGoalOut)
+def create_department_goal(
+    payload: PerformanceDepartmentGoalIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _is_performance_manager(current.role):
+        raise HTTPException(status_code=403, detail="Only supervisors/admin/ceo can create department goals")
+
+    company_goal = db.query(PerformanceCompanyGoal).filter(PerformanceCompanyGoal.id == payload.company_goal_id).first()
+    if not company_goal:
+        raise HTTPException(status_code=404, detail="Company goal not found")
+    department = (payload.department or "").strip()
+    if not department:
+        raise HTTPException(status_code=400, detail="department is required")
+    if len(department) > 120:
+        raise HTTPException(status_code=400, detail="department must be <= 120 characters")
+    if (current.role or "").strip().lower() == "supervisor":
+        my_dept = (current.department or "").strip()
+        if not my_dept:
+            raise HTTPException(status_code=400, detail="Supervisor profile missing department")
+        if department.lower() != my_dept.lower():
+            raise HTTPException(status_code=403, detail="Supervisors can only create goals for their own department")
+
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    if len(title) > 255:
+        raise HTTPException(status_code=400, detail="title must be <= 255 characters")
+    description = (payload.description or "").strip()
+    if len(description) > 3000:
+        raise HTTPException(status_code=400, detail="description must be <= 3000 characters")
+    _validate_goal_date_range(payload.period_start, payload.period_end)
+
+    row = PerformanceDepartmentGoal(
+        company_goal_id=payload.company_goal_id,
+        department=department,
+        title=title,
+        description=description or None,
+        period_start=payload.period_start,
+        period_end=payload.period_end,
+        status=_normalize_performance_status(payload.status),
+        created_by_id=current.id,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _ = row.created_by
+    _ = row.company_goal
+    _ = row.company_goal.created_by
+    return row
+
+
+@app.patch("/performance/department-goals/{goal_id}", response_model=PerformanceDepartmentGoalOut)
+def update_department_goal(
+    goal_id: int,
+    payload: PerformanceDepartmentGoalIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _is_performance_manager(current.role):
+        raise HTTPException(status_code=403, detail="Only supervisors/admin/ceo can update department goals")
+
+    row = db.query(PerformanceDepartmentGoal).filter(PerformanceDepartmentGoal.id == goal_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Department goal not found")
+    company_goal = db.query(PerformanceCompanyGoal).filter(PerformanceCompanyGoal.id == payload.company_goal_id).first()
+    if not company_goal:
+        raise HTTPException(status_code=404, detail="Company goal not found")
+
+    department = (payload.department or "").strip()
+    if not department:
+        raise HTTPException(status_code=400, detail="department is required")
+    if len(department) > 120:
+        raise HTTPException(status_code=400, detail="department must be <= 120 characters")
+    if (current.role or "").strip().lower() == "supervisor":
+        my_dept = (current.department or "").strip()
+        if not my_dept:
+            raise HTTPException(status_code=400, detail="Supervisor profile missing department")
+        if department.lower() != my_dept.lower():
+            raise HTTPException(status_code=403, detail="Supervisors can only update goals for their own department")
+
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    if len(title) > 255:
+        raise HTTPException(status_code=400, detail="title must be <= 255 characters")
+    description = (payload.description or "").strip()
+    if len(description) > 3000:
+        raise HTTPException(status_code=400, detail="description must be <= 3000 characters")
+    _validate_goal_date_range(payload.period_start, payload.period_end)
+
+    row.company_goal_id = payload.company_goal_id
+    row.department = department
+    row.title = title
+    row.description = description or None
+    row.period_start = payload.period_start
+    row.period_end = payload.period_end
+    row.status = _normalize_performance_status(payload.status)
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    _ = row.created_by
+    _ = row.company_goal
+    _ = row.company_goal.created_by
+    return row
+
+
+@app.get("/performance/employee-goals", response_model=List[PerformanceEmployeeGoalOut])
+def list_employee_goals(
+    user_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    q = db.query(PerformanceEmployeeGoal)
+    if role == "employee":
+        q = q.filter(PerformanceEmployeeGoal.user_id == current.id)
+    elif role == "supervisor":
+        dept = (current.department or "").strip()
+        if not dept:
+            q = q.filter(PerformanceEmployeeGoal.id == -1)
+        else:
+            q = q.join(User, User.id == PerformanceEmployeeGoal.user_id).filter(User.department == dept)
+
+    if user_id is not None:
+        if role == "employee" and user_id != current.id:
+            raise HTTPException(status_code=403, detail="Not allowed")
+        q = q.filter(PerformanceEmployeeGoal.user_id == user_id)
+
+    rows = q.order_by(PerformanceEmployeeGoal.created_at.desc(), PerformanceEmployeeGoal.id.desc()).all()
+    for row in rows:
+        _ = row.user
+        _ = row.department_goal
+        _ = row.department_goal.company_goal
+        _ = row.department_goal.company_goal.created_by
+        _ = row.department_goal.created_by
+        _ = row.created_by
+        _ = row.updated_by
+    return rows
+
+
+@app.post("/performance/employee-goals", response_model=PerformanceEmployeeGoalOut)
+def create_employee_goal(
+    payload: PerformanceEmployeeGoalIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    if not _is_performance_manager(current.role):
+        raise HTTPException(status_code=403, detail="Only supervisors/admin/ceo can create employee goals")
+    target_user = db.query(User).filter(User.id == payload.user_id).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    dept_goal = db.query(PerformanceDepartmentGoal).filter(PerformanceDepartmentGoal.id == payload.department_goal_id).first()
+    if not dept_goal:
+        raise HTTPException(status_code=404, detail="Department goal not found")
+
+    target_department = (target_user.department or "").strip()
+    goal_department = (dept_goal.department or "").strip()
+    if not target_department:
+        raise HTTPException(status_code=400, detail="Target user has no department configured")
+    if target_department.lower() != goal_department.lower():
+        raise HTTPException(status_code=400, detail="Employee goal must match target user's department goal")
+
+    if (current.role or "").strip().lower() == "supervisor":
+        my_dept = (current.department or "").strip()
+        if not my_dept:
+            raise HTTPException(status_code=400, detail="Supervisor profile missing department")
+        if target_department.lower() != my_dept.lower():
+            raise HTTPException(status_code=403, detail="Supervisors can only assign goals in their own department")
+
+    title = (payload.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+    if len(title) > 255:
+        raise HTTPException(status_code=400, detail="title must be <= 255 characters")
+    description = (payload.description or "").strip()
+    if len(description) > 3000:
+        raise HTTPException(status_code=400, detail="description must be <= 3000 characters")
+    self_comment = (payload.self_comment or "").strip()
+    manager_comment = (payload.manager_comment or "").strip()
+    if len(self_comment) > 2000 or len(manager_comment) > 2000:
+        raise HTTPException(status_code=400, detail="comments must be <= 2000 characters")
+    progress = int(payload.progress_percent or 0)
+    if progress < 0 or progress > 100:
+        raise HTTPException(status_code=400, detail="progress_percent must be between 0 and 100")
+
+    row = PerformanceEmployeeGoal(
+        department_goal_id=payload.department_goal_id,
+        user_id=payload.user_id,
+        title=title,
+        description=description or None,
+        progress_percent=progress,
+        status=_normalize_performance_status(payload.status),
+        self_comment=self_comment or None,
+        manager_comment=manager_comment or None,
+        created_by_id=current.id,
+        updated_by_id=current.id,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _ = row.user
+    _ = row.department_goal
+    _ = row.department_goal.company_goal
+    _ = row.department_goal.company_goal.created_by
+    _ = row.department_goal.created_by
+    _ = row.created_by
+    _ = row.updated_by
+    return row
+
+
+@app.patch("/performance/employee-goals/{goal_id}", response_model=PerformanceEmployeeGoalOut)
+def update_employee_goal(
+    goal_id: int,
+    payload: PerformanceEmployeeGoalUpdateIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    row = db.query(PerformanceEmployeeGoal).filter(PerformanceEmployeeGoal.id == goal_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Employee goal not found")
+
+    role = (current.role or "").strip().lower()
+    manager = _is_performance_manager(role)
+    is_owner = current.id == row.user_id
+
+    if not manager and not is_owner:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    if role == "supervisor":
+        my_dept = (current.department or "").strip()
+        goal_user = db.query(User).filter(User.id == row.user_id).first()
+        if not goal_user or not goal_user.department or goal_user.department.strip().lower() != my_dept.lower():
+            raise HTTPException(status_code=403, detail="Supervisors can only update goals in their own department")
+
+    if is_owner and not manager:
+        # Employees can only update their own progress/status/self comments.
+        if payload.title is not None or payload.description is not None or payload.manager_comment is not None:
+            raise HTTPException(status_code=403, detail="Employees can only update progress, status, and self_comment")
+
+    if payload.title is not None:
+        title = payload.title.strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="title cannot be empty")
+        if len(title) > 255:
+            raise HTTPException(status_code=400, detail="title must be <= 255 characters")
+        row.title = title
+    if payload.description is not None:
+        desc = payload.description.strip()
+        if len(desc) > 3000:
+            raise HTTPException(status_code=400, detail="description must be <= 3000 characters")
+        row.description = desc or None
+    if payload.progress_percent is not None:
+        progress = int(payload.progress_percent)
+        if progress < 0 or progress > 100:
+            raise HTTPException(status_code=400, detail="progress_percent must be between 0 and 100")
+        row.progress_percent = progress
+    if payload.status is not None:
+        row.status = _normalize_performance_status(payload.status)
+    if payload.self_comment is not None:
+        comment = payload.self_comment.strip()
+        if len(comment) > 2000:
+            raise HTTPException(status_code=400, detail="self_comment must be <= 2000 characters")
+        row.self_comment = comment or None
+    if payload.manager_comment is not None:
+        if not manager:
+            raise HTTPException(status_code=403, detail="Only supervisors/admin/ceo can update manager_comment")
+        comment = payload.manager_comment.strip()
+        if len(comment) > 2000:
+            raise HTTPException(status_code=400, detail="manager_comment must be <= 2000 characters")
+        row.manager_comment = comment or None
+
+    row.updated_by_id = current.id
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    _ = row.user
+    _ = row.department_goal
+    _ = row.department_goal.company_goal
+    _ = row.department_goal.company_goal.created_by
+    _ = row.department_goal.created_by
+    _ = row.created_by
+    _ = row.updated_by
+    return row
 
 
 def _to_task_reminder(task: ClientTask) -> TaskReminderOut:

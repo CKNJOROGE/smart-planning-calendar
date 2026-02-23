@@ -593,3 +593,106 @@ class SalaryAdvanceRequestOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PerformanceCompanyGoalIn(BaseModel):
+    title: str
+    description: Optional[str] = None
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    status: Optional[str] = "active"
+
+
+class PerformanceCompanyGoalOut(BaseModel):
+    id: int
+    title: str
+    description: Optional[str] = None
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    status: str
+    created_by_id: int
+    created_at: datetime
+    updated_at: datetime
+    created_by: UserOut
+
+    class Config:
+        from_attributes = True
+
+
+class PerformanceDepartmentGoalIn(BaseModel):
+    company_goal_id: int
+    department: str
+    title: str
+    description: Optional[str] = None
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    status: Optional[str] = "active"
+
+
+class PerformanceDepartmentGoalOut(BaseModel):
+    id: int
+    company_goal_id: int
+    department: str
+    title: str
+    description: Optional[str] = None
+    period_start: Optional[date] = None
+    period_end: Optional[date] = None
+    status: str
+    created_by_id: int
+    created_at: datetime
+    updated_at: datetime
+    created_by: UserOut
+    company_goal: PerformanceCompanyGoalOut
+
+    class Config:
+        from_attributes = True
+
+
+class PerformanceEmployeeGoalIn(BaseModel):
+    department_goal_id: int
+    user_id: int
+    title: str
+    description: Optional[str] = None
+    progress_percent: Optional[int] = 0
+    status: Optional[str] = "active"
+    self_comment: Optional[str] = None
+    manager_comment: Optional[str] = None
+
+
+class PerformanceEmployeeGoalUpdateIn(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    progress_percent: Optional[int] = None
+    status: Optional[str] = None
+    self_comment: Optional[str] = None
+    manager_comment: Optional[str] = None
+
+
+class PerformanceEmployeeGoalOut(BaseModel):
+    id: int
+    department_goal_id: int
+    user_id: int
+    title: str
+    description: Optional[str] = None
+    progress_percent: int
+    status: str
+    self_comment: Optional[str] = None
+    manager_comment: Optional[str] = None
+    created_by_id: int
+    updated_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    user: UserOut
+    department_goal: PerformanceDepartmentGoalOut
+    created_by: UserOut
+    updated_by: Optional[UserOut] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PerformanceAssignableUserOut(BaseModel):
+    id: int
+    name: str
+    role: str
+    department: Optional[str] = None

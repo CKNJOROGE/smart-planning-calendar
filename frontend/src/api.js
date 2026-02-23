@@ -502,6 +502,49 @@ export function markAuthorityToIncurIncurred(requestId, note) {
   });
 }
 
+export function listPerformanceUsers() {
+  return request("/performance/users");
+}
+
+export function listCompanyGoals() {
+  return request("/performance/company-goals");
+}
+
+export function createCompanyGoal(payload) {
+  return request("/performance/company-goals", { method: "POST", body: payload });
+}
+
+export function updateCompanyGoal(goalId, payload) {
+  return request(`/performance/company-goals/${goalId}`, { method: "PATCH", body: payload });
+}
+
+export function listDepartmentGoals() {
+  return request("/performance/department-goals");
+}
+
+export function createDepartmentGoal(payload) {
+  return request("/performance/department-goals", { method: "POST", body: payload });
+}
+
+export function updateDepartmentGoal(goalId, payload) {
+  return request(`/performance/department-goals/${goalId}`, { method: "PATCH", body: payload });
+}
+
+export function listEmployeeGoals(filters = {}) {
+  const qs = new URLSearchParams();
+  if (filters.user_id) qs.set("user_id", String(filters.user_id));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/performance/employee-goals${suffix}`);
+}
+
+export function createEmployeeGoal(payload) {
+  return request("/performance/employee-goals", { method: "POST", body: payload });
+}
+
+export function updateEmployeeGoal(goalId, payload) {
+  return request(`/performance/employee-goals/${goalId}`, { method: "PATCH", body: payload });
+}
+
 export function submitSalaryAdvanceRequest(payload) {
   return request("/finance/salary-advances", { method: "POST", body: payload });
 }
