@@ -439,13 +439,17 @@ export default function CalendarPage() {
       requireTwoStep: leaveLike && !!apiEvent?.require_two_step_leave_approval,
       firstApproverId: leaveLike ? (apiEvent?.first_approver_id ?? null) : null,
       secondApproverId: leaveLike ? (apiEvent?.second_approver_id ?? null) : null,
+      firstApproverName: leaveLike ? (apiEvent?.first_approver_name ?? "") : "",
+      secondApproverName: leaveLike ? (apiEvent?.second_approver_name ?? "") : "",
     });
   }
 
-  function approverLabel(id) {
+  function approverLabel(id, name) {
+    if (name && String(name).trim()) return String(name).trim();
     if (!id) return "Unassigned";
     const found = users.find((u) => u.id === id);
-    return found ? `${found.name} (ID ${found.id})` : `User #${id}`;
+    if (found?.name) return found.name;
+    return "Assigned approver";
   }
 
   function clientNameById(id) {
@@ -1019,14 +1023,14 @@ export default function CalendarPage() {
                 <div className="calendar-popup-approval-title">Two-step approval</div>
                 <div className="calendar-popup-approval-item">
                   <div className="calendar-popup-approval-label">1st approver</div>
-                  <div className="calendar-popup-approval-value">{approverLabel(popupApprovalConfig.firstApproverId)}</div>
+                  <div className="calendar-popup-approval-value">{approverLabel(popupApprovalConfig.firstApproverId, popupApprovalConfig.firstApproverName)}</div>
                   <span className={`calendar-mini-status ${popup.apiEvent.first_approved_by_id ? "approved" : "pending"}`}>
                     {popup.apiEvent.first_approved_by_id ? "Approved" : "Pending"}
                   </span>
                 </div>
                 <div className="calendar-popup-approval-item">
                   <div className="calendar-popup-approval-label">2nd approver</div>
-                  <div className="calendar-popup-approval-value">{approverLabel(popupApprovalConfig.secondApproverId)}</div>
+                  <div className="calendar-popup-approval-value">{approverLabel(popupApprovalConfig.secondApproverId, popupApprovalConfig.secondApproverName)}</div>
                   <span className={`calendar-mini-status ${popup.apiEvent.second_approved_by_id ? "approved" : "pending"}`}>
                     {popup.apiEvent.second_approved_by_id ? "Approved" : "Pending"}
                   </span>

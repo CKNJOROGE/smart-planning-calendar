@@ -417,10 +417,15 @@ def _attach_leave_review_metadata(
     current: User,
     owner: Optional[User] = None,
 ) -> None:
+    first_approver_name = None
+    second_approver_name = None
+
     if not _is_leave_like_event(e):
         setattr(e, "require_two_step_leave_approval", False)
         setattr(e, "first_approver_id", None)
         setattr(e, "second_approver_id", None)
+        setattr(e, "first_approver_name", None)
+        setattr(e, "second_approver_name", None)
         setattr(e, "can_current_user_approve", False)
         setattr(e, "can_current_user_reject", False)
         return
@@ -430,6 +435,8 @@ def _attach_leave_review_metadata(
         setattr(e, "require_two_step_leave_approval", False)
         setattr(e, "first_approver_id", None)
         setattr(e, "second_approver_id", None)
+        setattr(e, "first_approver_name", None)
+        setattr(e, "second_approver_name", None)
         setattr(e, "can_current_user_approve", False)
         setattr(e, "can_current_user_reject", False)
         return
@@ -437,6 +444,14 @@ def _attach_leave_review_metadata(
     setattr(e, "require_two_step_leave_approval", bool(owner_obj.require_two_step_leave_approval))
     setattr(e, "first_approver_id", owner_obj.first_approver_id)
     setattr(e, "second_approver_id", owner_obj.second_approver_id)
+    if owner_obj.first_approver_id is not None:
+        first = db.query(User).filter(User.id == owner_obj.first_approver_id).first()
+        first_approver_name = first.name if first else None
+    if owner_obj.second_approver_id is not None:
+        second = db.query(User).filter(User.id == owner_obj.second_approver_id).first()
+        second_approver_name = second.name if second else None
+    setattr(e, "first_approver_name", first_approver_name)
+    setattr(e, "second_approver_name", second_approver_name)
 
     can_approve, can_reject = _compute_leave_review_permissions(db, current, e, owner_obj)
     setattr(e, "can_current_user_approve", can_approve)

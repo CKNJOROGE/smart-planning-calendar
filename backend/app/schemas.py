@@ -188,6 +188,8 @@ class EventOut(BaseModel):
     require_two_step_leave_approval: bool = False
     first_approver_id: Optional[int] = None
     second_approver_id: Optional[int] = None
+    first_approver_name: Optional[str] = None
+    second_approver_name: Optional[str] = None
     can_current_user_approve: bool = False
     can_current_user_reject: bool = False
     user: UserOut
