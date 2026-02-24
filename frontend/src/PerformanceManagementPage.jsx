@@ -342,58 +342,66 @@ export default function PerformanceManagementPage() {
           <div className="muted" style={{ marginBottom: 8 }}>You can view department goals, but only supervisors/admin/ceo can create or edit them.</div>
         )}
 
-        {(departmentPerspectiveGroups.departments || []).map((dept) => (
-          <div
-            key={`department_block_${dept}`}
-            style={{
-              marginTop: 14,
-              border: "1px solid #e5e7eb",
-              borderRadius: 10,
-              padding: 12,
-              background: "#fbfcfe",
-            }}
-          >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(520px, 1fr))",
+            gap: 12,
+            marginTop: 12,
+          }}
+        >
+          {(departmentPerspectiveGroups.departments || []).map((dept) => (
             <div
+              key={`department_block_${dept}`}
               style={{
-                fontWeight: 900,
-                marginBottom: 8,
-                paddingBottom: 6,
-                borderBottom: "1px solid #e5e7eb",
+                border: "1px solid #e5e7eb",
+                borderRadius: 10,
+                padding: 12,
+                background: "#fbfcfe",
               }}
             >
-              {dept}
-            </div>
-            {PERSPECTIVE_OPTIONS.map((p) => (
-              <div key={`department_${dept}_${p.value}`} style={{ marginTop: 8 }}>
-                <div style={{ fontWeight: 800, marginBottom: 4 }}>{p.label}</div>
-                <div style={{ width: "100%", overflowX: "auto" }}>
-                  <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ background: "#f8fafc" }}>
-                        <th style={{ textAlign: "left", padding: 10 }}>Department Goal</th>
-                        <th style={{ textAlign: "left", padding: 10 }}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).map((g) => (
-                        <tr key={`dg_${g.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
-                          <td style={{ padding: 10 }}>
-                            <div style={{ fontWeight: 700 }}>{g.title}</div>
-                            {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
-                          </td>
-                          <td style={{ padding: 10 }}>{canManageDepartment ? <button className="btn" type="button" onClick={() => editDepartment(g)}>Edit</button> : "-"}</td>
-                        </tr>
-                      ))}
-                      {!(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).length && (
-                        <tr><td colSpan={2} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+              <div
+                style={{
+                  fontWeight: 900,
+                  marginBottom: 8,
+                  paddingBottom: 6,
+                  borderBottom: "1px solid #e5e7eb",
+                }}
+              >
+                {dept}
               </div>
-            ))}
-          </div>
-        ))}
+              {PERSPECTIVE_OPTIONS.map((p) => (
+                <div key={`department_${dept}_${p.value}`} style={{ marginTop: 8 }}>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>{p.label}</div>
+                  <div style={{ width: "100%", overflowX: "auto" }}>
+                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc" }}>
+                          <th style={{ textAlign: "left", padding: 10 }}>Department Goal</th>
+                          <th style={{ textAlign: "left", padding: 10 }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).map((g) => (
+                          <tr key={`dg_${g.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                            <td style={{ padding: 10 }}>
+                              <div style={{ fontWeight: 700 }}>{g.title}</div>
+                              {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
+                            </td>
+                            <td style={{ padding: 10 }}>{canManageDepartment ? <button className="btn" type="button" onClick={() => editDepartment(g)}>Edit</button> : "-"}</td>
+                          </tr>
+                        ))}
+                        {!(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).length && (
+                          <tr><td colSpan={2} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
         {!departmentPerspectiveGroups.departments.length && (
           <div className="muted" style={{ marginTop: 10 }}>No department goals yet.</div>
         )}
