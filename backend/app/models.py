@@ -336,6 +336,7 @@ class PerformanceCompanyGoal(Base):
     __tablename__ = "performance_company_goals"
 
     id = Column(Integer, primary_key=True)
+    perspective = Column(String(40), nullable=False, index=True, default="financial")
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     period_start = Column(Date, nullable=True, index=True)
@@ -354,6 +355,7 @@ class PerformanceDepartmentGoal(Base):
     id = Column(Integer, primary_key=True)
     company_goal_id = Column(Integer, ForeignKey("performance_company_goals.id"), nullable=False, index=True)
     department = Column(String(120), nullable=False, index=True)
+    perspective = Column(String(40), nullable=False, index=True, default="financial")
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     period_start = Column(Date, nullable=True, index=True)

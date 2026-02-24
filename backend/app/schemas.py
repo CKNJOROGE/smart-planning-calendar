@@ -596,6 +596,7 @@ class SalaryAdvanceRequestOut(BaseModel):
 
 
 class PerformanceCompanyGoalIn(BaseModel):
+    perspective: str = "financial"
     title: str
     description: Optional[str] = None
     period_start: Optional[date] = None
@@ -605,6 +606,7 @@ class PerformanceCompanyGoalIn(BaseModel):
 
 class PerformanceCompanyGoalOut(BaseModel):
     id: int
+    perspective: str
     title: str
     description: Optional[str] = None
     period_start: Optional[date] = None
@@ -622,6 +624,7 @@ class PerformanceCompanyGoalOut(BaseModel):
 class PerformanceDepartmentGoalIn(BaseModel):
     company_goal_id: int
     department: str
+    perspective: str = "financial"
     title: str
     description: Optional[str] = None
     period_start: Optional[date] = None
@@ -633,6 +636,7 @@ class PerformanceDepartmentGoalOut(BaseModel):
     id: int
     company_goal_id: int
     department: str
+    perspective: str
     title: str
     description: Optional[str] = None
     period_start: Optional[date] = None
