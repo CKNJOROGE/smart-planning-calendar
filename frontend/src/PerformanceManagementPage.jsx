@@ -334,8 +334,26 @@ export default function PerformanceManagementPage() {
         )}
 
         {(departmentPerspectiveGroups.departments || []).map((dept) => (
-          <div key={`department_block_${dept}`} style={{ marginTop: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 6 }}>{dept}</div>
+          <div
+            key={`department_block_${dept}`}
+            style={{
+              marginTop: 14,
+              border: "1px solid #e5e7eb",
+              borderRadius: 10,
+              padding: 12,
+              background: "#fbfcfe",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: 900,
+                marginBottom: 8,
+                paddingBottom: 6,
+                borderBottom: "1px solid #e5e7eb",
+              }}
+            >
+              {dept}
+            </div>
             {PERSPECTIVE_OPTIONS.map((p) => (
               <div key={`department_${dept}_${p.value}`} style={{ marginTop: 8 }}>
                 <div style={{ fontWeight: 800, marginBottom: 4 }}>{p.label}</div>
