@@ -67,14 +67,19 @@ export default function PerformanceManagementPage() {
     return groups;
   }, [companyGoals]);
 
-  const groupedDepartmentGoals = useMemo(() => {
-    const groups = Object.fromEntries(PERSPECTIVE_OPTIONS.map((p) => [p.value, []]));
+  const departmentPerspectiveGroups = useMemo(() => {
+    const byDepartment = {};
     for (const row of departmentGoals || []) {
-      const key = row.perspective || "financial";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(row);
+      const dept = String(row.department || "").trim() || "Unassigned";
+      if (!byDepartment[dept]) {
+        byDepartment[dept] = Object.fromEntries(PERSPECTIVE_OPTIONS.map((p) => [p.value, []]));
+      }
+      const perspective = row.perspective || "financial";
+      if (!byDepartment[dept][perspective]) byDepartment[dept][perspective] = [];
+      byDepartment[dept][perspective].push(row);
     }
-    return groups;
+    const departments = Object.keys(byDepartment).sort((a, b) => a.localeCompare(b));
+    return { byDepartment, departments };
   }, [departmentGoals]);
 
   async function loadData() {
@@ -328,37 +333,43 @@ export default function PerformanceManagementPage() {
           <div className="muted" style={{ marginBottom: 8 }}>You can view department goals, but only supervisors/admin/ceo can create or edit them.</div>
         )}
 
-        {PERSPECTIVE_OPTIONS.map((p) => (
-          <div key={`department_group_${p.value}`} style={{ marginTop: 12 }}>
-            <div style={{ fontWeight: 800, marginBottom: 6 }}>{p.label}</div>
-            <div style={{ width: "100%", overflowX: "auto" }}>
-              <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    <th style={{ textAlign: "left", padding: 10 }}>Department Goal</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Department</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(groupedDepartmentGoals[p.value] || []).map((g) => (
-                    <tr key={`dg_${g.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
-                      <td style={{ padding: 10 }}>
-                        <div style={{ fontWeight: 700 }}>{g.title}</div>
-                        {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
-                      </td>
-                      <td style={{ padding: 10 }}>{g.department}</td>
-                      <td style={{ padding: 10 }}>{canManageDepartment ? <button className="btn" type="button" onClick={() => editDepartment(g)}>Edit</button> : "-"}</td>
-                    </tr>
-                  ))}
-                  {!(groupedDepartmentGoals[p.value] || []).length && (
-                    <tr><td colSpan={3} style={{ padding: 12 }} className="muted">No department goals under this perspective yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+        {(departmentPerspectiveGroups.departments || []).map((dept) => (
+          <div key={`department_block_${dept}`} style={{ marginTop: 12 }}>
+            <div style={{ fontWeight: 900, marginBottom: 6 }}>{dept}</div>
+            {PERSPECTIVE_OPTIONS.map((p) => (
+              <div key={`department_${dept}_${p.value}`} style={{ marginTop: 8 }}>
+                <div style={{ fontWeight: 800, marginBottom: 4 }}>{p.label}</div>
+                <div style={{ width: "100%", overflowX: "auto" }}>
+                  <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ background: "#f8fafc" }}>
+                        <th style={{ textAlign: "left", padding: 10 }}>Department Goal</th>
+                        <th style={{ textAlign: "left", padding: 10 }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).map((g) => (
+                        <tr key={`dg_${g.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                          <td style={{ padding: 10 }}>
+                            <div style={{ fontWeight: 700 }}>{g.title}</div>
+                            {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
+                          </td>
+                          <td style={{ padding: 10 }}>{canManageDepartment ? <button className="btn" type="button" onClick={() => editDepartment(g)}>Edit</button> : "-"}</td>
+                        </tr>
+                      ))}
+                      {!(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).length && (
+                        <tr><td colSpan={2} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
           </div>
         ))}
+        {!departmentPerspectiveGroups.departments.length && (
+          <div className="muted" style={{ marginTop: 10 }}>No department goals yet.</div>
+        )}
       </div>
 
       {busy && <div className="muted" style={{ marginTop: 10 }}>Loading...</div>}
