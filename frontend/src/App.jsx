@@ -11,6 +11,7 @@ import ClientTaskManagerPage from "./ClientTaskManagerPage";
 import DashboardPage from "./DashboardPage";
 import FinanceRequestsPage from "./FinanceRequestsPage";
 import PerformanceManagementPage from "./PerformanceManagementPage";
+import IndividualGoalsPage from "./IndividualGoalsPage";
 import { getToken, clearToken } from "./api";
 import { me } from "./api";
 import { ToastProvider } from "./ToastProvider";
@@ -114,6 +115,7 @@ function Shell({ onLogout }) {
             <Route path="/client-task-manager" element={<ClientTaskManagerPage />} />
             <Route path="/finance-requests" element={<FinanceRequestsPage />} />
             <Route path="/performance-management" element={<PerformanceManagementPage />} />
+            <Route path="/performance-management/individual-goals" element={<IndividualGoalsPage />} />
 
             {/* Admin only pages: UI hides, backend enforces */}
             <Route path="/users" element={<UsersPage />} />

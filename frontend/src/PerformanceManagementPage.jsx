@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   me,
   listDepartments,
@@ -24,6 +25,7 @@ function trimOrNull(v) {
 }
 
 export default function PerformanceManagementPage() {
+  const navigate = useNavigate();
   const { showToast } = useToast();
   const [current, setCurrent] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -366,9 +368,23 @@ export default function PerformanceManagementPage() {
                   marginBottom: 8,
                   paddingBottom: 6,
                   borderBottom: "1px solid #e5e7eb",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                 }}
               >
-                {dept}
+                <span>{dept}</span>
+                {String(current?.department || "").trim().toLowerCase() === String(dept || "").trim().toLowerCase() && (
+                  <button
+                    className="btn"
+                    type="button"
+                    title="Go to individual goals"
+                    onClick={() => navigate("/performance-management/individual-goals")}
+                    style={{ padding: "2px 10px", lineHeight: 1.1 }}
+                  >
+                    →
+                  </button>
+                )}
               </div>
               {PERSPECTIVE_OPTIONS.map((p) => (
                 <div key={`department_${dept}_${p.value}`} style={{ marginTop: 8 }}>

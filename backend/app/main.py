@@ -2761,20 +2761,7 @@ def list_department_goals(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    role = (current.role or "").strip().lower()
     q = db.query(PerformanceDepartmentGoal)
-    if role == "employee":
-        dept = (current.department or "").strip()
-        if dept:
-            q = q.filter(PerformanceDepartmentGoal.department == dept)
-        else:
-            q = q.filter(PerformanceDepartmentGoal.id == -1)
-    elif role == "supervisor":
-        dept = (current.department or "").strip()
-        if dept:
-            q = q.filter(PerformanceDepartmentGoal.department == dept)
-        else:
-            q = q.filter(PerformanceDepartmentGoal.id == -1)
 
     rows = q.order_by(
         PerformanceDepartmentGoal.perspective.asc(),
