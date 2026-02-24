@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
-import { me, listUsers, adminGetUserProfile, adminUpdateUserProfile, adminUploadUserDocument, adminGetUserLeaveBalance, openProtectedFile } from "./api";
+import { me, listUsers, listDepartments, adminGetUserProfile, adminUpdateUserProfile, adminUploadUserDocument, adminGetUserLeaveBalance, openProtectedFile } from "./api";
 import { useToast } from "./ToastProvider";
 
 const PROFILE_DOCUMENTS = [
@@ -23,6 +23,7 @@ export default function UserProfilePage() {
   const [uploadingDocs, setUploadingDocs] = useState({});
   const [adminUsers, setAdminUsers] = useState([]);
   const [supervisorUsers, setSupervisorUsers] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -37,9 +38,10 @@ export default function UserProfilePage() {
       setProfile(p);
       const lb = await adminGetUserLeaveBalance(userId);
       setLeaveBalance(lb);
-      const allUsers = await listUsers();
+      const [allUsers, deptRows] = await Promise.all([listUsers(), listDepartments()]);
       setAdminUsers(allUsers.filter((x) => x.role === "admin" || x.role === "ceo"));
       setSupervisorUsers(allUsers.filter((x) => x.role === "supervisor"));
+      setDepartments(deptRows || []);
     })().catch((e) => setErr(String(e.message || e)));
   }, [userId]);
 
@@ -163,11 +165,18 @@ export default function UserProfilePage() {
               value={profile.phone || ""}
               onChange={(v) => setProfile((p) => ({ ...p, phone: v }))}
             />
-            <Field
-              label="Department"
-              value={profile.department || ""}
-              onChange={(v) => setProfile((p) => ({ ...p, department: v }))}
-            />
+            <div className="field">
+              <label>Department</label>
+              <select
+                value={profile.department || ""}
+                onChange={(e) => setProfile((p) => ({ ...p, department: e.target.value || null }))}
+              >
+                <option value="">Unassigned</option>
+                {departments.map((d) => (
+                  <option key={`dept_profile_${d.id}`} value={d.name}>{d.name}</option>
+                ))}
+              </select>
+            </div>
             <Field
               label="Designation"
               value={profile.designation || ""}

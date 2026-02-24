@@ -251,6 +251,20 @@ class LibraryCategoryOut(BaseModel):
         from_attributes = True
 
 
+class DepartmentCreate(BaseModel):
+    name: str
+
+
+class DepartmentOut(BaseModel):
+    id: int
+    name: str
+    created_by_id: Optional[int] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # -------------------------
 # Client Task Manager
 # -------------------------
@@ -622,7 +636,7 @@ class PerformanceCompanyGoalOut(BaseModel):
 
 
 class PerformanceDepartmentGoalIn(BaseModel):
-    company_goal_id: int
+    company_goal_id: Optional[int] = None
     department: str
     perspective: str = "financial"
     title: str
@@ -634,7 +648,7 @@ class PerformanceDepartmentGoalIn(BaseModel):
 
 class PerformanceDepartmentGoalOut(BaseModel):
     id: int
-    company_goal_id: int
+    company_goal_id: Optional[int] = None
     department: str
     perspective: str
     title: str
@@ -646,7 +660,7 @@ class PerformanceDepartmentGoalOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     created_by: UserOut
-    company_goal: PerformanceCompanyGoalOut
+    company_goal: Optional[PerformanceCompanyGoalOut] = None
 
     class Config:
         from_attributes = True

@@ -116,6 +116,17 @@ class LibraryCategory(Base):
     created_by = relationship("User", foreign_keys=[created_by_id])
 
 
+class Department(Base):
+    __tablename__ = "departments"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=False, unique=True, index=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+
+
 class ClientAccount(Base):
     __tablename__ = "client_accounts"
 
@@ -353,7 +364,7 @@ class PerformanceDepartmentGoal(Base):
     __tablename__ = "performance_department_goals"
 
     id = Column(Integer, primary_key=True)
-    company_goal_id = Column(Integer, ForeignKey("performance_company_goals.id"), nullable=False, index=True)
+    company_goal_id = Column(Integer, ForeignKey("performance_company_goals.id"), nullable=True, index=True)
     department = Column(String(120), nullable=False, index=True)
     perspective = Column(String(40), nullable=False, index=True, default="financial")
     title = Column(String(255), nullable=False)

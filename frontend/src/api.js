@@ -77,6 +77,27 @@ export function listUsers() {
   return request("/users");
 }
 
+export function listDepartments() {
+  return request("/departments");
+}
+
+export function createDepartment(name) {
+  return request("/departments", { method: "POST", body: { name } });
+}
+
+export async function deleteDepartment(departmentId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/departments/${departmentId}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return res.json();
+}
+
 // filters: { type?, user_id?, department? }
 export function listEvents(startISO, endISO, filters = {}) {
   const qs = new URLSearchParams({ start: startISO, end: endISO });

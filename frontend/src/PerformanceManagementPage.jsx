@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   me,
+  listDepartments,
   listCompanyGoals,
   createCompanyGoal,
   updateCompanyGoal,
@@ -17,11 +18,6 @@ const PERSPECTIVE_OPTIONS = [
   { value: "learning_growth", label: "Learning & Growth Perspective" },
 ];
 
-function perspectiveLabel(v) {
-  const found = PERSPECTIVE_OPTIONS.find((x) => x.value === v);
-  return found ? found.label : v || "-";
-}
-
 function trimOrNull(v) {
   const s = String(v || "").trim();
   return s ? s : null;
@@ -35,6 +31,7 @@ export default function PerformanceManagementPage() {
 
   const [companyGoals, setCompanyGoals] = useState([]);
   const [departmentGoals, setDepartmentGoals] = useState([]);
+  const [departments, setDepartments] = useState([]);
 
   const [editingCompanyId, setEditingCompanyId] = useState(null);
   const [editingDepartmentId, setEditingDepartmentId] = useState(null);
@@ -48,7 +45,6 @@ export default function PerformanceManagementPage() {
     status: "active",
   });
   const [departmentForm, setDepartmentForm] = useState({
-    company_goal_id: "",
     department: "",
     perspective: "financial",
     title: "",
@@ -87,9 +83,10 @@ export default function PerformanceManagementPage() {
     try {
       const meData = await me();
       setCurrent(meData);
-      const [cGoals, dGoals] = await Promise.all([listCompanyGoals(), listDepartmentGoals()]);
+      const [cGoals, dGoals, deptRows] = await Promise.all([listCompanyGoals(), listDepartmentGoals(), listDepartments()]);
       setCompanyGoals(cGoals || []);
       setDepartmentGoals(dGoals || []);
+      setDepartments(deptRows || []);
       if ((meData.role || "").toLowerCase() === "supervisor") {
         setDepartmentForm((f) => ({ ...f, department: meData.department || "" }));
       }
@@ -159,10 +156,6 @@ export default function PerformanceManagementPage() {
   async function submitDepartmentGoal() {
     setErr("");
     if (!canManageDepartment) return;
-    if (!departmentForm.company_goal_id) {
-      setErr("Select the parent company goal first.");
-      return;
-    }
     if (!departmentForm.department.trim()) {
       setErr("Department is required.");
       return;
@@ -172,7 +165,6 @@ export default function PerformanceManagementPage() {
       return;
     }
     const payload = {
-      company_goal_id: Number(departmentForm.company_goal_id),
       department: departmentForm.department.trim(),
       perspective: departmentForm.perspective,
       title: departmentForm.title.trim(),
@@ -191,7 +183,6 @@ export default function PerformanceManagementPage() {
       }
       setEditingDepartmentId(null);
       setDepartmentForm({
-        company_goal_id: "",
         department: (current?.role || "").toLowerCase() === "supervisor" ? (current?.department || "") : "",
         perspective: "financial",
         title: "",
@@ -211,7 +202,6 @@ export default function PerformanceManagementPage() {
   function editDepartment(goal) {
     setEditingDepartmentId(goal.id);
     setDepartmentForm({
-      company_goal_id: String(goal.company_goal_id || ""),
       department: goal.department || "",
       perspective: goal.perspective || "financial",
       title: goal.title || "",
@@ -302,24 +292,18 @@ export default function PerformanceManagementPage() {
         {canManageDepartment ? (
           <>
             <div className="row">
-              <div className="field" style={{ flex: "1 1 260px" }}>
-                <label>Parent Company Goal</label>
-                <select value={departmentForm.company_goal_id} onChange={(e) => setDepartmentForm((f) => ({ ...f, company_goal_id: e.target.value }))}>
-                  <option value="">Select company goal</option>
-                  {companyGoals.map((g) => (
-                    <option key={`cg_parent_${g.id}`} value={g.id}>
-                      [{perspectiveLabel(g.perspective)}] {g.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
               <div className="field" style={{ flex: "1 1 220px" }}>
                 <label>Department</label>
-                <input
+                <select
                   value={departmentForm.department}
                   onChange={(e) => setDepartmentForm((f) => ({ ...f, department: e.target.value }))}
                   disabled={(current?.role || "").toLowerCase() === "supervisor"}
-                />
+                >
+                  <option value="">Select department</option>
+                  {departments.map((d) => (
+                    <option key={`dept_goal_${d.id}`} value={d.name}>{d.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="field" style={{ flex: "1 1 240px" }}>
                 <label>Perspective</label>
@@ -353,7 +337,6 @@ export default function PerformanceManagementPage() {
                   <tr style={{ background: "#f8fafc" }}>
                     <th style={{ textAlign: "left", padding: 10 }}>Department Goal</th>
                     <th style={{ textAlign: "left", padding: 10 }}>Department</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Parent Company Goal</th>
                     <th style={{ textAlign: "left", padding: 10 }}>Action</th>
                   </tr>
                 </thead>
@@ -365,12 +348,11 @@ export default function PerformanceManagementPage() {
                         {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
                       </td>
                       <td style={{ padding: 10 }}>{g.department}</td>
-                      <td style={{ padding: 10 }}>{g.company_goal?.title || `#${g.company_goal_id}`}</td>
                       <td style={{ padding: 10 }}>{canManageDepartment ? <button className="btn" type="button" onClick={() => editDepartment(g)}>Edit</button> : "-"}</td>
                     </tr>
                   ))}
                   {!(groupedDepartmentGoals[p.value] || []).length && (
-                    <tr><td colSpan={4} style={{ padding: 12 }} className="muted">No department goals under this perspective yet.</td></tr>
+                    <tr><td colSpan={3} style={{ padding: 12 }} className="muted">No department goals under this perspective yet.</td></tr>
                   )}
                 </tbody>
               </table>

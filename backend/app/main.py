@@ -21,6 +21,7 @@ from .models import (
     Event,
     CompanyDocument,
     LibraryCategory,
+    Department,
     ClientAccount,
     ClientTask,
     DailyActivity,
@@ -52,6 +53,8 @@ from .schemas import (
     CompanyDocumentOut,
     LibraryCategoryCreate,
     LibraryCategoryOut,
+    DepartmentCreate,
+    DepartmentOut,
     ClientAccountCreate,
     ClientAccountUpdate,
     ClientAccountOut,
@@ -361,6 +364,31 @@ def _is_admin_like(role: Optional[str]) -> bool:
 
 def _is_finance_reviewer(role: Optional[str]) -> bool:
     return (role or "").strip().lower() in {"finance", "admin", "ceo"}
+
+
+def _normalize_department_name(raw: Optional[str]) -> str:
+    return " ".join((raw or "").strip().split())
+
+
+def _department_name_map(db: Session) -> dict[str, str]:
+    rows = db.query(Department).order_by(Department.name.asc()).all()
+    out: dict[str, str] = {}
+    for row in rows:
+        name = _normalize_department_name(row.name)
+        if name:
+            out[name.lower()] = name
+    return out
+
+
+def _validate_department_exists(db: Session, raw_department: Optional[str]) -> Optional[str]:
+    normalized = _normalize_department_name(raw_department)
+    if not normalized:
+        return None
+    name_map = _department_name_map(db)
+    canonical = name_map.get(normalized.lower())
+    if not canonical:
+        raise HTTPException(status_code=400, detail="department must be selected from configured departments")
+    return canonical
 
 
 def _is_leave_like_event(e: Event) -> bool:
@@ -697,6 +725,60 @@ def get_me(user: User = Depends(get_current_user)):
 
 
 # -------------------------
+# Departments
+# -------------------------
+@app.get("/departments", response_model=List[DepartmentOut])
+def list_departments(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    return db.query(Department).order_by(Department.name.asc()).all()
+
+
+@app.post("/departments", response_model=DepartmentOut)
+def create_department(
+    payload: DepartmentCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    name = _normalize_department_name(payload.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="Department name is required")
+    if len(name) > 120:
+        raise HTTPException(status_code=400, detail="Department name must be <= 120 characters")
+    exists = db.query(Department).filter(Department.name.ilike(name)).first()
+    if exists:
+        raise HTTPException(status_code=400, detail="Department already exists")
+    row = Department(name=name, created_by_id=admin.id)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@app.delete("/departments/{department_id}")
+def delete_department(
+    department_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    row = db.query(Department).filter(Department.id == department_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Department not found")
+    name = _normalize_department_name(row.name)
+    users_using = db.query(User).filter(User.department.ilike(name)).count()
+    if users_using:
+        raise HTTPException(status_code=400, detail=f"Cannot delete. Department is assigned to {users_using} user(s)")
+    goals_using = db.query(PerformanceDepartmentGoal).filter(PerformanceDepartmentGoal.department.ilike(name)).count()
+    if goals_using:
+        raise HTTPException(status_code=400, detail=f"Cannot delete. Department is used by {goals_using} department goal(s)")
+
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
+# -------------------------
 # Users (admin only list/create)
 # -------------------------
 @app.get("/users", response_model=List[UserOut])
@@ -715,6 +797,8 @@ def create_user(
     if not _is_valid_role(payload.role):
         raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, finance, admin, ceo")
 
+    validated_department = _validate_department_exists(db, payload.department)
+
     u = User(
         name=payload.name,
         email=payload.email,
@@ -722,7 +806,7 @@ def create_user(
         role=payload.role.lower(),
         avatar_url=payload.avatar_url,
         phone=payload.phone,
-        department=payload.department,
+        department=validated_department,
         designation=payload.designation,
         gender=payload.gender,
         address=payload.address,
@@ -774,6 +858,8 @@ def update_user_profile(
         if not name:
             raise HTTPException(status_code=400, detail="Name cannot be empty")
         incoming["name"] = name
+    if "department" in incoming:
+        incoming["department"] = _validate_department_exists(db, incoming.get("department"))
 
     for k, v in incoming.items():
         setattr(u, k, v)
@@ -938,6 +1024,8 @@ def admin_update_user_profile(
         if not _is_valid_role(role):
             raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, finance, admin, ceo")
         incoming["role"] = role
+    if "department" in incoming:
+        incoming["department"] = _validate_department_exists(db, incoming.get("department"))
 
     for leave_num_field in ("leave_opening_accrued", "leave_opening_used"):
         if leave_num_field in incoming:
@@ -2563,7 +2651,8 @@ def list_department_goals(
     for row in rows:
         _ = row.created_by
         _ = row.company_goal
-        _ = row.company_goal.created_by
+        if row.company_goal:
+            _ = row.company_goal.created_by
     return rows
 
 
@@ -2576,10 +2665,12 @@ def create_department_goal(
     if not _is_performance_manager(current.role):
         raise HTTPException(status_code=403, detail="Only supervisors/admin/ceo can create department goals")
 
-    company_goal = db.query(PerformanceCompanyGoal).filter(PerformanceCompanyGoal.id == payload.company_goal_id).first()
-    if not company_goal:
-        raise HTTPException(status_code=404, detail="Company goal not found")
-    department = (payload.department or "").strip()
+    company_goal = None
+    if payload.company_goal_id is not None:
+        company_goal = db.query(PerformanceCompanyGoal).filter(PerformanceCompanyGoal.id == payload.company_goal_id).first()
+        if not company_goal:
+            raise HTTPException(status_code=404, detail="Company goal not found")
+    department = _validate_department_exists(db, payload.department)
     if not department:
         raise HTTPException(status_code=400, detail="department is required")
     if len(department) > 120:
@@ -2619,7 +2710,8 @@ def create_department_goal(
     db.refresh(row)
     _ = row.created_by
     _ = row.company_goal
-    _ = row.company_goal.created_by
+    if row.company_goal:
+        _ = row.company_goal.created_by
     return row
 
 
@@ -2636,11 +2728,12 @@ def update_department_goal(
     row = db.query(PerformanceDepartmentGoal).filter(PerformanceDepartmentGoal.id == goal_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Department goal not found")
-    company_goal = db.query(PerformanceCompanyGoal).filter(PerformanceCompanyGoal.id == payload.company_goal_id).first()
-    if not company_goal:
-        raise HTTPException(status_code=404, detail="Company goal not found")
+    if payload.company_goal_id is not None:
+        company_goal = db.query(PerformanceCompanyGoal).filter(PerformanceCompanyGoal.id == payload.company_goal_id).first()
+        if not company_goal:
+            raise HTTPException(status_code=404, detail="Company goal not found")
 
-    department = (payload.department or "").strip()
+    department = _validate_department_exists(db, payload.department)
     if not department:
         raise HTTPException(status_code=400, detail="department is required")
     if len(department) > 120:
@@ -2675,7 +2768,8 @@ def update_department_goal(
     db.refresh(row)
     _ = row.created_by
     _ = row.company_goal
-    _ = row.company_goal.created_by
+    if row.company_goal:
+        _ = row.company_goal.created_by
     return row
 
 

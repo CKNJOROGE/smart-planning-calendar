@@ -3,6 +3,7 @@ import {
   me,
   getUserProfile,
   updateUserProfile,
+  listDepartments,
   getLeaveBalance,
   uploadMyAvatar,
   uploadMyDocument,
@@ -24,6 +25,7 @@ export default function MyProfilePage() {
   const [meUser, setMeUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [leaveBalance, setLeaveBalance] = useState(null);
+  const [departments, setDepartments] = useState([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingDocs, setUploadingDocs] = useState({});
@@ -39,6 +41,8 @@ export default function MyProfilePage() {
       setProfile(p);
       const bal = await getLeaveBalance();
       setLeaveBalance(bal);
+      const deptRows = await listDepartments();
+      setDepartments(deptRows || []);
     })().catch((e) => setErr(String(e.message || e)));
   }, []);
 
@@ -158,11 +162,18 @@ export default function MyProfilePage() {
               value={profile.phone || ""}
               onChange={(v) => setProfile((p) => ({ ...p, phone: v }))}
             />
-            <Field
-              label="Department"
-              value={profile.department || ""}
-              onChange={(v) => setProfile((p) => ({ ...p, department: v }))}
-            />
+            <div className="field">
+              <label>Department</label>
+              <select
+                value={profile.department || ""}
+                onChange={(e) => setProfile((p) => ({ ...p, department: e.target.value || null }))}
+              >
+                <option value="">Unassigned</option>
+                {departments.map((d) => (
+                  <option key={`dept_me_${d.id}`} value={d.name}>{d.name}</option>
+                ))}
+              </select>
+            </div>
             <Field
               label="Designation"
               value={profile.designation || ""}

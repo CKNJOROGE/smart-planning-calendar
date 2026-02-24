@@ -1,13 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { listUsers, createUser, deleteUser, me } from "./api";
+import { listUsers, createUser, deleteUser, listDepartments, createDepartment, deleteDepartment, me } from "./api";
 import { Link } from "react-router-dom";
 import Avatar from "./Avatar";
 
 export default function UsersPage() {
   const [current, setCurrent] = useState(null);
   const [users, setUsers] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [departmentName, setDepartmentName] = useState("");
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -26,8 +28,9 @@ export default function UsersPage() {
     try {
       const u = await me();
       setCurrent(u);
-      const data = await listUsers();
+      const [data, deptData] = await Promise.all([listUsers(), listDepartments()]);
       setUsers(data);
+      setDepartments(deptData || []);
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
@@ -79,6 +82,40 @@ export default function UsersPage() {
     );
   }
 
+  async function handleCreateDepartment(e) {
+    e.preventDefault();
+    setErr("");
+    const name = (departmentName || "").trim();
+    if (!name) {
+      setErr("Department name is required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await createDepartment(name);
+      setDepartmentName("");
+      await load();
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteDepartment(row) {
+    setErr("");
+    if (!confirm(`Delete department "${row.name}"?`)) return;
+    setBusy(true);
+    try {
+      await deleteDepartment(row.id);
+      await load();
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleDeleteUser(user) {
     setErr("");
     if (!confirm(`Delete user "${user.name}" (${user.email})?`)) return;
@@ -107,6 +144,47 @@ export default function UsersPage() {
 
   return (
     <div className="page-wrap users-page">
+      <div className="card" style={{ padding: 16, marginBottom: 14 }}>
+        <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 6 }}>Departments</div>
+        <div className="muted" style={{ marginBottom: 10 }}>
+          Configure departments used in user profiles and performance department goals.
+        </div>
+        <form onSubmit={handleCreateDepartment} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+          <input
+            value={departmentName}
+            onChange={(e) => setDepartmentName(e.target.value)}
+            placeholder="Add department"
+            style={{ minWidth: 240 }}
+          />
+          <button className="btn btn-primary" type="submit" disabled={busy}>Add Department</button>
+        </form>
+        <div style={{ width: "100%", overflowX: "auto" }}>
+          <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#f8fafc" }}>
+                <th style={{ textAlign: "left", padding: 12 }}>Name</th>
+                <th style={{ textAlign: "left", padding: 12 }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(departments || []).map((d) => (
+                <tr key={`dept_${d.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                  <td style={{ padding: 12 }}>{d.name}</td>
+                  <td style={{ padding: 12 }}>
+                    <button className="btn btn-danger" type="button" onClick={() => handleDeleteDepartment(d)} disabled={busy}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!departments.length && (
+                <tr><td colSpan={2} style={{ padding: 16 }} className="muted">No departments configured yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div className="card" style={{ padding: 16, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
           <div>
