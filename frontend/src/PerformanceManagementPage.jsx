@@ -10,17 +10,12 @@ import {
 } from "./api";
 import { useToast } from "./ToastProvider";
 
-const STATUS_OPTIONS = ["active", "on_track", "at_risk", "completed", "paused", "cancelled"];
 const PERSPECTIVE_OPTIONS = [
   { value: "financial", label: "Financial Perspective" },
   { value: "client", label: "Client Perspective" },
   { value: "internal_process", label: "Internal Process Perspective" },
   { value: "learning_growth", label: "Learning & Growth Perspective" },
 ];
-
-function statusLabel(v) {
-  return String(v || "").replaceAll("_", " ");
-}
 
 function perspectiveLabel(v) {
   const found = PERSPECTIVE_OPTIONS.find((x) => x.value === v);
@@ -261,22 +256,6 @@ export default function PerformanceManagementPage() {
               <label>Description</label>
               <textarea value={companyForm.description} onChange={(e) => setCompanyForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
-            <div className="row">
-              <div className="field" style={{ flex: "1 1 180px" }}>
-                <label>Start Date</label>
-                <input type="date" value={companyForm.period_start} onChange={(e) => setCompanyForm((f) => ({ ...f, period_start: e.target.value }))} />
-              </div>
-              <div className="field" style={{ flex: "1 1 180px" }}>
-                <label>End Date</label>
-                <input type="date" value={companyForm.period_end} onChange={(e) => setCompanyForm((f) => ({ ...f, period_end: e.target.value }))} />
-              </div>
-              <div className="field" style={{ flex: "1 1 180px" }}>
-                <label>Status</label>
-                <select value={companyForm.status} onChange={(e) => setCompanyForm((f) => ({ ...f, status: e.target.value }))}>
-                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-                </select>
-              </div>
-            </div>
             <button className="btn btn-primary" type="button" onClick={submitCompanyGoal}>
               {editingCompanyId ? "Update Company Goal" : "Add Company Goal"}
             </button>
@@ -293,8 +272,6 @@ export default function PerformanceManagementPage() {
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
                     <th style={{ textAlign: "left", padding: 10 }}>Goal</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Period</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Status</th>
                     <th style={{ textAlign: "left", padding: 10 }}>Owner</th>
                     <th style={{ textAlign: "left", padding: 10 }}>Action</th>
                   </tr>
@@ -306,14 +283,12 @@ export default function PerformanceManagementPage() {
                         <div style={{ fontWeight: 700 }}>{g.title}</div>
                         {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
                       </td>
-                      <td style={{ padding: 10 }}>{g.period_start || "-"} to {g.period_end || "-"}</td>
-                      <td style={{ padding: 10 }}>{statusLabel(g.status)}</td>
                       <td style={{ padding: 10 }}>{g.created_by?.name || "-"}</td>
                       <td style={{ padding: 10 }}>{canManageCompany ? <button className="btn" type="button" onClick={() => editCompany(g)}>Edit</button> : "-"}</td>
                     </tr>
                   ))}
                   {!(groupedCompanyGoals[p.value] || []).length && (
-                    <tr><td colSpan={5} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
+                    <tr><td colSpan={3} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -361,22 +336,6 @@ export default function PerformanceManagementPage() {
               <label>Description</label>
               <textarea value={departmentForm.description} onChange={(e) => setDepartmentForm((f) => ({ ...f, description: e.target.value }))} />
             </div>
-            <div className="row">
-              <div className="field" style={{ flex: "1 1 180px" }}>
-                <label>Start Date</label>
-                <input type="date" value={departmentForm.period_start} onChange={(e) => setDepartmentForm((f) => ({ ...f, period_start: e.target.value }))} />
-              </div>
-              <div className="field" style={{ flex: "1 1 180px" }}>
-                <label>End Date</label>
-                <input type="date" value={departmentForm.period_end} onChange={(e) => setDepartmentForm((f) => ({ ...f, period_end: e.target.value }))} />
-              </div>
-              <div className="field" style={{ flex: "1 1 180px" }}>
-                <label>Status</label>
-                <select value={departmentForm.status} onChange={(e) => setDepartmentForm((f) => ({ ...f, status: e.target.value }))}>
-                  {STATUS_OPTIONS.map((s) => <option key={`ds_${s}`} value={s}>{statusLabel(s)}</option>)}
-                </select>
-              </div>
-            </div>
             <button className="btn btn-primary" type="button" onClick={submitDepartmentGoal}>
               {editingDepartmentId ? "Update Department Goal" : "Add Department Goal"}
             </button>
@@ -395,7 +354,6 @@ export default function PerformanceManagementPage() {
                     <th style={{ textAlign: "left", padding: 10 }}>Department Goal</th>
                     <th style={{ textAlign: "left", padding: 10 }}>Department</th>
                     <th style={{ textAlign: "left", padding: 10 }}>Parent Company Goal</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Status</th>
                     <th style={{ textAlign: "left", padding: 10 }}>Action</th>
                   </tr>
                 </thead>
@@ -408,12 +366,11 @@ export default function PerformanceManagementPage() {
                       </td>
                       <td style={{ padding: 10 }}>{g.department}</td>
                       <td style={{ padding: 10 }}>{g.company_goal?.title || `#${g.company_goal_id}`}</td>
-                      <td style={{ padding: 10 }}>{statusLabel(g.status)}</td>
                       <td style={{ padding: 10 }}>{canManageDepartment ? <button className="btn" type="button" onClick={() => editDepartment(g)}>Edit</button> : "-"}</td>
                     </tr>
                   ))}
                   {!(groupedDepartmentGoals[p.value] || []).length && (
-                    <tr><td colSpan={5} style={{ padding: 12 }} className="muted">No department goals under this perspective yet.</td></tr>
+                    <tr><td colSpan={4} style={{ padding: 12 }} className="muted">No department goals under this perspective yet.</td></tr>
                   )}
                 </tbody>
               </table>
