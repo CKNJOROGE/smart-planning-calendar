@@ -127,6 +127,22 @@ class Department(Base):
     created_by = relationship("User", foreign_keys=[created_by_id])
 
 
+class Designation(Base):
+    __tablename__ = "designations"
+    __table_args__ = (
+        UniqueConstraint("department_id", "name", name="uq_designations_department_name"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    department = relationship("Department", foreign_keys=[department_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])
+
+
 class ClientAccount(Base):
     __tablename__ = "client_accounts"
 

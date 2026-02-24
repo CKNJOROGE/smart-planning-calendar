@@ -98,6 +98,30 @@ export async function deleteDepartment(departmentId) {
   return res.json();
 }
 
+export function listDesignations(departmentId = null) {
+  const qs = new URLSearchParams();
+  if (departmentId != null) qs.set("department_id", String(departmentId));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/designations${suffix}`);
+}
+
+export function createDesignation(payload) {
+  return request("/designations", { method: "POST", body: payload });
+}
+
+export async function deleteDesignation(designationId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/designations/${designationId}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  }
+  return res.json();
+}
+
 // filters: { type?, user_id?, department? }
 export function listEvents(startISO, endISO, filters = {}) {
   const qs = new URLSearchParams({ start: startISO, end: endISO });

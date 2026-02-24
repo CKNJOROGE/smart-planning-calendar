@@ -22,6 +22,7 @@ from .models import (
     CompanyDocument,
     LibraryCategory,
     Department,
+    Designation,
     ClientAccount,
     ClientTask,
     DailyActivity,
@@ -55,6 +56,8 @@ from .schemas import (
     LibraryCategoryOut,
     DepartmentCreate,
     DepartmentOut,
+    DesignationCreate,
+    DesignationOut,
     ClientAccountCreate,
     ClientAccountUpdate,
     ClientAccountOut,
@@ -370,6 +373,21 @@ def _normalize_department_name(raw: Optional[str]) -> str:
     return " ".join((raw or "").strip().split())
 
 
+def _normalize_designation_name(raw: Optional[str]) -> str:
+    return " ".join((raw or "").strip().split())
+
+
+def _get_department_by_name(db: Session, raw_department: Optional[str]) -> Optional[Department]:
+    normalized = _normalize_department_name(raw_department)
+    if not normalized:
+        return None
+    rows = db.query(Department).all()
+    for row in rows:
+        if _normalize_department_name(row.name).lower() == normalized.lower():
+            return row
+    return None
+
+
 def _department_name_map(db: Session) -> dict[str, str]:
     rows = db.query(Department).order_by(Department.name.asc()).all()
     out: dict[str, str] = {}
@@ -389,6 +407,28 @@ def _validate_department_exists(db: Session, raw_department: Optional[str]) -> O
     if not canonical:
         raise HTTPException(status_code=400, detail="department must be selected from configured departments")
     return canonical
+
+
+def _validate_designation_exists_for_department(
+    db: Session,
+    department_name: Optional[str],
+    raw_designation: Optional[str],
+) -> Optional[str]:
+    designation = _normalize_designation_name(raw_designation)
+    if not designation:
+        return None
+    department = _normalize_department_name(department_name)
+    if not department:
+        raise HTTPException(status_code=400, detail="designation requires a selected department")
+    dept_row = _get_department_by_name(db, department)
+    if not dept_row:
+        raise HTTPException(status_code=400, detail="department must be selected from configured departments")
+
+    rows = db.query(Designation).filter(Designation.department_id == dept_row.id).all()
+    for row in rows:
+        if _normalize_designation_name(row.name).lower() == designation.lower():
+            return _normalize_designation_name(row.name)
+    raise HTTPException(status_code=400, detail="designation must be selected from configured designations for the department")
 
 
 def _is_leave_like_event(e: Event) -> bool:
@@ -772,7 +812,75 @@ def delete_department(
     goals_using = db.query(PerformanceDepartmentGoal).filter(PerformanceDepartmentGoal.department.ilike(name)).count()
     if goals_using:
         raise HTTPException(status_code=400, detail=f"Cannot delete. Department is used by {goals_using} department goal(s)")
+    designations_using = db.query(Designation).filter(Designation.department_id == row.id).count()
+    if designations_using:
+        raise HTTPException(status_code=400, detail=f"Cannot delete. Delete {designations_using} designation(s) first")
 
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/designations", response_model=List[DesignationOut])
+def list_designations(
+    department_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    q = db.query(Designation)
+    if department_id is not None:
+        q = q.filter(Designation.department_id == department_id)
+    rows = q.order_by(Designation.department_id.asc(), Designation.name.asc()).all()
+    for row in rows:
+        _ = row.department
+    return rows
+
+
+@app.post("/designations", response_model=DesignationOut)
+def create_designation(
+    payload: DesignationCreate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    department = db.query(Department).filter(Department.id == payload.department_id).first()
+    if not department:
+        raise HTTPException(status_code=404, detail="Department not found")
+    name = _normalize_designation_name(payload.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="Designation name is required")
+    if len(name) > 120:
+        raise HTTPException(status_code=400, detail="Designation name must be <= 120 characters")
+    existing = db.query(Designation).filter(Designation.department_id == department.id).all()
+    if any(_normalize_designation_name(x.name).lower() == name.lower() for x in existing):
+        raise HTTPException(status_code=400, detail="Designation already exists in this department")
+
+    row = Designation(department_id=department.id, name=name, created_by_id=admin.id)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    _ = row.department
+    return row
+
+
+@app.delete("/designations/{designation_id}")
+def delete_designation(
+    designation_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    row = db.query(Designation).filter(Designation.id == designation_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Designation not found")
+    dept = row.department
+    dept_name = _normalize_department_name(dept.name if dept else "")
+    desig_name = _normalize_designation_name(row.name)
+    users_using = (
+        db.query(User)
+        .filter(User.department.ilike(dept_name), User.designation.ilike(desig_name))
+        .count()
+    )
+    if users_using:
+        raise HTTPException(status_code=400, detail=f"Cannot delete. Designation is assigned to {users_using} user(s)")
     db.delete(row)
     db.commit()
     return {"ok": True}
@@ -798,6 +906,7 @@ def create_user(
         raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, finance, admin, ceo")
 
     validated_department = _validate_department_exists(db, payload.department)
+    validated_designation = _validate_designation_exists_for_department(db, validated_department, payload.designation)
 
     u = User(
         name=payload.name,
@@ -807,7 +916,7 @@ def create_user(
         avatar_url=payload.avatar_url,
         phone=payload.phone,
         department=validated_department,
-        designation=payload.designation,
+        designation=validated_designation,
         gender=payload.gender,
         address=payload.address,
         hire_date=payload.hire_date or date.today(),
@@ -860,6 +969,18 @@ def update_user_profile(
         incoming["name"] = name
     if "department" in incoming:
         incoming["department"] = _validate_department_exists(db, incoming.get("department"))
+    if "designation" in incoming or "department" in incoming:
+        effective_department = incoming.get("department", u.department)
+        if "department" in incoming and "designation" not in incoming:
+            incoming["designation"] = None
+        effective_designation = incoming.get("designation", u.designation)
+        if "designation" in incoming and incoming.get("designation") is not None:
+            incoming["designation"] = _normalize_designation_name(incoming.get("designation"))
+        incoming["designation"] = _validate_designation_exists_for_department(
+            db,
+            effective_department,
+            incoming.get("designation", effective_designation),
+        )
 
     for k, v in incoming.items():
         setattr(u, k, v)
@@ -1026,6 +1147,18 @@ def admin_update_user_profile(
         incoming["role"] = role
     if "department" in incoming:
         incoming["department"] = _validate_department_exists(db, incoming.get("department"))
+    if "designation" in incoming or "department" in incoming:
+        effective_department = incoming.get("department", u.department)
+        if "department" in incoming and "designation" not in incoming:
+            incoming["designation"] = None
+        effective_designation = incoming.get("designation", u.designation)
+        if "designation" in incoming and incoming.get("designation") is not None:
+            incoming["designation"] = _normalize_designation_name(incoming.get("designation"))
+        incoming["designation"] = _validate_designation_exists_for_department(
+            db,
+            effective_department,
+            incoming.get("designation", effective_designation),
+        )
 
     for leave_num_field in ("leave_opening_accrued", "leave_opening_used"):
         if leave_num_field in incoming:

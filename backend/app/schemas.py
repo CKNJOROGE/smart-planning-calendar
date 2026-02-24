@@ -265,6 +265,23 @@ class DepartmentOut(BaseModel):
         from_attributes = True
 
 
+class DesignationCreate(BaseModel):
+    department_id: int
+    name: str
+
+
+class DesignationOut(BaseModel):
+    id: int
+    department_id: int
+    name: str
+    created_by_id: Optional[int] = None
+    created_at: datetime
+    department: DepartmentOut
+
+    class Config:
+        from_attributes = True
+
+
 # -------------------------
 # Client Task Manager
 # -------------------------

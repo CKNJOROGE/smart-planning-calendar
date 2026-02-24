@@ -4,6 +4,7 @@ import {
   getUserProfile,
   updateUserProfile,
   listDepartments,
+  listDesignations,
   getLeaveBalance,
   uploadMyAvatar,
   uploadMyDocument,
@@ -26,6 +27,7 @@ export default function MyProfilePage() {
   const [profile, setProfile] = useState(null);
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadingDocs, setUploadingDocs] = useState({});
@@ -43,6 +45,8 @@ export default function MyProfilePage() {
       setLeaveBalance(bal);
       const deptRows = await listDepartments();
       setDepartments(deptRows || []);
+      const designationRows = await listDesignations();
+      setDesignations(designationRows || []);
     })().catch((e) => setErr(String(e.message || e)));
   }, []);
 
@@ -166,7 +170,7 @@ export default function MyProfilePage() {
               <label>Department</label>
               <select
                 value={profile.department || ""}
-                onChange={(e) => setProfile((p) => ({ ...p, department: e.target.value || null }))}
+                onChange={(e) => setProfile((p) => ({ ...p, department: e.target.value || null, designation: null }))}
               >
                 <option value="">Unassigned</option>
                 {departments.map((d) => (
@@ -174,11 +178,21 @@ export default function MyProfilePage() {
                 ))}
               </select>
             </div>
-            <Field
-              label="Designation"
-              value={profile.designation || ""}
-              onChange={(v) => setProfile((p) => ({ ...p, designation: v }))}
-            />
+            <div className="field">
+              <label>Designation</label>
+              <select
+                value={profile.designation || ""}
+                onChange={(e) => setProfile((p) => ({ ...p, designation: e.target.value || null }))}
+                disabled={!profile.department}
+              >
+                <option value="">{profile.department ? "Select designation" : "Select department first"}</option>
+                {designations
+                  .filter((x) => (x.department?.name || "").toLowerCase() === String(profile.department || "").toLowerCase())
+                  .map((x) => (
+                    <option key={`desig_me_${x.id}`} value={x.name}>{x.name}</option>
+                  ))}
+              </select>
+            </div>
             <Field
               label="Gender"
               value={profile.gender || ""}

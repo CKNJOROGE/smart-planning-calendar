@@ -1,5 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { listUsers, createUser, deleteUser, listDepartments, createDepartment, deleteDepartment, me } from "./api";
+import {
+  listUsers,
+  createUser,
+  deleteUser,
+  listDepartments,
+  createDepartment,
+  deleteDepartment,
+  listDesignations,
+  createDesignation,
+  deleteDesignation,
+  me,
+} from "./api";
 import { Link } from "react-router-dom";
 import Avatar from "./Avatar";
 
@@ -7,9 +18,11 @@ export default function UsersPage() {
   const [current, setCurrent] = useState(null);
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [departmentName, setDepartmentName] = useState("");
+  const [designationDraftByDepartment, setDesignationDraftByDepartment] = useState({});
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -28,9 +41,10 @@ export default function UsersPage() {
     try {
       const u = await me();
       setCurrent(u);
-      const [data, deptData] = await Promise.all([listUsers(), listDepartments()]);
+      const [data, deptData, designationData] = await Promise.all([listUsers(), listDepartments(), listDesignations()]);
       setUsers(data);
       setDepartments(deptData || []);
+      setDesignations(designationData || []);
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
@@ -116,6 +130,43 @@ export default function UsersPage() {
     }
   }
 
+  function designationsForDepartment(departmentId) {
+    return (designations || []).filter((d) => Number(d.department_id) === Number(departmentId));
+  }
+
+  async function handleCreateDesignation(departmentId) {
+    setErr("");
+    const name = String(designationDraftByDepartment[departmentId] || "").trim();
+    if (!name) {
+      setErr("Designation name is required.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await createDesignation({ department_id: Number(departmentId), name });
+      setDesignationDraftByDepartment((prev) => ({ ...prev, [departmentId]: "" }));
+      await load();
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteDesignation(row) {
+    setErr("");
+    if (!confirm(`Delete designation "${row.name}"?`)) return;
+    setBusy(true);
+    try {
+      await deleteDesignation(row.id);
+      await load();
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleDeleteUser(user) {
     setErr("");
     if (!confirm(`Delete user "${user.name}" (${user.email})?`)) return;
@@ -163,6 +214,7 @@ export default function UsersPage() {
             <thead>
               <tr style={{ background: "#f8fafc" }}>
                 <th style={{ textAlign: "left", padding: 12 }}>Name</th>
+                <th style={{ textAlign: "left", padding: 12 }}>Designations</th>
                 <th style={{ textAlign: "left", padding: 12 }}>Actions</th>
               </tr>
             </thead>
@@ -171,6 +223,36 @@ export default function UsersPage() {
                 <tr key={`dept_${d.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                   <td style={{ padding: 12 }}>{d.name}</td>
                   <td style={{ padding: 12 }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                      {designationsForDepartment(d.id).map((x) => (
+                        <span key={`desig_${x.id}`} className="pill" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          {x.name}
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            style={{ padding: "2px 8px", lineHeight: 1 }}
+                            onClick={() => handleDeleteDesignation(x)}
+                            disabled={busy}
+                          >
+                            x
+                          </button>
+                        </span>
+                      ))}
+                      {!designationsForDepartment(d.id).length && <span className="muted">No designations</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <input
+                        value={designationDraftByDepartment[d.id] || ""}
+                        onChange={(e) => setDesignationDraftByDepartment((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                        placeholder={`Add designation for ${d.name}`}
+                        style={{ minWidth: 220 }}
+                      />
+                      <button className="btn" type="button" onClick={() => handleCreateDesignation(d.id)} disabled={busy}>
+                        Add
+                      </button>
+                    </div>
+                  </td>
+                  <td style={{ padding: 12 }}>
                     <button className="btn btn-danger" type="button" onClick={() => handleDeleteDepartment(d)} disabled={busy}>
                       Delete
                     </button>
@@ -178,7 +260,7 @@ export default function UsersPage() {
                 </tr>
               ))}
               {!departments.length && (
-                <tr><td colSpan={2} style={{ padding: 16 }} className="muted">No departments configured yet.</td></tr>
+                <tr><td colSpan={3} style={{ padding: 16 }} className="muted">No departments configured yet.</td></tr>
               )}
             </tbody>
           </table>

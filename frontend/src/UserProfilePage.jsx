@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
-import { me, listUsers, listDepartments, adminGetUserProfile, adminUpdateUserProfile, adminUploadUserDocument, adminGetUserLeaveBalance, openProtectedFile } from "./api";
+import { me, listUsers, listDepartments, listDesignations, adminGetUserProfile, adminUpdateUserProfile, adminUploadUserDocument, adminGetUserLeaveBalance, openProtectedFile } from "./api";
 import { useToast } from "./ToastProvider";
 
 const PROFILE_DOCUMENTS = [
@@ -24,6 +24,7 @@ export default function UserProfilePage() {
   const [adminUsers, setAdminUsers] = useState([]);
   const [supervisorUsers, setSupervisorUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -38,10 +39,11 @@ export default function UserProfilePage() {
       setProfile(p);
       const lb = await adminGetUserLeaveBalance(userId);
       setLeaveBalance(lb);
-      const [allUsers, deptRows] = await Promise.all([listUsers(), listDepartments()]);
+      const [allUsers, deptRows, designationRows] = await Promise.all([listUsers(), listDepartments(), listDesignations()]);
       setAdminUsers(allUsers.filter((x) => x.role === "admin" || x.role === "ceo"));
       setSupervisorUsers(allUsers.filter((x) => x.role === "supervisor"));
       setDepartments(deptRows || []);
+      setDesignations(designationRows || []);
     })().catch((e) => setErr(String(e.message || e)));
   }, [userId]);
 
@@ -169,7 +171,7 @@ export default function UserProfilePage() {
               <label>Department</label>
               <select
                 value={profile.department || ""}
-                onChange={(e) => setProfile((p) => ({ ...p, department: e.target.value || null }))}
+                onChange={(e) => setProfile((p) => ({ ...p, department: e.target.value || null, designation: null }))}
               >
                 <option value="">Unassigned</option>
                 {departments.map((d) => (
@@ -177,11 +179,21 @@ export default function UserProfilePage() {
                 ))}
               </select>
             </div>
-            <Field
-              label="Designation"
-              value={profile.designation || ""}
-              onChange={(v) => setProfile((p) => ({ ...p, designation: v }))}
-            />
+            <div className="field">
+              <label>Designation</label>
+              <select
+                value={profile.designation || ""}
+                onChange={(e) => setProfile((p) => ({ ...p, designation: e.target.value || null }))}
+                disabled={!profile.department}
+              >
+                <option value="">{profile.department ? "Select designation" : "Select department first"}</option>
+                {designations
+                  .filter((x) => (x.department?.name || "").toLowerCase() === String(profile.department || "").toLowerCase())
+                  .map((x) => (
+                    <option key={`desig_profile_${x.id}`} value={x.name}>{x.name}</option>
+                  ))}
+              </select>
+            </div>
             <Field
               label="Gender"
               value={profile.gender || ""}
