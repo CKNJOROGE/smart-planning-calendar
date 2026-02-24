@@ -259,37 +259,46 @@ export default function PerformanceManagementPage() {
           <div className="muted" style={{ marginBottom: 8 }}>Only Admin/CEO can create or edit company goals.</div>
         )}
 
-        {PERSPECTIVE_OPTIONS.map((p) => (
-          <div key={`company_group_${p.value}`} style={{ marginTop: 12 }}>
-            <div style={{ fontWeight: 800, marginBottom: 6 }}>{p.label}</div>
-            <div style={{ width: "100%", overflowX: "auto" }}>
-              <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "#f8fafc" }}>
-                    <th style={{ textAlign: "left", padding: 10 }}>Goal</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Owner</th>
-                    <th style={{ textAlign: "left", padding: 10 }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(groupedCompanyGoals[p.value] || []).map((g) => (
-                    <tr key={`cg_${g.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
-                      <td style={{ padding: 10 }}>
-                        <div style={{ fontWeight: 700 }}>{g.title}</div>
-                        {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
-                      </td>
-                      <td style={{ padding: 10 }}>{g.created_by?.name || "-"}</td>
-                      <td style={{ padding: 10 }}>{canManageCompany ? <button className="btn" type="button" onClick={() => editCompany(g)}>Edit</button> : "-"}</td>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))",
+            gap: 12,
+            marginTop: 12,
+          }}
+        >
+          {PERSPECTIVE_OPTIONS.map((p) => (
+            <div key={`company_group_${p.value}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10, background: "#fbfcfe" }}>
+              <div style={{ fontWeight: 800, marginBottom: 6 }}>{p.label}</div>
+              <div style={{ width: "100%", overflowX: "auto" }}>
+                <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <th style={{ textAlign: "left", padding: 10 }}>Goal</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Owner</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Action</th>
                     </tr>
-                  ))}
-                  {!(groupedCompanyGoals[p.value] || []).length && (
-                    <tr><td colSpan={3} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(groupedCompanyGoals[p.value] || []).map((g) => (
+                      <tr key={`cg_${g.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <td style={{ padding: 10 }}>
+                          <div style={{ fontWeight: 700 }}>{g.title}</div>
+                          {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
+                        </td>
+                        <td style={{ padding: 10 }}>{g.created_by?.name || "-"}</td>
+                        <td style={{ padding: 10 }}>{canManageCompany ? <button className="btn" type="button" onClick={() => editCompany(g)}>Edit</button> : "-"}</td>
+                      </tr>
+                    ))}
+                    {!(groupedCompanyGoals[p.value] || []).length && (
+                      <tr><td colSpan={3} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       <div className="card">
