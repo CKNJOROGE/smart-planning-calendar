@@ -22,13 +22,18 @@ import {
 import { useToast } from "./ToastProvider";
 import Avatar from "./Avatar";
 
+const PUBLIC_HOLIDAY_TYPE = "Public Holiday";
+
 function typeLabel(t) {
+  if ((t || "").toLowerCase() === "public holiday") return PUBLIC_HOLIDAY_TYPE;
   if ((t || "").toLowerCase() === "hospital") return "Sick Leave";
   return t || "Unavailable";
 }
 
 function colorByType(type) {
   switch ((type || "").toLowerCase()) {
+    case "public holiday":
+      return "#0f766e";
     case "leave":
       return "#2e7d32";
     case "hospital":
@@ -83,6 +88,136 @@ function toCsvCell(value) {
     return `"${s.replace(/"/g, "\"\"")}"`;
   }
   return s;
+}
+
+function makeUtcDate(year, month, day) {
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function addUtcDays(d, days) {
+  const copy = new Date(d.getTime());
+  copy.setUTCDate(copy.getUTCDate() + days);
+  return copy;
+}
+
+function toYmdUtc(d) {
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function easterSundayUtc(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return makeUtcDate(year, month, day);
+}
+
+function kenyaIslamicHolidayMap(year) {
+  const map = {
+    2025: { fitr: "2025-03-31", adha: "2025-06-06" },
+    2026: { fitr: "2026-03-20", adha: "2026-05-27" },
+    2027: { fitr: "2027-03-10", adha: "2027-05-17" },
+    2028: { fitr: "2028-02-28", adha: "2028-05-05" },
+    2029: { fitr: "2029-02-16", adha: "2029-04-24" },
+    2030: { fitr: "2030-02-06", adha: "2030-04-13" },
+  };
+  return map[year] || null;
+}
+
+function buildKenyaPublicHolidays(year) {
+  const easter = easterSundayUtc(year);
+  const oct10Name = year >= 2025 ? "Mazingira Day" : "Huduma Day";
+  const fixed = [
+    { name: "New Year's Day", date: toYmdUtc(makeUtcDate(year, 1, 1)) },
+    { name: "Labour Day", date: toYmdUtc(makeUtcDate(year, 5, 1)) },
+    { name: "Madaraka Day", date: toYmdUtc(makeUtcDate(year, 6, 1)) },
+    { name: oct10Name, date: toYmdUtc(makeUtcDate(year, 10, 10)) },
+    { name: "Mashujaa Day", date: toYmdUtc(makeUtcDate(year, 10, 20)) },
+    { name: "Jamhuri Day", date: toYmdUtc(makeUtcDate(year, 12, 12)) },
+    { name: "Christmas Day", date: toYmdUtc(makeUtcDate(year, 12, 25)) },
+    { name: "Boxing Day", date: toYmdUtc(makeUtcDate(year, 12, 26)) },
+  ];
+  const movable = [
+    { name: "Good Friday", date: toYmdUtc(addUtcDays(easter, -2)) },
+    { name: "Easter Monday", date: toYmdUtc(addUtcDays(easter, 1)) },
+  ];
+  const islamic = kenyaIslamicHolidayMap(year);
+  if (islamic) {
+    movable.push({ name: "Eid al-Fitr", date: islamic.fitr });
+    movable.push({ name: "Eid al-Adha", date: islamic.adha });
+  }
+
+  const items = [...fixed, ...movable];
+  const observed = [];
+  for (const h of items) {
+    const d = new Date(`${h.date}T00:00:00Z`);
+    if (d.getUTCDay() === 0) {
+      observed.push({
+        name: `${h.name} (Observed)`,
+        date: toYmdUtc(addUtcDays(d, 1)),
+      });
+    }
+  }
+  return [...items, ...observed];
+}
+
+function buildKenyaHolidayEvents(startISO, endISO) {
+  const rangeStart = new Date(startISO);
+  const rangeEnd = new Date(endISO);
+  if (Number.isNaN(rangeStart.getTime()) || Number.isNaN(rangeEnd.getTime())) return [];
+
+  const startYear = rangeStart.getFullYear();
+  const endYear = rangeEnd.getFullYear();
+  const holidays = [];
+
+  for (let year = startYear; year <= endYear; year += 1) {
+    const annual = buildKenyaPublicHolidays(year);
+    for (const h of annual) {
+      const start = new Date(`${h.date}T00:00:00`);
+      const end = addUtcDays(new Date(`${h.date}T00:00:00Z`), 1);
+      if (start < rangeEnd && end > rangeStart) {
+        const endDate = toYmdUtc(end);
+        const id = `holiday-${h.date}-${h.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+        holidays.push({
+          id,
+          title: `${h.name} - ${PUBLIC_HOLIDAY_TYPE}`,
+          start: h.date,
+          end: endDate,
+          allDay: true,
+          backgroundColor: colorByType(PUBLIC_HOLIDAY_TYPE),
+          borderColor: colorByType(PUBLIC_HOLIDAY_TYPE),
+          extendedProps: {
+            api: {
+              id,
+              user_id: null,
+              user: { name: h.name, avatar_url: null, department: "Kenya" },
+              start_ts: `${h.date}T00:00:00`,
+              end_ts: `${endDate}T00:00:00`,
+              all_day: true,
+              type: PUBLIC_HOLIDAY_TYPE,
+              status: "approved",
+              note: "Public holiday recognized in Kenya.",
+              is_public_holiday: true,
+            },
+          },
+        });
+      }
+    }
+  }
+  return holidays;
 }
 
 function isPastCurrentDayEvent(apiEvent) {
@@ -291,7 +426,12 @@ export default function CalendarPage() {
       extendedProps: { api: e },
     }));
 
-    setEvents(mapped);
+    const includePublicHolidays = !filters.type || filters.type === PUBLIC_HOLIDAY_TYPE;
+    const holidayEvents = includePublicHolidays ? buildKenyaHolidayEvents(queryStart, queryEnd) : [];
+    const combined = [...mapped, ...holidayEvents].sort(
+      (a, b) => Number(new Date(a.start)) - Number(new Date(b.start))
+    );
+    setEvents(combined);
   }
 
   async function refresh() {
@@ -821,6 +961,7 @@ export default function CalendarPage() {
                 <option value="Client Visit">Client Visit</option>
                 <option value="Training">Training</option>
                 <option value="Other">Other</option>
+                <option value={PUBLIC_HOLIDAY_TYPE}>{PUBLIC_HOLIDAY_TYPE}</option>
               </select>
             </div>
 
@@ -883,6 +1024,7 @@ export default function CalendarPage() {
           <span className="pill"><span className="dot" style={{ background: "#6a1b9a" }} /> Client Visit</span>
           <span className="pill"><span className="dot" style={{ background: "#ef6c00" }} /> Training</span>
           <span className="pill"><span className="dot" style={{ background: "#1565c0" }} /> Other</span>
+          <span className="pill"><span className="dot" style={{ background: "#0f766e" }} /> {PUBLIC_HOLIDAY_TYPE}</span>
         </div>
 
         <div className="card">
