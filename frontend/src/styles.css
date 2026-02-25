@@ -558,6 +558,82 @@ textarea{ resize: vertical; min-height: 90px; }
   letter-spacing: 0.02em;
 }
 
+.calendar-page .fc .fc-bg-event.fc-kenya-holiday-bg {
+  opacity: 0.3;
+  border: none;
+  background:
+    linear-gradient(145deg, rgba(15, 118, 110, 0.3), rgba(20, 184, 166, 0.2)),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.2) 0 6px, rgba(255, 255, 255, 0.06) 6px 12px);
+}
+
+.calendar-page .fc .fc-daygrid-day.fc-kenya-holiday-day {
+  position: relative;
+}
+
+.calendar-page .fc .fc-daygrid-day.fc-kenya-holiday-day::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cg fill='none' stroke='%230f766e' stroke-width='2' stroke-opacity='0.35'%3E%3Cpath d='M10 30h50M10 60h35M120 20h45M100 90h65M20 120h40M105 145h55'/%3E%3C/g%3E%3Cg fill='%230f766e' fill-opacity='0.28'%3E%3Ccircle cx='45' cy='95' r='5'/%3E%3Ccircle cx='140' cy='55' r='5'/%3E%3Ccircle cx='88' cy='148' r='4'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 150px 150px;
+}
+
+.calendar-page .fc .fc-holiday-day-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  max-width: calc(100% - 32px);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: #064e3b;
+  background: rgba(240, 253, 250, 0.92);
+  border: 1px solid rgba(45, 212, 191, 0.55);
+  backdrop-filter: blur(2px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 5;
+}
+
+.calendar-page .fc .fc-holiday-day-badge::before {
+  content: "";
+  flex: 0 0 12px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='10' fill='%2314b8a6'/%3E%3Cpath d='M7 12h10M12 7v10' stroke='white' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.calendar-page .fc .fc-daygrid-day[data-holiday-theme='national'] .fc-holiday-day-badge::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='4' width='20' height='4' fill='%231a1a1a'/%3E%3Crect x='2' y='10' width='20' height='4' fill='%23bb1f25'/%3E%3Crect x='2' y='16' width='20' height='4' fill='%2315823c'/%3E%3C/svg%3E");
+}
+
+.calendar-page .fc .fc-daygrid-day[data-holiday-theme='faith'] .fc-holiday-day-badge::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3l2.2 4.7L19 8.5l-3.5 3.4.8 4.8L12 14.8l-4.3 1.9.8-4.8L5 8.5l4.8-.8z' fill='%23f59e0b'/%3E%3C/svg%3E");
+}
+
+.calendar-page .fc .fc-daygrid-day[data-holiday-theme='eid'] .fc-holiday-day-badge::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13.8 5.2a7.2 7.2 0 11-5.1 12.3 6.6 6.6 0 108-10.1c-.9-.1-1.9-.2-2.9-.2z' fill='%230ea5a4'/%3E%3Ccircle cx='17.6' cy='8.1' r='1.7' fill='%2322d3ee'/%3E%3C/svg%3E");
+}
+
+.calendar-page .fc .fc-daygrid-day[data-holiday-theme='eco'] .fc-holiday-day-badge::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.5 4.5c-4.4.5-7.9 2.6-10.3 6.3-1.5 2.4-2.3 5-2.7 8.2 3.1-.4 5.8-1.3 8.2-2.7 3.7-2.3 5.8-5.8 6.3-10.2-.5-.8-.7-1.1-1.5-1.6z' fill='%2316a34a'/%3E%3C/svg%3E");
+}
+
+.calendar-page .fc .fc-daygrid-day[data-holiday-theme='civic'] .fc-holiday-day-badge::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='4' y='5' width='16' height='14' rx='2.5' fill='%230ea5a4'/%3E%3Cpath d='M8 9h8M8 13h8' stroke='white' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
 .calendar-event-popup {
   position: fixed;
   z-index: 9999;

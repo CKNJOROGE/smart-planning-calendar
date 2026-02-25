@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -53,6 +53,16 @@ function toLocalDateInput(d) {
   const mm = String(x.getMonth() + 1).padStart(2, "0");
   const dd = String(x.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function holidayThemeFromName(name) {
+  const n = (name || "").toLowerCase();
+  if (n.includes("jamhuri") || n.includes("mashujaa") || n.includes("madaraka")) return "national";
+  if (n.includes("christmas") || n.includes("easter") || n.includes("good friday")) return "faith";
+  if (n.includes("eid")) return "eid";
+  if (n.includes("labour")) return "civic";
+  if (n.includes("mazingira")) return "eco";
+  return "default";
 }
 
 function formatEventBoundary(v, allDay, isEnd = false) {
@@ -171,10 +181,13 @@ function buildKenyaPublicHolidays(year) {
       });
     }
   }
-  return [...items, ...observed];
+  return [...items, ...observed].map((h) => ({
+    ...h,
+    theme: holidayThemeFromName(h.name),
+  }));
 }
 
-function buildKenyaHolidayEvents(startISO, endISO) {
+function buildKenyaHolidayEntries(startISO, endISO) {
   const rangeStart = new Date(startISO);
   const rangeEnd = new Date(endISO);
   if (Number.isNaN(rangeStart.getTime()) || Number.isNaN(rangeEnd.getTime())) return [];
@@ -190,29 +203,13 @@ function buildKenyaHolidayEvents(startISO, endISO) {
       const end = addUtcDays(new Date(`${h.date}T00:00:00Z`), 1);
       if (start < rangeEnd && end > rangeStart) {
         const endDate = toYmdUtc(end);
-        const id = `holiday-${h.date}-${h.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
         holidays.push({
-          id,
-          title: `${h.name} - ${PUBLIC_HOLIDAY_TYPE}`,
+          id: `holiday-${h.date}-${h.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          name: h.name,
+          date: h.date,
           start: h.date,
           end: endDate,
-          allDay: true,
-          backgroundColor: colorByType(PUBLIC_HOLIDAY_TYPE),
-          borderColor: colorByType(PUBLIC_HOLIDAY_TYPE),
-          extendedProps: {
-            api: {
-              id,
-              user_id: null,
-              user: { name: h.name, avatar_url: null, department: "Kenya" },
-              start_ts: `${h.date}T00:00:00`,
-              end_ts: `${endDate}T00:00:00`,
-              all_day: true,
-              type: PUBLIC_HOLIDAY_TYPE,
-              status: "approved",
-              note: "Public holiday recognized in Kenya.",
-              is_public_holiday: true,
-            },
-          },
+          theme: h.theme || "default",
         });
       }
     }
@@ -275,6 +272,7 @@ export default function CalendarPage() {
   const [user, setUser] = useState(null);
 
   const [events, setEvents] = useState([]);
+  const [holidayByDate, setHolidayByDate] = useState({});
   const [range, setRange] = useState({ start: null, end: null });
   const [error, setError] = useState("");
 
@@ -392,6 +390,7 @@ export default function CalendarPage() {
     if (filters.start_date && filters.end_date && filters.start_date > filters.end_date) {
       setError("Filter error: Start Date cannot be after End Date.");
       setEvents([]);
+      setHolidayByDate({});
       return;
     }
 
@@ -407,13 +406,14 @@ export default function CalendarPage() {
     }
 
     const f = {};
-    if (filters.type) f.type = filters.type;
+    if (filters.type && filters.type !== PUBLIC_HOLIDAY_TYPE) f.type = filters.type;
     if (user?.role === "admin") {
       if (filters.user_id) f.user_id = Number(filters.user_id);
       if (filters.department) f.department = filters.department;
     }
 
-    const data = await listEvents(queryStart, queryEnd, f);
+    const onlyHolidays = filters.type === PUBLIC_HOLIDAY_TYPE;
+    const data = onlyHolidays ? [] : await listEvents(queryStart, queryEnd, f);
 
     const mapped = data.map((e) => ({
       id: String(e.id),
@@ -427,7 +427,23 @@ export default function CalendarPage() {
     }));
 
     const includePublicHolidays = !filters.type || filters.type === PUBLIC_HOLIDAY_TYPE;
-    const holidayEvents = includePublicHolidays ? buildKenyaHolidayEvents(queryStart, queryEnd) : [];
+    const holidayEntries = includePublicHolidays ? buildKenyaHolidayEntries(queryStart, queryEnd) : [];
+    const holidayEvents = holidayEntries.map((h) => ({
+      id: h.id,
+      title: h.name,
+      start: h.start,
+      end: h.end,
+      display: "background",
+      allDay: true,
+      classNames: ["fc-kenya-holiday-bg", `fc-kenya-holiday-theme-${h.theme || "default"}`],
+      backgroundColor: colorByType(PUBLIC_HOLIDAY_TYPE),
+    }));
+    const holidayMap = {};
+    for (const h of holidayEntries) {
+      holidayMap[h.date] = { name: h.name, theme: h.theme || "default" };
+    }
+    setHolidayByDate(holidayMap);
+
     const combined = [...mapped, ...holidayEvents].sort(
       (a, b) => Number(new Date(a.start)) - Number(new Date(b.start))
     );
@@ -444,6 +460,30 @@ export default function CalendarPage() {
       setError(String(e.message || e));
     }
   }
+
+  const dayCellClassNames = useCallback((arg) => {
+    const dayKey = toLocalDateInput(arg.date);
+    const holiday = holidayByDate[dayKey];
+    if (!holiday) return [];
+    return ["fc-kenya-holiday-day", `fc-kenya-holiday-theme-${holiday.theme || "default"}`];
+  }, [holidayByDate]);
+
+  const dayCellDidMount = useCallback((arg) => {
+    const dayKey = toLocalDateInput(arg.date);
+    const holiday = holidayByDate[dayKey];
+    const host = arg.el.querySelector(".fc-daygrid-day-frame") || arg.el;
+    const existing = host.querySelector(".fc-holiday-day-badge");
+    if (existing) existing.remove();
+    if (!holiday) return;
+
+    arg.el.setAttribute("title", `${holiday.name} (${PUBLIC_HOLIDAY_TYPE})`);
+    arg.el.setAttribute("data-holiday-theme", holiday.theme || "default");
+
+    const badge = document.createElement("div");
+    badge.className = "fc-holiday-day-badge";
+    badge.textContent = holiday.name;
+    host.appendChild(badge);
+  }, [holidayByDate]);
 
   // Leave balance helper (compute as-of start date to allow future accrual)
   async function refreshLeaveBalance(asOfYYYYMMDD) {
@@ -568,6 +608,7 @@ export default function CalendarPage() {
 
   function onEventClick(clickInfo) {
     const apiEvent = clickInfo.event.extendedProps.api;
+    if (!apiEvent) return;
     const jsEvent = clickInfo.jsEvent;
     const leaveLike = isLeaveLikeType(apiEvent?.type);
     setPopup({
@@ -1038,6 +1079,8 @@ export default function CalendarPage() {
               right: "dayGridMonth,timeGridWeek,timeGridDay",
             }}
             events={events}
+            dayCellClassNames={dayCellClassNames}
+            dayCellDidMount={dayCellDidMount}
             datesSet={onDatesSet}
             dateClick={onDateClick}
             eventClick={onEventClick}
