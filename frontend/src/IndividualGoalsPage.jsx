@@ -97,6 +97,7 @@ function GoalsTable({ title, defaultRows = [] }) {
 export default function IndividualGoalsPage() {
   const navigate = useNavigate();
   const [current, setCurrent] = useState(null);
+  const [selectedQuarter, setSelectedQuarter] = useState("");
 
   const isJuniorHrOutsourcing = useMemo(() => {
     const dept = normalize(current?.department);
@@ -127,13 +128,34 @@ export default function IndividualGoalsPage() {
           </>
         ) : (
           <>
+            {!selectedQuarter ? (
+              <div className="field" style={{ maxWidth: 320, marginBottom: 8 }}>
+                <label>Select Appraisal Quarter</label>
+                <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)}>
+                  <option value="">Choose quarter</option>
+                  <option value="Q1">Q1</option>
+                  <option value="Q2">Q2</option>
+                  <option value="Q3">Q3</option>
+                  <option value="Q4">Q4</option>
+                </select>
+                <div className="helper">Pick quarter first to load the appraisal form.</div>
+              </div>
+            ) : (
+              <div className="row" style={{ marginBottom: 10 }}>
+                <div className="pill">Quarter: <b>{selectedQuarter}</b></div>
+                <button className="btn" type="button" onClick={() => setSelectedQuarter("")}>Change Quarter</button>
+              </div>
+            )}
+
+            {!selectedQuarter ? null : (
+              <>
             <div style={{ fontWeight: 900, marginBottom: 4 }}>SUSTENIR HR CONSULTANCY</div>
             <div style={{ fontWeight: 800, marginBottom: 8 }}>PERFORMANCE APPRAISAL FORM - JUNIOR HR CONSULTANT</div>
 
             <div className="row">
               <div className="field" style={{ flex: "1 1 200px" }}>
                 <label>Review Period</label>
-                <input />
+                <input defaultValue={selectedQuarter} />
               </div>
               <div className="field" style={{ flex: "1 1 220px" }}>
                 <label>Employee Name</label>
@@ -325,6 +347,8 @@ export default function IndividualGoalsPage() {
                 Save Appraisal Draft
               </button>
             </div>
+              </>
+            )}
           </>
         )}
       </div>
