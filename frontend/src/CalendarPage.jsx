@@ -676,6 +676,11 @@ export default function CalendarPage() {
     return normalizeStatus(popup.apiEvent.status);
   }, [popup]);
 
+  const showPopupStatus = useMemo(() => {
+    if (!popup?.apiEvent) return false;
+    return isLeaveLikeType(popup.apiEvent.type);
+  }, [popup]);
+
   const reviewBlockReason = useMemo(() => {
     if (!popup || !user) return "";
     return getReviewBlockReason(popup.apiEvent, user);
@@ -1139,9 +1144,11 @@ export default function CalendarPage() {
                 <div className="calendar-popup-title">{popup.apiEvent.user.name}</div>
                 <div className="calendar-popup-type">{typeLabel(popup.apiEvent.type)}</div>
               </div>
-              <span className={`calendar-status-pill status-${popupStatus}`}>
-                {popupStatus}
-              </span>
+              {showPopupStatus && (
+                <span className={`calendar-status-pill status-${popupStatus}`}>
+                  {popupStatus}
+                </span>
+              )}
             </div>
 
             <div className="calendar-popup-body">
