@@ -436,6 +436,10 @@ export default function CalendarPage() {
       display: "background",
       allDay: true,
       classNames: ["fc-kenya-holiday-bg", `fc-kenya-holiday-theme-${h.theme || "default"}`],
+      extendedProps: {
+        holidayName: h.name,
+        isHolidayBackground: true,
+      },
       backgroundColor: colorByType(PUBLIC_HOLIDAY_TYPE),
     }));
     const holidayMap = {};
@@ -1085,6 +1089,14 @@ export default function CalendarPage() {
             dateClick={onDateClick}
             eventClick={onEventClick}
             eventContent={(arg) => {
+              const holidayName = arg.event.extendedProps?.holidayName;
+              if (holidayName) {
+                return (
+                  <div className="event-chip holiday-name-chip">
+                    <div className="event-text" title={holidayName}>{holidayName}</div>
+                  </div>
+                );
+              }
               const api = arg.event.extendedProps.api;
               const isPendingLeave =
                 ["leave", "hospital"].includes((api?.type || "").toLowerCase()) &&
