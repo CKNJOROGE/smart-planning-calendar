@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Optional
+from typing import Optional, Set
 from sqlalchemy.orm import Session
 from .models import Event, User
 
@@ -19,6 +19,85 @@ class LeaveBalance:
     accrued: float
     used: float
     remaining: float
+
+
+def _make_date(y: int, m: int, d: int) -> date:
+    return date(y, m, d)
+
+
+def _add_days(d: date, days: int) -> date:
+    return d + timedelta(days=days)
+
+
+def _easter_sunday(year: int) -> date:
+    # Gregorian Easter (Meeus/Jones/Butcher)
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return _make_date(year, month, day)
+
+
+def _kenya_islamic_holidays(year: int) -> Set[date]:
+    # Operational lookup used by this app. Official gazetted observance can shift by moon sighting.
+    known = {
+        2025: ("2025-03-31", "2025-06-06"),
+        2026: ("2026-03-20", "2026-05-27"),
+        2027: ("2027-03-10", "2027-05-17"),
+        2028: ("2028-02-28", "2028-05-05"),
+        2029: ("2029-02-16", "2029-04-24"),
+        2030: ("2030-02-06", "2030-04-13"),
+    }
+    vals = known.get(year)
+    if not vals:
+        return set()
+    return {date.fromisoformat(vals[0]), date.fromisoformat(vals[1])}
+
+
+def _kenya_public_holidays(year: int) -> Set[date]:
+    easter = _easter_sunday(year)
+    fixed = {
+        _make_date(year, 1, 1),   # New Year's Day
+        _make_date(year, 5, 1),   # Labour Day
+        _make_date(year, 6, 1),   # Madaraka Day
+        _make_date(year, 10, 10), # Mazingira/Huduma Day
+        _make_date(year, 10, 20), # Mashujaa Day
+        _make_date(year, 12, 12), # Jamhuri Day
+        _make_date(year, 12, 25), # Christmas Day
+        _make_date(year, 12, 26), # Boxing Day
+    }
+    movable = {
+        _add_days(easter, -2),  # Good Friday
+        _add_days(easter, 1),   # Easter Monday
+    }
+    holidays = set(fixed | movable | _kenya_islamic_holidays(year))
+
+    # If a holiday falls on Sunday, observe on Monday.
+    observed = set()
+    for h in holidays:
+        if h.weekday() == 6:
+            observed.add(_add_days(h, 1))
+    holidays |= observed
+    return holidays
+
+
+def _is_chargeable_leave_day(day_value: date) -> bool:
+    # Company policy here: Sunday is non-working; Saturday is a working day.
+    if day_value.weekday() == 6:
+        return False
+    if day_value in _kenya_public_holidays(day_value.year):
+        return False
+    return True
 
 
 def _anniversary_on_or_before(hire_date: date, d: date) -> date:
@@ -77,7 +156,13 @@ def _event_leave_days_within_window(e_start: datetime, e_end: datetime, w_start:
     ed2 = min(ed, w_end)
     if ed2 <= s2:
         return 0.0
-    return float((ed2 - s2).days)
+    total = 0
+    d = s2
+    while d < ed2:
+        if _is_chargeable_leave_day(d):
+            total += 1
+        d += timedelta(days=1)
+    return float(total)
 
 
 def compute_leave_balance(
