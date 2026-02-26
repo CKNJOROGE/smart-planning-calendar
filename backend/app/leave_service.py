@@ -100,7 +100,9 @@ def compute_leave_balance(
 
     months_accrued = _full_months_between(accrual_anchor, as_of)
     accrued_since_anchor = round(months_accrued * ACCRUAL_RATE_PER_MONTH, 2)
-    accrued = min(ANNUAL_CAP, round(opening_accrued + accrued_since_anchor, 2))
+    # Preserve historical opening balance and cap only accrual earned in this cycle.
+    accrued_since_anchor_capped = min(ANNUAL_CAP, accrued_since_anchor)
+    accrued = round(opening_accrued + accrued_since_anchor_capped, 2)
 
     usage_window_start = period_start
     if opening_as_of and period_start <= opening_as_of < period_end:
