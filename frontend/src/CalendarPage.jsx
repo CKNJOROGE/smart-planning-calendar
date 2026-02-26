@@ -16,6 +16,7 @@ import {
   uploadEventSickNote,
   deleteEvent,
   getLeaveBalance,
+  adminGetUserLeaveBalance,
   getWsUrl,
   openProtectedFile,
 } from "./api";
@@ -301,6 +302,7 @@ export default function CalendarPage() {
   // Leave balance (shown when selecting Leave)
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [dashboardBalance, setDashboardBalance] = useState(null);
+  const [allUserBalances, setAllUserBalances] = useState([]);
 
   // event info popup
   const [popup, setPopup] = useState(null); // {x,y,apiEvent}
@@ -381,8 +383,25 @@ export default function CalendarPage() {
     if (u.role === "admin" || u.role === "ceo") {
       const all = await listUsers();
       setUsers(all);
+      try {
+        const rows = await Promise.all(
+          (all || []).map(async (x) => {
+            try {
+              const bal = await adminGetUserLeaveBalance(x.id);
+              return { user: x, balance: bal };
+            } catch {
+              return { user: x, balance: null };
+            }
+          })
+        );
+        rows.sort((a, b) => String(a.user?.name || "").localeCompare(String(b.user?.name || "")));
+        setAllUserBalances(rows);
+      } catch {
+        setAllUserBalances([]);
+      }
     } else {
       setUsers([]);
+      setAllUserBalances([]);
     }
   }
 
@@ -460,6 +479,20 @@ export default function CalendarPage() {
       await loadEvents(range.start, range.end);
       const bal = await getLeaveBalance();
       setDashboardBalance(bal);
+      if (user && (user.role === "admin" || user.role === "ceo") && users.length) {
+        const rows = await Promise.all(
+          users.map(async (x) => {
+            try {
+              const userBal = await adminGetUserLeaveBalance(x.id);
+              return { user: x, balance: userBal };
+            } catch {
+              return { user: x, balance: null };
+            }
+          })
+        );
+        rows.sort((a, b) => String(a.user?.name || "").localeCompare(String(b.user?.name || "")));
+        setAllUserBalances(rows);
+      }
     } catch (e) {
       setError(String(e.message || e));
     }
@@ -985,6 +1018,22 @@ export default function CalendarPage() {
             </div>
             <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
               Period: {dashboardBalance.period_start} - {dashboardBalance.period_end}
+            </div>
+          </div>
+        )}
+
+        {(user?.role === "admin" || user?.role === "ceo") && !!allUserBalances.length && (
+          <div className="card" style={{ marginBottom: 14, background: "#f8fafc" }}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>All Users Leave Balance</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {allUserBalances.map((row) => (
+                <div key={`user-bal-${row.user.id}`} className="pill" style={{ display: "grid", gridTemplateColumns: "minmax(160px, 1.3fr) 1fr 1fr 1fr", gap: 10, alignItems: "center" }}>
+                  <div style={{ fontWeight: 800 }}>{row.user.name}</div>
+                  <div>Accrued: <b>{row.balance?.accrued ?? "-"}</b></div>
+                  <div>Used: <b>{row.balance?.used ?? "-"}</b></div>
+                  <div>Remaining: <b>{row.balance?.remaining ?? "-"}</b></div>
+                </div>
+              ))}
             </div>
           </div>
         )}
