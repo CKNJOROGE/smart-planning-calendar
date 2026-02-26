@@ -651,10 +651,32 @@ textarea{ resize: vertical; min-height: 90px; }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  align-items: start;
+}
+
+.department-goals-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .department-goals-card {
   min-width: 0;
+}
+
+.department-goals-content {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.department-goals-content.collapsed {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+}
+
+.department-goals-content.expanded {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .calendar-event-popup {

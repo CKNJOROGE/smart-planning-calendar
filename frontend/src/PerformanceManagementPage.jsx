@@ -85,6 +85,14 @@ export default function PerformanceManagementPage() {
     return { byDepartment, departments };
   }, [departmentGoals]);
 
+  const departmentColumns = useMemo(() => {
+    const rows = departmentPerspectiveGroups.departments || [];
+    return [
+      rows.filter((_, idx) => idx % 2 === 0),
+      rows.filter((_, idx) => idx % 2 === 1),
+    ];
+  }, [departmentPerspectiveGroups.departments]);
+
   async function loadData() {
     setBusy(true);
     setErr("");
@@ -223,7 +231,7 @@ export default function PerformanceManagementPage() {
   function toggleDepartmentCollapse(dept) {
     setCollapsedDepartments((prev) => ({
       ...prev,
-      [dept]: !prev[dept],
+      [dept]: !(prev[dept] !== false),
     }));
   }
 
@@ -353,83 +361,91 @@ export default function PerformanceManagementPage() {
         )}
 
         <div className="department-goals-grid" style={{ marginTop: 12 }}>
-          {(departmentPerspectiveGroups.departments || []).map((dept) => {
-            const isCollapsed = !!collapsedDepartments[dept];
-            return (
-            <div
-              key={`department_block_${dept}`}
-              className="department-goals-card"
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 10,
-                padding: 12,
-                background: "#fbfcfe",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 900,
-                  marginBottom: 8,
-                  paddingBottom: 6,
-                  borderBottom: "1px solid #e5e7eb",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <span>{dept}</span>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => toggleDepartmentCollapse(dept)}
-                    style={{ padding: "2px 10px", lineHeight: 1.1 }}
+          {departmentColumns.map((column, columnIdx) => (
+            <div key={`dept_col_${columnIdx}`} className="department-goals-column">
+              {column.map((dept) => {
+                const isCollapsed = collapsedDepartments[dept] !== false;
+                return (
+                  <div
+                    key={`department_block_${dept}`}
+                    className="department-goals-card"
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 10,
+                      padding: 12,
+                      background: "#fbfcfe",
+                    }}
                   >
-                    {isCollapsed ? "Expand" : "Collapse"}
-                  </button>
-                  {String(current?.department || "").trim().toLowerCase() === String(dept || "").trim().toLowerCase() && (
-                    <button
-                      className="btn"
-                      type="button"
-                      title="Go to individual goals"
-                      onClick={() => navigate("/performance-management/individual-goals")}
-                      style={{ padding: "2px 10px", lineHeight: 1.1 }}
-                    >Go</button>
-                  )}
-                </div>
-              </div>
-              {!isCollapsed && PERSPECTIVE_OPTIONS.map((p) => (
-                <div key={`department_${dept}_${p.value}`} style={{ marginTop: 8 }}>
-                  <div style={{ fontWeight: 800, marginBottom: 4 }}>{p.label}</div>
-                  <div style={{ width: "100%", overflowX: "auto" }}>
-                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: "#f8fafc" }}>
-                          <th style={{ textAlign: "left", padding: 10 }}>Department Goal</th>
-                          <th style={{ textAlign: "left", padding: 10 }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).map((g) => (
-                          <tr key={`dg_${g.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
-                            <td style={{ padding: 10 }}>
-                              <div style={{ fontWeight: 700 }}>{g.title}</div>
-                              {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
-                            </td>
-                            <td style={{ padding: 10 }}>{canManageDepartment ? <button className="btn" type="button" onClick={() => editDepartment(g)}>Edit</button> : "-"}</td>
-                          </tr>
-                        ))}
-                        {!(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).length && (
-                          <tr><td colSpan={2} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        marginBottom: 8,
+                        paddingBottom: 6,
+                        borderBottom: "1px solid #e5e7eb",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <span>{dept}</span>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <button
+                          className="btn"
+                          type="button"
+                          onClick={() => toggleDepartmentCollapse(dept)}
+                          style={{ padding: "2px 10px", lineHeight: 1.1 }}
+                        >
+                          {isCollapsed ? "Expand" : "Collapse"}
+                        </button>
+                        {String(current?.department || "").trim().toLowerCase() === String(dept || "").trim().toLowerCase() && (
+                          <button
+                            className="btn"
+                            type="button"
+                            title="Go to individual goals"
+                            onClick={() => navigate("/performance-management/individual-goals")}
+                            style={{ padding: "2px 10px", lineHeight: 1.1 }}
+                          >
+                            Go
+                          </button>
                         )}
-                      </tbody>
-                    </table>
+                      </div>
+                    </div>
+                    <div className={`department-goals-content ${isCollapsed ? "collapsed" : "expanded"}`}>
+                      {!isCollapsed && PERSPECTIVE_OPTIONS.map((p) => (
+                        <div key={`department_${dept}_${p.value}`} style={{ marginTop: 8 }}>
+                          <div style={{ fontWeight: 800, marginBottom: 4 }}>{p.label}</div>
+                          <div style={{ width: "100%", overflowX: "auto" }}>
+                            <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                              <thead>
+                                <tr style={{ background: "#f8fafc" }}>
+                                  <th style={{ textAlign: "left", padding: 10 }}>Department Goal</th>
+                                  <th style={{ textAlign: "left", padding: 10 }}>Action</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).map((g) => (
+                                  <tr key={`dg_${g.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                                    <td style={{ padding: 10 }}>
+                                      <div style={{ fontWeight: 700 }}>{g.title}</div>
+                                      {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
+                                    </td>
+                                    <td style={{ padding: 10 }}>{canManageDepartment ? <button className="btn" type="button" onClick={() => editDepartment(g)}>Edit</button> : "-"}</td>
+                                  </tr>
+                                ))}
+                                {!(departmentPerspectiveGroups.byDepartment[dept]?.[p.value] || []).length && (
+                                  <tr><td colSpan={2} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          );
-          })}
+          ))}
         </div>
         {!departmentPerspectiveGroups.departments.length && (
           <div className="muted" style={{ marginTop: 10 }}>No department goals yet.</div>
