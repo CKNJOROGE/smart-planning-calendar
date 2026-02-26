@@ -203,11 +203,41 @@ export default function IndividualGoalsPage() {
             <div className="row">
               <div className="field" style={{ flex: "1 1 360px" }}>
                 <label>Employee Reflection</label>
-                <textarea placeholder="Key achievements, challenges, skills to develop, support required..." />
+                <div className="field">
+                  <label>3 Key achievements</label>
+                  <textarea />
+                </div>
+                <div className="field">
+                  <label>Challenges</label>
+                  <textarea />
+                </div>
+                <div className="field">
+                  <label>Skills to develop</label>
+                  <textarea />
+                </div>
+                <div className="field">
+                  <label>Support required</label>
+                  <textarea />
+                </div>
               </div>
               <div className="field" style={{ flex: "1 1 360px" }}>
                 <label>Supervisor Summary</label>
-                <textarea placeholder="Overall narrative, strengths, performance gaps, development actions..." />
+                <div className="field">
+                  <label>Overall performance narrative</label>
+                  <textarea />
+                </div>
+                <div className="field">
+                  <label>Strengths</label>
+                  <textarea />
+                </div>
+                <div className="field">
+                  <label>Performance gaps</label>
+                  <textarea />
+                </div>
+                <div className="field">
+                  <label>Development actions</label>
+                  <textarea />
+                </div>
               </div>
             </div>
 
