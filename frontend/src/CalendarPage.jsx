@@ -681,6 +681,12 @@ export default function CalendarPage() {
     return isLeaveLikeType(popup.apiEvent.type);
   }, [popup]);
 
+  function miniApprovalStatus(approvedById) {
+    if (popupStatus === "rejected") return { cls: "rejected", label: "Rejected" };
+    if (approvedById) return { cls: "approved", label: "Approved" };
+    return { cls: "pending", label: "Pending" };
+  }
+
   const reviewBlockReason = useMemo(() => {
     if (!popup || !user) return "";
     return getReviewBlockReason(popup.apiEvent, user);
@@ -1225,20 +1231,28 @@ export default function CalendarPage() {
             {popupApprovalConfig?.requireTwoStep && (
               <div className="calendar-popup-approval">
                 <div className="calendar-popup-approval-title">Two-step approval</div>
+                {(() => {
+                  const firstMini = miniApprovalStatus(popup.apiEvent.first_approved_by_id);
+                  const secondMini = miniApprovalStatus(popup.apiEvent.second_approved_by_id);
+                  return (
+                    <>
                 <div className="calendar-popup-approval-item">
                   <div className="calendar-popup-approval-label">1st approver</div>
                   <div className="calendar-popup-approval-value">{approverLabel(popupApprovalConfig.firstApproverId, popupApprovalConfig.firstApproverName)}</div>
-                  <span className={`calendar-mini-status ${popup.apiEvent.first_approved_by_id ? "approved" : "pending"}`}>
-                    {popup.apiEvent.first_approved_by_id ? "Approved" : "Pending"}
+                  <span className={`calendar-mini-status ${firstMini.cls}`}>
+                    {firstMini.label}
                   </span>
                 </div>
                 <div className="calendar-popup-approval-item">
                   <div className="calendar-popup-approval-label">2nd approver</div>
                   <div className="calendar-popup-approval-value">{approverLabel(popupApprovalConfig.secondApproverId, popupApprovalConfig.secondApproverName)}</div>
-                  <span className={`calendar-mini-status ${popup.apiEvent.second_approved_by_id ? "approved" : "pending"}`}>
-                    {popup.apiEvent.second_approved_by_id ? "Approved" : "Pending"}
+                  <span className={`calendar-mini-status ${secondMini.cls}`}>
+                    {secondMini.label}
                   </span>
                 </div>
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>

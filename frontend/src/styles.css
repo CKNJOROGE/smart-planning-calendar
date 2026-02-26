@@ -862,6 +862,12 @@ textarea{ resize: vertical; min-height: 90px; }
   border-color: #fdba74;
 }
 
+.calendar-mini-status.rejected {
+  background: #fef2f2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
 /* Profile glassmorphism + neumorphism (scoped) */
 .profile-page {
   position: relative;
