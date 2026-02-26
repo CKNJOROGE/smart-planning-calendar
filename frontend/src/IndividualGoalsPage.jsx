@@ -52,6 +52,48 @@ function KpiTable({ title, rows }) {
   );
 }
 
+function GoalsTable({ title, defaultRows = [] }) {
+  const rows = defaultRows.length ? defaultRows : Array.from({ length: 5 }).map(() => ({
+    objective: "",
+    keyResults: "",
+    bscLink: "",
+    comments: "",
+    selfRating: "",
+    supervisorRating: "",
+  }));
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ fontWeight: 800, marginBottom: 6 }}>{title}</div>
+      <div style={{ width: "100%", overflowX: "auto" }}>
+        <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#f8fafc" }}>
+              <th style={{ textAlign: "left", padding: 10, minWidth: 180 }}>Objective (What)</th>
+              <th style={{ textAlign: "left", padding: 10, minWidth: 220 }}>Key Results (How Measured)</th>
+              <th style={{ textAlign: "left", padding: 10, minWidth: 140 }}>BSC Link</th>
+              <th style={{ textAlign: "left", padding: 10, minWidth: 140 }}>Comments</th>
+              <th style={{ textAlign: "left", padding: 10, minWidth: 140 }}>Self-Rating</th>
+              <th style={{ textAlign: "left", padding: 10, minWidth: 170 }}>Supervisor Rating</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr key={`${title}-row-${idx}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                <td style={{ padding: 10 }}><textarea defaultValue={row.objective || ""} /></td>
+                <td style={{ padding: 10 }}><textarea defaultValue={row.keyResults || ""} /></td>
+                <td style={{ padding: 10 }}><input defaultValue={row.bscLink || ""} /></td>
+                <td style={{ padding: 10 }}><textarea defaultValue={row.comments || ""} /></td>
+                <td style={{ padding: 10 }}><input defaultValue={row.selfRating || ""} /></td>
+                <td style={{ padding: 10 }}><input defaultValue={row.supervisorRating || ""} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function IndividualGoalsPage() {
   const navigate = useNavigate();
   const [current, setCurrent] = useState(null);
@@ -168,18 +210,52 @@ export default function IndividualGoalsPage() {
               </div>
             </div>
 
-            <div className="field">
-              <label>Goals set in the last review period</label>
-              <textarea placeholder="Objective, key results, comments, ratings..." />
-            </div>
-            <div className="field">
-              <label>New goals for the next review period</label>
-              <textarea defaultValue={`1) Improve HR documentation accuracy and compliance across assigned clients
-2) Strengthen recruitment execution efficiency
-3) Enhance client responsiveness and service quality
-4) Build capability in employee relations and labour law
-5) Improve personal productivity and task management`} />
-            </div>
+            <GoalsTable title="Goals set in the last review period" />
+            <GoalsTable
+              title="New goals for the next review period"
+              defaultRows={[
+                {
+                  objective: "Improve HR documentation accuracy and compliance across assigned clients",
+                  keyResults: "100% files updated monthly; zero missing statutory documents; reports submitted on time",
+                  bscLink: "Internal Process",
+                  comments: "",
+                  selfRating: "",
+                  supervisorRating: "",
+                },
+                {
+                  objective: "Strengthen recruitment execution efficiency",
+                  keyResults: "Shortlist within SLA; candidate communication within 48 hrs; maintain pipeline for priority roles",
+                  bscLink: "Client / Internal Process",
+                  comments: "",
+                  selfRating: "",
+                  supervisorRating: "",
+                },
+                {
+                  objective: "Enhance client responsiveness and service quality",
+                  keyResults: "Respond within 2 hrs; positive feedback from clients; reduce follow-ups",
+                  bscLink: "Client",
+                  comments: "",
+                  selfRating: "",
+                  supervisorRating: "",
+                },
+                {
+                  objective: "Build capability in employee relations and labour law",
+                  keyResults: "Complete 1 HR training/webinar",
+                  bscLink: "Learning & Growth",
+                  comments: "",
+                  selfRating: "",
+                  supervisorRating: "",
+                },
+                {
+                  objective: "Improve personal productivity and task management",
+                  keyResults: "Daily task tracker; meet deadlines; reduce rework/errors",
+                  bscLink: "Financial / Internal Process",
+                  comments: "",
+                  selfRating: "",
+                  supervisorRating: "",
+                },
+              ]}
+            />
 
             <div style={{ fontWeight: 900, marginTop: 14 }}>Section 6: Overall Performance Summary</div>
             <div className="row">
