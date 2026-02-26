@@ -104,8 +104,7 @@ export default function DashboardPage() {
     reimbursement_submit_period_end: "",
     reimbursement_submit_message: "",
   });
-
-  const isAdmin = currentUser?.role === "admin";
+  const isCeo = currentUser?.role === "ceo";
 
   const groupedTodayPosts = useMemo(
     () => groupActivitiesByUserDay(overview.todays_activities)
@@ -189,7 +188,7 @@ export default function DashboardPage() {
       const filters = { days: 90 };
       if (historyFilters.start_date) filters.start_date = historyFilters.start_date;
       if (historyFilters.end_date) filters.end_date = historyFilters.end_date;
-      if (isAdmin && historyFilters.user_query.trim()) filters.user_query = historyFilters.user_query.trim();
+      if (isCeo && historyFilters.user_query.trim()) filters.user_query = historyFilters.user_query.trim();
       const rows = await listTodoHistory(filters);
       setHistoryRows(rows || []);
     } catch (e) {
@@ -205,7 +204,7 @@ export default function DashboardPage() {
       return;
     }
 
-    const filtersLine = isAdmin
+    const filtersLine = isCeo
       ? `Filters: user="${historyFilters.user_query || "all"}", from="${historyFilters.start_date || "all"}", to="${historyFilters.end_date || "all"}"`
       : `Filters: from="${historyFilters.start_date || "all"}", to="${historyFilters.end_date || "all"}"`;
 
@@ -511,14 +510,12 @@ export default function DashboardPage() {
           <div className="card dashboard-panel">
             <div className="dashboard-panel-head">
               <div className="dashboard-panel-title">To-Do List History</div>
-              {isAdmin && (
-                <button className="btn" type="button" onClick={exportHistoryPdf} disabled={!historyByDate.length}>
-                  Export as PDF
-                </button>
-              )}
+              <button className="btn" type="button" onClick={exportHistoryPdf} disabled={!historyByDate.length}>
+                Export as PDF
+              </button>
             </div>
-            {isAdmin && (
-              <div className="row" style={{ marginBottom: 10 }}>
+            <div className="row" style={{ marginBottom: 10 }}>
+              {isCeo && (
                 <div className="field" style={{ flex: "1 1 240px", marginBottom: 0 }}>
                   <label>Search User</label>
                   <input
@@ -528,46 +525,46 @@ export default function DashboardPage() {
                     placeholder="Name or email"
                   />
                 </div>
-                <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
-                  <label>From</label>
-                  <input
-                    type="date"
-                    value={historyDraft.start_date}
-                    onChange={(e) => setHistoryDraft((prev) => ({ ...prev, start_date: e.target.value }))}
-                  />
-                </div>
-                <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
-                  <label>To</label>
-                  <input
-                    type="date"
-                    value={historyDraft.end_date}
-                    onChange={(e) => setHistoryDraft((prev) => ({ ...prev, end_date: e.target.value }))}
-                  />
-                </div>
-                <div style={{ alignSelf: "end", display: "flex", gap: 8 }}>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => setHistoryFilters({ ...historyDraft })}
-                    disabled={historyLoading}
-                  >
-                    Search
-                  </button>
-                  <button
-                    className="btn"
-                    type="button"
-                    onClick={() => {
-                      const reset = { user_query: "", start_date: "", end_date: "" };
-                      setHistoryDraft(reset);
-                      setHistoryFilters(reset);
-                    }}
-                    disabled={historyLoading}
-                  >
-                    Clear
-                  </button>
-                </div>
+              )}
+              <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                <label>From</label>
+                <input
+                  type="date"
+                  value={historyDraft.start_date}
+                  onChange={(e) => setHistoryDraft((prev) => ({ ...prev, start_date: e.target.value }))}
+                />
               </div>
-            )}
+              <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                <label>To</label>
+                <input
+                  type="date"
+                  value={historyDraft.end_date}
+                  onChange={(e) => setHistoryDraft((prev) => ({ ...prev, end_date: e.target.value }))}
+                />
+              </div>
+              <div style={{ alignSelf: "end", display: "flex", gap: 8 }}>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setHistoryFilters({ ...historyDraft })}
+                  disabled={historyLoading}
+                >
+                  Search
+                </button>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    const reset = { user_query: "", start_date: "", end_date: "" };
+                    setHistoryDraft(reset);
+                    setHistoryFilters(reset);
+                  }}
+                  disabled={historyLoading}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
             {historyLoading ? (
               <div className="muted">Loading history...</div>
             ) : !historyByDate.length ? (
