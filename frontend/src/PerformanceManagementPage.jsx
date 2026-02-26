@@ -37,6 +37,7 @@ export default function PerformanceManagementPage() {
 
   const [editingCompanyId, setEditingCompanyId] = useState(null);
   const [editingDepartmentId, setEditingDepartmentId] = useState(null);
+  const [collapsedDepartments, setCollapsedDepartments] = useState({});
 
   const [companyForm, setCompanyForm] = useState({
     perspective: "financial",
@@ -219,6 +220,13 @@ export default function PerformanceManagementPage() {
     });
   }
 
+  function toggleDepartmentCollapse(dept) {
+    setCollapsedDepartments((prev) => ({
+      ...prev,
+      [dept]: !prev[dept],
+    }));
+  }
+
   return (
     <div className="page-wrap">
       <div className="card" style={{ marginBottom: 12 }}>
@@ -344,17 +352,13 @@ export default function PerformanceManagementPage() {
           <div className="muted" style={{ marginBottom: 8 }}>You can view department goals, but only supervisors/admin/ceo can create or edit them.</div>
         )}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(520px, 1fr))",
-            gap: 12,
-            marginTop: 12,
-          }}
-        >
-          {(departmentPerspectiveGroups.departments || []).map((dept) => (
+        <div className="department-goals-grid" style={{ marginTop: 12 }}>
+          {(departmentPerspectiveGroups.departments || []).map((dept) => {
+            const isCollapsed = !!collapsedDepartments[dept];
+            return (
             <div
               key={`department_block_${dept}`}
+              className="department-goals-card"
               style={{
                 border: "1px solid #e5e7eb",
                 borderRadius: 10,
@@ -374,19 +378,27 @@ export default function PerformanceManagementPage() {
                 }}
               >
                 <span>{dept}</span>
-                {String(current?.department || "").trim().toLowerCase() === String(dept || "").trim().toLowerCase() && (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <button
                     className="btn"
                     type="button"
-                    title="Go to individual goals"
-                    onClick={() => navigate("/performance-management/individual-goals")}
+                    onClick={() => toggleDepartmentCollapse(dept)}
                     style={{ padding: "2px 10px", lineHeight: 1.1 }}
                   >
-                    →
+                    {isCollapsed ? "Expand" : "Collapse"}
                   </button>
-                )}
+                  {String(current?.department || "").trim().toLowerCase() === String(dept || "").trim().toLowerCase() && (
+                    <button
+                      className="btn"
+                      type="button"
+                      title="Go to individual goals"
+                      onClick={() => navigate("/performance-management/individual-goals")}
+                      style={{ padding: "2px 10px", lineHeight: 1.1 }}
+                    >Go</button>
+                  )}
+                </div>
               </div>
-              {PERSPECTIVE_OPTIONS.map((p) => (
+              {!isCollapsed && PERSPECTIVE_OPTIONS.map((p) => (
                 <div key={`department_${dept}_${p.value}`} style={{ marginTop: 8 }}>
                   <div style={{ fontWeight: 800, marginBottom: 4 }}>{p.label}</div>
                   <div style={{ width: "100%", overflowX: "auto" }}>
@@ -416,7 +428,8 @@ export default function PerformanceManagementPage() {
                 </div>
               ))}
             </div>
-          ))}
+          );
+          })}
         </div>
         {!departmentPerspectiveGroups.departments.length && (
           <div className="muted" style={{ marginTop: 10 }}>No department goals yet.</div>
@@ -427,3 +440,4 @@ export default function PerformanceManagementPage() {
     </div>
   );
 }
+

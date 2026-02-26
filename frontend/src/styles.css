@@ -647,6 +647,16 @@ textarea{ resize: vertical; min-height: 90px; }
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='4' y='5' width='16' height='14' rx='2.5' fill='%230ea5a4'/%3E%3Cpath d='M8 9h8M8 13h8' stroke='white' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
+.department-goals-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.department-goals-card {
+  min-width: 0;
+}
+
 .calendar-event-popup {
   position: fixed;
   z-index: 9999;
@@ -1801,4 +1811,10 @@ textarea{ resize: vertical; min-height: 90px; }
   color: #fecaca;
   border-color: rgba(248, 113, 113, 0.52);
   background: rgba(127, 29, 29, 0.42);
+}
+
+@media (max-width: 1100px) {
+  .department-goals-grid {
+    grid-template-columns: 1fr;
+  }
 }
