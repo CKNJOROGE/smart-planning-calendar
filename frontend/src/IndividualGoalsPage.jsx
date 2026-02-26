@@ -8,6 +8,14 @@ function normalize(v) {
   return String(v || "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function currentQuarter() {
+  const month = new Date().getMonth() + 1;
+  if (month <= 3) return "Q1";
+  if (month <= 6) return "Q2";
+  if (month <= 9) return "Q3";
+  return "Q4";
+}
+
 function KpiTable({ title, rows }) {
   return (
     <div style={{ marginTop: 12 }}>
@@ -97,7 +105,7 @@ function GoalsTable({ title, defaultRows = [] }) {
 export default function IndividualGoalsPage() {
   const navigate = useNavigate();
   const [current, setCurrent] = useState(null);
-  const [selectedQuarter, setSelectedQuarter] = useState("");
+  const [selectedQuarter, setSelectedQuarter] = useState(currentQuarter());
 
   const isJuniorHrOutsourcing = useMemo(() => {
     const dept = normalize(current?.department);
@@ -128,27 +136,17 @@ export default function IndividualGoalsPage() {
           </>
         ) : (
           <>
-            {!selectedQuarter ? (
-              <div className="field" style={{ maxWidth: 320, marginBottom: 8 }}>
-                <label>Select Appraisal Quarter</label>
-                <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)}>
-                  <option value="">Choose quarter</option>
-                  <option value="Q1">Q1</option>
-                  <option value="Q2">Q2</option>
-                  <option value="Q3">Q3</option>
-                  <option value="Q4">Q4</option>
-                </select>
-                <div className="helper">Pick quarter first to load the appraisal form.</div>
-              </div>
-            ) : (
-              <div className="row" style={{ marginBottom: 10 }}>
-                <div className="pill">Quarter: <b>{selectedQuarter}</b></div>
-                <button className="btn" type="button" onClick={() => setSelectedQuarter("")}>Change Quarter</button>
-              </div>
-            )}
+            <div className="field" style={{ maxWidth: 320, marginBottom: 8 }}>
+              <label>Appraisal Quarter</label>
+              <select value={selectedQuarter} onChange={(e) => setSelectedQuarter(e.target.value)}>
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+              </select>
+              <div className="helper">Quarter is preselected based on current date.</div>
+            </div>
 
-            {!selectedQuarter ? null : (
-              <>
             <div style={{ fontWeight: 900, marginBottom: 4 }}>SUSTENIR HR CONSULTANCY</div>
             <div style={{ fontWeight: 800, marginBottom: 8 }}>PERFORMANCE APPRAISAL FORM - JUNIOR HR CONSULTANT</div>
 
@@ -347,8 +345,6 @@ export default function IndividualGoalsPage() {
                 Save Appraisal Draft
               </button>
             </div>
-              </>
-            )}
           </>
         )}
       </div>
