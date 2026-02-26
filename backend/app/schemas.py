@@ -32,6 +32,7 @@ class UserOut(BaseModel):
     role: str
     avatar_url: Optional[str] = None
     department: Optional[str] = None
+    designation: Optional[str] = None
 
     class Config:
         from_attributes = True
