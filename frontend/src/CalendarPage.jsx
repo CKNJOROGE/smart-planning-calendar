@@ -303,6 +303,7 @@ export default function CalendarPage() {
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [dashboardBalance, setDashboardBalance] = useState(null);
   const [allUserBalances, setAllUserBalances] = useState([]);
+  const [allBalancesCollapsed, setAllBalancesCollapsed] = useState(true);
 
   // event info popup
   const [popup, setPopup] = useState(null); // {x,y,apiEvent}
@@ -1024,9 +1025,14 @@ export default function CalendarPage() {
 
         {(user?.role === "admin" || user?.role === "ceo") && !!allUserBalances.length && (
           <div className="card" style={{ marginBottom: 14, background: "#f8fafc" }}>
-            <div style={{ fontWeight: 900, marginBottom: 8 }}>All Users Leave Balance</div>
-            <div style={{ display: "grid", gap: 8 }}>
-              {allUserBalances.map((row) => (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
+              <div style={{ fontWeight: 900 }}>All Users Leave Balance</div>
+              <button className="btn" type="button" onClick={() => setAllBalancesCollapsed((v) => !v)}>
+                {allBalancesCollapsed ? "Expand" : "Collapse"}
+              </button>
+            </div>
+            <div style={{ maxHeight: allBalancesCollapsed ? 0 : 100, overflowY: "auto", display: "grid", gap: 8 }}>
+              {!allBalancesCollapsed && allUserBalances.map((row) => (
                 <div key={`user-bal-${row.user.id}`} className="pill" style={{ display: "grid", gridTemplateColumns: "minmax(160px, 1.3fr) 1fr 1fr 1fr", gap: 10, alignItems: "center" }}>
                   <div style={{ fontWeight: 800 }}>{row.user.name}</div>
                   <div>Accrued: <b>{row.balance?.accrued ?? "-"}</b></div>
