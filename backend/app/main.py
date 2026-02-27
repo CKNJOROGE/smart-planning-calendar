@@ -4,6 +4,8 @@ from typing import List, Optional
 from pathlib import Path
 from uuid import uuid4
 import json
+import hashlib
+import secrets
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Request, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,9 +37,13 @@ from .models import (
     PerformanceCompanyGoal,
     PerformanceDepartmentGoal,
     PerformanceEmployeeGoal,
+    PasswordResetToken,
 )
 from .schemas import (
     TokenResponse,
+    MessageOut,
+    ForgotPasswordIn,
+    ResetPasswordIn,
     FirstAdminCreate,
     UserOut,
     UserProfileOut,
@@ -104,6 +110,7 @@ from .config import settings
 from .ws_manager import ConnectionManager
 from .leave_service import compute_leave_balance, validate_leave_request
 from .storage import object_storage
+from .email_service import send_email, smtp_ready
 
 app = FastAPI(title="Smart Planning Calendar API")
 ws_manager = ConnectionManager()
@@ -178,6 +185,8 @@ def _assert_startup_settings():
             raise RuntimeError("CORS_ORIGINS must be configured in production.")
         if not settings.trusted_hosts_list:
             raise RuntimeError("TRUSTED_HOSTS must be configured in production.")
+        if not smtp_ready():
+            raise RuntimeError("SMTP + FRONTEND_BASE_URL must be configured in production for password reset.")
 
 
 @app.on_event("startup")
@@ -190,6 +199,10 @@ def startup():
 @app.get("/healthz")
 def healthz():
     return {"status": "ok"}
+
+
+def _password_reset_token_hash(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
 @app.get("/files/documents/{file_name}")
@@ -757,6 +770,108 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
     token = create_access_token(subject=user.email)
     return {"access_token": token, "token_type": "bearer"}
+
+
+@app.post("/auth/forgot-password", response_model=MessageOut)
+def forgot_password(payload: ForgotPasswordIn, db: Session = Depends(get_db)):
+    # Always return a generic response to avoid leaking whether an email exists.
+    generic = MessageOut(message="If an account with that email exists, reset instructions have been sent.")
+    email = str(payload.email or "").strip().lower()
+    if not email:
+        return generic
+
+    user = db.query(User).filter(User.email.ilike(email)).first()
+    if not user:
+        return generic
+    if not smtp_ready():
+        return generic
+
+    now = datetime.utcnow()
+    recent = (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.created_at >= now - timedelta(minutes=1),
+        )
+        .first()
+    )
+    if recent:
+        return generic
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = _password_reset_token_hash(raw_token)
+    expires_at = now + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+
+    row = PasswordResetToken(
+        user_id=user.id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+    )
+    db.add(row)
+    db.commit()
+
+    link = f"{settings.FRONTEND_BASE_URL.rstrip('/')}/reset-password?token={raw_token}"
+    body = (
+        "A password reset was requested for your account.\n\n"
+        f"Reset link: {link}\n\n"
+        f"This link expires in {settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES} minutes.\n"
+        "If you did not request this, you can ignore this email."
+    )
+    try:
+        send_email(user.email, "Password reset instructions", body)
+    except Exception:
+        # Keep response generic; avoid leaking delivery details.
+        pass
+
+    return generic
+
+
+@app.post("/auth/reset-password", response_model=MessageOut)
+def reset_password(payload: ResetPasswordIn, db: Session = Depends(get_db)):
+    token = (payload.token or "").strip()
+    new_password = payload.new_password or ""
+    if not token:
+        raise HTTPException(status_code=400, detail="Reset token is required")
+    if len(new_password) < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
+
+    now = datetime.utcnow()
+    token_hash = _password_reset_token_hash(token)
+    row = (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.token_hash == token_hash,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.expires_at >= now,
+        )
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user = db.query(User).filter(User.id == row.user_id).first()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    user.password_hash = hash_password(new_password)
+    row.used_at = now
+
+    # Invalidate any other active tokens for this user.
+    (
+        db.query(PasswordResetToken)
+        .filter(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.id != row.id,
+        )
+        .update({"used_at": now}, synchronize_session=False)
+    )
+
+    db.add(user)
+    db.add(row)
+    db.commit()
+
+    return MessageOut(message="Password has been reset successfully.")
 
 
 @app.get("/me", response_model=UserOut)

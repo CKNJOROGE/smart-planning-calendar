@@ -22,6 +22,19 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class MessageOut(BaseModel):
+    message: str
+
+
+class ForgotPasswordIn(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    new_password: str
+
+
 # -------------------------
 # Users (basic list + event embedding)
 # -------------------------

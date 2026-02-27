@@ -359,6 +359,19 @@ class SalaryAdvanceRequest(Base):
     disbursed_by = relationship("User", foreign_keys=[disbursed_by_id])
 
 
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
 class PerformanceCompanyGoal(Base):
     __tablename__ = "performance_company_goals"
 

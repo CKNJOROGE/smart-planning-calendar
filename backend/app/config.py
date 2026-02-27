@@ -33,6 +33,17 @@ class Settings(BaseSettings):
     R2_SECRET_ACCESS_KEY: str = ""
     R2_REGION: str = "auto"
 
+    # SMTP + password reset
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_USE_SSL: bool = False
+    SMTP_FROM_EMAIL: str = ""
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
+
     def list_from_csv(self, value: str) -> list[str]:
         return [x.strip() for x in (value or "").split(",") if x.strip()]
 

@@ -69,6 +69,20 @@ export async function login(email, password) {
   return res.json();
 }
 
+export function requestPasswordReset(email) {
+  return request("/auth/forgot-password", {
+    method: "POST",
+    body: { email },
+  });
+}
+
+export function resetPassword(token, newPassword) {
+  return request("/auth/reset-password", {
+    method: "POST",
+    body: { token, new_password: newPassword },
+  });
+}
+
 export function me() {
   return request("/me");
 }

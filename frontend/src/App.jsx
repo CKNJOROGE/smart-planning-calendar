@@ -12,6 +12,8 @@ import DashboardPage from "./DashboardPage";
 import FinanceRequestsPage from "./FinanceRequestsPage";
 import PerformanceManagementPage from "./PerformanceManagementPage";
 import IndividualGoalsPage from "./IndividualGoalsPage";
+import ForgotPasswordPage from "./ForgotPasswordPage";
+import ResetPasswordPage from "./ResetPasswordPage";
 import { getToken, clearToken } from "./api";
 import { me } from "./api";
 import { ToastProvider } from "./ToastProvider";
@@ -172,6 +174,8 @@ export default function App() {
           {authState !== "authed" ? (
             <>
               <Route path="/login" element={<LoginPage onLoggedIn={() => setAuthState("authed")} />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="*" element={<Navigate to="/login" replace />} />
             </>
           ) : (

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { login, saveToken, me } from "./api";
+import { Link } from "react-router-dom";
 
 export default function Login({ onLoggedIn }) {
   const particlesRef = useRef(null);
@@ -274,14 +275,9 @@ export default function Login({ onLoggedIn }) {
             </button>
 
             <div className="auth-foot-row">
-              <button
-                type="button"
-                className="link-btn"
-                onClick={() => setError("Password reset is not set up yet. Please contact your admin.")}
-                disabled={loading}
-              >
+              <Link className="link-btn" to="/forgot-password">
                 Forgot password?
-              </button>
+              </Link>
             </div>
 
             {error && (
