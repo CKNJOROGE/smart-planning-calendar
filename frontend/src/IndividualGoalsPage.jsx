@@ -91,8 +91,20 @@ function GoalsTable({ title, defaultRows = [] }) {
                 <td style={{ padding: 10 }}><textarea defaultValue={row.keyResults || ""} /></td>
                 <td style={{ padding: 10 }}><input defaultValue={row.bscLink || ""} /></td>
                 <td style={{ padding: 10 }}><textarea defaultValue={row.comments || ""} /></td>
-                <td style={{ padding: 10 }}><input defaultValue={row.selfRating || ""} /></td>
-                <td style={{ padding: 10 }}><input defaultValue={row.supervisorRating || ""} /></td>
+                <td style={{ padding: 10 }}>
+                  <select defaultValue={row.selfRating || ""}>
+                    {RATING_OPTIONS.map((v) => (
+                      <option key={`${title}-self-${idx}-${v}`} value={v}>{v || "-"}</option>
+                    ))}
+                  </select>
+                </td>
+                <td style={{ padding: 10 }}>
+                  <select defaultValue={row.supervisorRating || ""}>
+                    {RATING_OPTIONS.map((v) => (
+                      <option key={`${title}-supervisor-${idx}-${v}`} value={v}>{v || "-"}</option>
+                    ))}
+                  </select>
+                </td>
               </tr>
             ))}
           </tbody>
