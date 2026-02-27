@@ -89,7 +89,15 @@ function GoalsTable({ title, defaultRows = [] }) {
               <tr key={`${title}-row-${idx}`} style={{ borderTop: "1px solid #eef2f7" }}>
                 <td style={{ padding: 10 }}><textarea defaultValue={row.objective || ""} /></td>
                 <td style={{ padding: 10 }}><textarea defaultValue={row.keyResults || ""} /></td>
-                <td style={{ padding: 10 }}><input defaultValue={row.bscLink || ""} /></td>
+                <td style={{ padding: 10 }}>
+                  <select defaultValue={row.bscLink || ""}>
+                    <option value="">-</option>
+                    <option value="Financial">Financial</option>
+                    <option value="Client">Client</option>
+                    <option value="Internal Process">Internal Process</option>
+                    <option value="Learning & Growth">Learning & Growth</option>
+                  </select>
+                </td>
                 <td style={{ padding: 10 }}><textarea defaultValue={row.comments || ""} /></td>
                 <td style={{ padding: 10 }}>
                   <select defaultValue={row.selfRating || ""}>
