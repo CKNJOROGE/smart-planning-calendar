@@ -79,7 +79,7 @@ function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((kpi) => (
+            {rows.map((kpi, idx) => (
               <tr key={kpi} style={{ borderTop: "1px solid #eef2f7" }}>
                 <td style={{ padding: 10, fontWeight: 600 }}>{kpi}</td>
                 <td style={{ padding: 10 }}>
