@@ -111,7 +111,11 @@ from .config import settings
 from .ws_manager import ConnectionManager
 from .leave_service import compute_leave_balance, validate_leave_request
 from .storage import object_storage
-from .email_service import send_email, smtp_ready, smtp_configuration_errors
+from .email_service import (
+    send_email,
+    password_reset_delivery_ready,
+    password_reset_delivery_configuration_errors,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -188,10 +192,10 @@ def _assert_startup_settings():
             raise RuntimeError("CORS_ORIGINS must be configured in production.")
         if not settings.trusted_hosts_list:
             raise RuntimeError("TRUSTED_HOSTS must be configured in production.")
-        if not smtp_ready():
+        if not password_reset_delivery_ready():
             logger.warning(
-                "SMTP/forgot-password is not ready at startup: %s",
-                "; ".join(smtp_configuration_errors()),
+                "Forgot-password delivery is not ready at startup: %s",
+                "; ".join(password_reset_delivery_configuration_errors()),
             )
 
 
@@ -789,10 +793,10 @@ def forgot_password(payload: ForgotPasswordIn, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email.ilike(email)).first()
     if not user:
         return generic
-    if not smtp_ready():
+    if not password_reset_delivery_ready():
         logger.warning(
-            "Forgot-password skipped because SMTP is not ready: %s",
-            "; ".join(smtp_configuration_errors()),
+            "Forgot-password skipped because delivery is not ready: %s",
+            "; ".join(password_reset_delivery_configuration_errors()),
         )
         return generic
 

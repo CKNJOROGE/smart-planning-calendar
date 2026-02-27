@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     R2_REGION: str = "auto"
 
     # SMTP + password reset
+    EMAIL_PROVIDER: str = "smtp"  # smtp | brevo
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
@@ -41,6 +42,10 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
     SMTP_USE_SSL: bool = False
     SMTP_FROM_EMAIL: str = ""
+    BREVO_API_KEY: str = ""
+    BREVO_API_URL: str = "https://api.brevo.com/v3/smtp/email"
+    BREVO_FROM_EMAIL: str = ""
+    BREVO_FROM_NAME: str = "Smart Planning Calendar"
     FRONTEND_BASE_URL: str = "http://localhost:5173"
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
 
