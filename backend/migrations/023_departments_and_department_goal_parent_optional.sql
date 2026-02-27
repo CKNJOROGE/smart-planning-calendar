@@ -17,7 +17,7 @@ CREATE INDEX IF NOT EXISTS ix_departments_created_by_id ON departments (created_
 INSERT INTO departments (name, created_by_id, created_at)
 SELECT DISTINCT
     TRIM(u.department) AS name,
-    NULL AS created_by_id,
+    NULL::INTEGER AS created_by_id,
     NOW() AS created_at
 FROM users u
 WHERE TRIM(COALESCE(u.department, '')) <> ''
@@ -27,7 +27,7 @@ ON CONFLICT (name) DO NOTHING;
 INSERT INTO departments (name, created_by_id, created_at)
 SELECT DISTINCT
     TRIM(g.department) AS name,
-    NULL AS created_by_id,
+    NULL::INTEGER AS created_by_id,
     NOW() AS created_at
 FROM performance_department_goals g
 WHERE TRIM(COALESCE(g.department, '')) <> ''
