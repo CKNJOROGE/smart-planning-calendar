@@ -9,6 +9,7 @@ import {
   listDesignations,
   createDesignation,
   deleteDesignation,
+  adminResetUserPassword,
   me,
 } from "./api";
 import { Link } from "react-router-dom";
@@ -182,6 +183,26 @@ export default function UsersPage() {
     }
   }
 
+  async function handleResetUserPassword(user) {
+    setErr("");
+    const pwd = window.prompt(`Set a new password for ${user.name} (${user.email}):`);
+    if (pwd == null) return;
+    const trimmed = String(pwd).trim();
+    if (trimmed.length < 12) {
+      setErr("Password must be at least 12 characters.");
+      return;
+    }
+    if (!confirm(`Reset password for "${user.name}" now?`)) return;
+    setBusy(true);
+    try {
+      await adminResetUserPassword(user.id, trimmed);
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (current.role !== "admin" && current.role !== "ceo") {
     return (
       <div className="page-wrap users-page">
@@ -328,6 +349,15 @@ export default function UsersPage() {
                     <span className="pill">{u.role}</span>
                   </td>
                   <td style={{ padding: 12 }}>
+                    <button
+                      className="btn"
+                      onClick={() => handleResetUserPassword(u)}
+                      disabled={busy}
+                      title="Reset user's password"
+                      style={{ marginRight: 8 }}
+                    >
+                      Reset Password
+                    </button>
                     <button
                       className="btn btn-danger"
                       onClick={() => handleDeleteUser(u)}

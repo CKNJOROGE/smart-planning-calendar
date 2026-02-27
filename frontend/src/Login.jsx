@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { login, saveToken, me } from "./api";
-import { Link } from "react-router-dom";
 
 export default function Login({ onLoggedIn }) {
   const particlesRef = useRef(null);
@@ -275,9 +274,7 @@ export default function Login({ onLoggedIn }) {
             </button>
 
             <div className="auth-foot-row">
-              <Link className="link-btn" to="/forgot-password">
-                Forgot password?
-              </Link>
+              <span className="muted">Forgot password? Contact Admin/CEO.</span>
             </div>
 
             {error && (

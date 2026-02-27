@@ -301,6 +301,13 @@ export async function deleteUser(userId) {
   return res.json();
 }
 
+export function adminResetUserPassword(userId, newPassword) {
+  return request(`/admin/users/${userId}/reset-password`, {
+    method: "POST",
+    body: { new_password: newPassword },
+  });
+}
+
 // Leave balance (optional as_of=YYYY-MM-DD)
 export function getLeaveBalance(asOfYYYYMMDD) {
   const qs = asOfYYYYMMDD ? `?as_of=${encodeURIComponent(asOfYYYYMMDD)}` : "";

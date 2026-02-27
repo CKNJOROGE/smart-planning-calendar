@@ -123,6 +123,10 @@ class UserUpdate(BaseModel):
     avatar_url: Optional[str] = None
 
 
+class AdminResetUserPasswordIn(BaseModel):
+    new_password: str
+
+
 class AdminUserProfileOut(UserProfileOut):
     notes_private: Optional[str] = None
     require_two_step_leave_approval: bool = False

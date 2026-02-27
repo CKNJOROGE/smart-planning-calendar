@@ -50,6 +50,7 @@ from .schemas import (
     UserProfileOut,
     UserProfileUpdate,
     UserCreate,
+    AdminResetUserPasswordIn,
     AdminUserProfileOut,
     AdminUserProfileUpdate,
     EventCreate,
@@ -1176,6 +1177,26 @@ def delete_user(
     db.delete(u)
     db.commit()
     return {"ok": True}
+
+
+@app.post("/admin/users/{user_id}/reset-password", response_model=MessageOut)
+def admin_reset_user_password(
+    user_id: int,
+    payload: AdminResetUserPasswordIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(require_admin),
+):
+    u = db.query(User).filter(User.id == user_id).first()
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    new_password = (payload.new_password or "").strip()
+    if len(new_password) < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
+    u.password_hash = hash_password(new_password)
+    db.commit()
+    actor = f"user_id={current.id}, role={current.role}"
+    logger.info("Admin password reset executed by %s for target_user_id=%s", actor, u.id)
+    return MessageOut(message="Password reset successfully.")
 
 
 @app.post("/users/me/avatar", response_model=UserProfileOut)
