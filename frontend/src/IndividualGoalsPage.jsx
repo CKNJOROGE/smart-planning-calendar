@@ -6,8 +6,7 @@ const RATING_OPTIONS = ["", "1", "2", "3", "4", "5"];
 const KPI_SECTIONS = [
   {
     key: "financial",
-    title: "Section 1: Financial (Weight: 15%)",
-    weight: 15,
+    title: "Section 1: Financial",
     rows: [
       "Timely completion of billable client tasks",
       "Contribution to successful recruitment placements",
@@ -17,8 +16,7 @@ const KPI_SECTIONS = [
   },
   {
     key: "client",
-    title: "Section 2: Client (Weight: 35%)",
-    weight: 35,
+    title: "Section 2: Client",
     rows: [
       "Responsiveness to client requests",
       "Professional client communication",
@@ -29,8 +27,7 @@ const KPI_SECTIONS = [
   },
   {
     key: "internal_process",
-    title: "Section 3: Internal Process (Weight: 25%)",
-    weight: 25,
+    title: "Section 3: Internal Process",
     rows: [
       "HR documentation completeness",
       "SOP compliance",
@@ -41,14 +38,56 @@ const KPI_SECTIONS = [
   },
   {
     key: "learning_growth",
-    title: "Section 4: Learning & Growth (Weight: 25%)",
-    weight: 25,
+    title: "Section 4: Learning & Growth",
     rows: [
       "HR skills improvement",
       "Initiative taken",
       "Application of feedback",
       "Collaboration and knowledge sharing",
     ],
+  },
+];
+const LAST_REVIEW_GOALS_COUNT = 5;
+const NEXT_REVIEW_GOALS_DEFAULT_ROWS = [
+  {
+    objective: "Improve HR documentation accuracy and compliance across assigned clients",
+    keyResults: "100% files updated monthly; zero missing statutory documents; reports submitted on time",
+    bscLink: "Internal Process",
+    comments: "",
+    selfRating: "",
+    supervisorRating: "",
+  },
+  {
+    objective: "Strengthen recruitment execution efficiency",
+    keyResults: "Shortlist within SLA; candidate communication within 48 hrs; maintain pipeline for priority roles",
+    bscLink: "Client / Internal Process",
+    comments: "",
+    selfRating: "",
+    supervisorRating: "",
+  },
+  {
+    objective: "Enhance client responsiveness and service quality",
+    keyResults: "Respond within 2 hrs; positive feedback from clients; reduce follow-ups",
+    bscLink: "Client",
+    comments: "",
+    selfRating: "",
+    supervisorRating: "",
+  },
+  {
+    objective: "Build capability in employee relations and labour law",
+    keyResults: "Complete 1 HR training/webinar",
+    bscLink: "Learning & Growth",
+    comments: "",
+    selfRating: "",
+    supervisorRating: "",
+  },
+  {
+    objective: "Improve personal productivity and task management",
+    keyResults: "Daily task tracker; meet deadlines; reduce rework/errors",
+    bscLink: "Financial / Internal Process",
+    comments: "",
+    selfRating: "",
+    supervisorRating: "",
   },
 ];
 
@@ -111,7 +150,7 @@ function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange }) {
   );
 }
 
-function GoalsTable({ title, defaultRows = [] }) {
+function GoalsTable({ title, defaultRows = [], supervisorValues = [], onSupervisorChange = () => {} }) {
   const rows = defaultRows.length ? defaultRows : Array.from({ length: 5 }).map(() => ({
     objective: "",
     keyResults: "",
@@ -158,7 +197,10 @@ function GoalsTable({ title, defaultRows = [] }) {
                   </select>
                 </td>
                 <td style={{ padding: 10 }}>
-                  <select defaultValue={row.supervisorRating || ""}>
+                  <select
+                    value={supervisorValues[idx] || row.supervisorRating || ""}
+                    onChange={(e) => onSupervisorChange(idx, e.target.value)}
+                  >
                     {RATING_OPTIONS.map((v) => (
                       <option key={`${title}-supervisor-${idx}-${v}`} value={v}>{v || "-"}</option>
                     ))}
@@ -183,6 +225,10 @@ export default function IndividualGoalsPage() {
       return acc;
     }, {})
   );
+  const [goalSupervisorRatings, setGoalSupervisorRatings] = useState({
+    last_review: Array.from({ length: LAST_REVIEW_GOALS_COUNT }).map(() => ""),
+    next_review: Array.from({ length: NEXT_REVIEW_GOALS_DEFAULT_ROWS.length }).map(() => ""),
+  });
 
   const isJuniorHrOutsourcing = useMemo(() => {
     const dept = normalize(current?.department);
@@ -190,20 +236,21 @@ export default function IndividualGoalsPage() {
     return dept === normalize("HR OUTSOURCING DEPARTMENT") && desig === normalize("Junior HR Consultant");
   }, [current?.department, current?.designation]);
   const averageWeightedScore = useMemo(() => {
-    let hasAnyRating = false;
-    let weighted = 0;
-    for (const section of KPI_SECTIONS) {
-      const vals = (supervisorRatings[section.key] || [])
-        .map((v) => Number(v))
-        .filter((n) => Number.isFinite(n) && n >= 1 && n <= 5);
-      if (!vals.length) continue;
-      hasAnyRating = true;
-      const sectionPercent = (vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100;
-      weighted += sectionPercent * (section.weight / 100);
-    }
-    if (!hasAnyRating) return null;
-    return Math.round(weighted * 10) / 10;
-  }, [supervisorRatings]);
+    const sectionRatings = KPI_SECTIONS.flatMap((section) => supervisorRatings[section.key] || []);
+    const allRatings = [
+      ...sectionRatings,
+      ...(goalSupervisorRatings.last_review || []),
+      ...(goalSupervisorRatings.next_review || []),
+    ];
+    const toNumber = (v) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 1 && n <= 5 ? n : 0;
+    };
+    const earned = allRatings.reduce((sum, v) => sum + toNumber(v), 0);
+    const maxPossible = allRatings.length * 5;
+    if (!maxPossible || earned <= 0) return null;
+    return Math.round(((earned / maxPossible) * 100) * 10) / 10;
+  }, [supervisorRatings, goalSupervisorRatings]);
   const performanceCategory = useMemo(() => {
     if (averageWeightedScore == null) return "";
     if (averageWeightedScore <= 40) return "Unsatisfactory";
@@ -218,6 +265,15 @@ export default function IndividualGoalsPage() {
   }, []);
   function updateSupervisorRating(sectionKey, rowIndex, value) {
     setSupervisorRatings((prev) => {
+      const next = { ...prev };
+      const arr = [...(next[sectionKey] || [])];
+      arr[rowIndex] = value;
+      next[sectionKey] = arr;
+      return next;
+    });
+  }
+  function updateGoalSupervisorRating(sectionKey, rowIndex, value) {
+    setGoalSupervisorRatings((prev) => {
       const next = { ...prev };
       const arr = [...(next[sectionKey] || [])];
       arr[rowIndex] = value;
@@ -307,57 +363,22 @@ export default function IndividualGoalsPage() {
               </div>
             </div>
 
-            <GoalsTable title="Goals set in the last review period" />
+            <GoalsTable
+              title="Goals set in the last review period"
+              supervisorValues={goalSupervisorRatings.last_review || []}
+              onSupervisorChange={(idx, value) => updateGoalSupervisorRating("last_review", idx, value)}
+            />
             <GoalsTable
               title="New goals for the next review period"
-              defaultRows={[
-                {
-                  objective: "Improve HR documentation accuracy and compliance across assigned clients",
-                  keyResults: "100% files updated monthly; zero missing statutory documents; reports submitted on time",
-                  bscLink: "Internal Process",
-                  comments: "",
-                  selfRating: "",
-                  supervisorRating: "",
-                },
-                {
-                  objective: "Strengthen recruitment execution efficiency",
-                  keyResults: "Shortlist within SLA; candidate communication within 48 hrs; maintain pipeline for priority roles",
-                  bscLink: "Client / Internal Process",
-                  comments: "",
-                  selfRating: "",
-                  supervisorRating: "",
-                },
-                {
-                  objective: "Enhance client responsiveness and service quality",
-                  keyResults: "Respond within 2 hrs; positive feedback from clients; reduce follow-ups",
-                  bscLink: "Client",
-                  comments: "",
-                  selfRating: "",
-                  supervisorRating: "",
-                },
-                {
-                  objective: "Build capability in employee relations and labour law",
-                  keyResults: "Complete 1 HR training/webinar",
-                  bscLink: "Learning & Growth",
-                  comments: "",
-                  selfRating: "",
-                  supervisorRating: "",
-                },
-                {
-                  objective: "Improve personal productivity and task management",
-                  keyResults: "Daily task tracker; meet deadlines; reduce rework/errors",
-                  bscLink: "Financial / Internal Process",
-                  comments: "",
-                  selfRating: "",
-                  supervisorRating: "",
-                },
-              ]}
+              defaultRows={NEXT_REVIEW_GOALS_DEFAULT_ROWS}
+              supervisorValues={goalSupervisorRatings.next_review || []}
+              onSupervisorChange={(idx, value) => updateGoalSupervisorRating("next_review", idx, value)}
             />
 
             <div style={{ fontWeight: 900, marginTop: 14 }}>Section 6: Overall Performance Summary</div>
             <div className="row">
               <div className="field" style={{ flex: "1 1 220px" }}>
-                <label>Average Weighted Score</label>
+                <label>Average Score</label>
                 <input value={averageWeightedScore == null ? "" : `${averageWeightedScore}%`} readOnly />
               </div>
               <div className="field" style={{ flex: "2 1 420px" }}>
@@ -373,7 +394,7 @@ export default function IndividualGoalsPage() {
               </div>
             </div>
             <div className="helper" style={{ marginTop: 4 }}>
-              Auto-calculated from supervisor ratings in Sections 1-4.
+              Auto-calculated from all supervisor ratings in Sections 1-5.
             </div>
 
             <div style={{ fontWeight: 900, marginTop: 14 }}>Section 7: Reflection & Supervisor Review</div>
