@@ -52,6 +52,14 @@ const KPI_SECTIONS = [
   },
 ];
 const LAST_REVIEW_GOALS_COUNT = 5;
+const EMPTY_GOAL_ROW = {
+  objective: "",
+  keyResults: "",
+  bscLink: "",
+  comments: "",
+  selfRating: "",
+  supervisorRating: "",
+};
 const NEXT_REVIEW_GOALS_DEFAULT_ROWS = [
   {
     objective: "Improve HR documentation accuracy and compliance across assigned clients",
@@ -155,17 +163,16 @@ function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange }) {
 }
 
 function GoalsTable({ title, defaultRows = [], supervisorValues = [], onSupervisorChange = () => {} }) {
-  const rows = defaultRows.length ? defaultRows : Array.from({ length: 5 }).map(() => ({
-    objective: "",
-    keyResults: "",
-    bscLink: "",
-    comments: "",
-    selfRating: "",
-    supervisorRating: "",
-  }));
+  const rows = defaultRows.length ? defaultRows : Array.from({ length: 5 }).map(() => ({ ...EMPTY_GOAL_ROW }));
   return (
     <div style={{ marginTop: 10 }}>
-      <div style={{ fontWeight: 800, marginBottom: 6 }}>{title}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <div style={{ fontWeight: 800 }}>{title}</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" type="button" onClick={() => onSupervisorChange("add_row", "")}>+ Row</button>
+          <button className="btn" type="button" onClick={() => onSupervisorChange("remove_row", "")} disabled={rows.length <= 1}>- Row</button>
+        </div>
+      </div>
       <div style={{ width: "100%", overflowX: "auto" }}>
         <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
@@ -233,6 +240,12 @@ export default function IndividualGoalsPage() {
     last_review: Array.from({ length: LAST_REVIEW_GOALS_COUNT }).map(() => ""),
     next_review: Array.from({ length: NEXT_REVIEW_GOALS_DEFAULT_ROWS.length }).map(() => ""),
   });
+  const [lastReviewRows, setLastReviewRows] = useState(() =>
+    Array.from({ length: LAST_REVIEW_GOALS_COUNT }).map(() => ({ ...EMPTY_GOAL_ROW }))
+  );
+  const [nextReviewRows, setNextReviewRows] = useState(() =>
+    NEXT_REVIEW_GOALS_DEFAULT_ROWS.map((r) => ({ ...r }))
+  );
 
   const hasHrOutsourcingAppraisalForm = useMemo(() => {
     const dept = normalize(current?.department);
@@ -277,6 +290,34 @@ export default function IndividualGoalsPage() {
     });
   }
   function updateGoalSupervisorRating(sectionKey, rowIndex, value) {
+    if (rowIndex === "add_row") {
+      setGoalSupervisorRatings((prev) => ({
+        ...prev,
+        [sectionKey]: [...(prev[sectionKey] || []), ""],
+      }));
+      if (sectionKey === "last_review") {
+        setLastReviewRows((prev) => [...prev, { ...EMPTY_GOAL_ROW }]);
+      } else {
+        setNextReviewRows((prev) => [...prev, { ...EMPTY_GOAL_ROW }]);
+      }
+      return;
+    }
+    if (rowIndex === "remove_row") {
+      if (sectionKey === "last_review") {
+        setLastReviewRows((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+      } else {
+        setNextReviewRows((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+      }
+      setGoalSupervisorRatings((prev) => {
+        const currentRows = prev[sectionKey] || [];
+        if (currentRows.length <= 1) return prev;
+        return {
+          ...prev,
+          [sectionKey]: currentRows.slice(0, -1),
+        };
+      });
+      return;
+    }
     setGoalSupervisorRatings((prev) => {
       const next = { ...prev };
       const arr = [...(next[sectionKey] || [])];
@@ -362,12 +403,13 @@ export default function IndividualGoalsPage() {
 
             <GoalsTable
               title="Goals set in the last review period"
+              defaultRows={lastReviewRows}
               supervisorValues={goalSupervisorRatings.last_review || []}
               onSupervisorChange={(idx, value) => updateGoalSupervisorRating("last_review", idx, value)}
             />
             <GoalsTable
               title="New goals for the next review period"
-              defaultRows={NEXT_REVIEW_GOALS_DEFAULT_ROWS}
+              defaultRows={nextReviewRows}
               supervisorValues={goalSupervisorRatings.next_review || []}
               onSupervisorChange={(idx, value) => updateGoalSupervisorRating("next_review", idx, value)}
             />
