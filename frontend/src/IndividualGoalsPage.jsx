@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { me } from "./api";
 
@@ -162,15 +162,35 @@ function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange }) {
   );
 }
 
-function GoalsTable({ title, defaultRows = [], supervisorValues = [], onSupervisorChange = () => {} }) {
+function GoalsTable({
+  title,
+  defaultRows = [],
+  supervisorValues = [],
+  onSupervisorChange = () => {},
+  onAddRow = () => {},
+  onRemoveRow = () => {},
+}) {
   const rows = defaultRows.length ? defaultRows : Array.from({ length: 5 }).map(() => ({ ...EMPTY_GOAL_ROW }));
+  const tableRef = useRef(null);
+  const [selectedRowIndex, setSelectedRowIndex] = useState(null);
+
+  useEffect(() => {
+    function onDocMouseDown(e) {
+      if (!tableRef.current) return;
+      if (!tableRef.current.contains(e.target)) {
+        setSelectedRowIndex(null);
+      }
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
+
   return (
-    <div style={{ marginTop: 10 }}>
+    <div style={{ marginTop: 10 }} ref={tableRef}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <div style={{ fontWeight: 800 }}>{title}</div>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="btn" type="button" onClick={() => onSupervisorChange("add_row", "")}>+ Row</button>
-          <button className="btn" type="button" onClick={() => onSupervisorChange("remove_row", "")} disabled={rows.length <= 1}>- Row</button>
+          <button className="btn" type="button" onClick={onAddRow}>+ Row</button>
         </div>
       </div>
       <div style={{ width: "100%", overflowX: "auto" }}>
@@ -187,8 +207,32 @@ function GoalsTable({ title, defaultRows = [], supervisorValues = [], onSupervis
           </thead>
           <tbody>
             {rows.map((row, idx) => (
-              <tr key={`${title}-row-${idx}`} style={{ borderTop: "1px solid #eef2f7" }}>
-                <td style={{ padding: 10 }}><textarea defaultValue={row.objective || ""} /></td>
+              <tr
+                key={`${title}-row-${idx}`}
+                style={{ borderTop: "1px solid #eef2f7", background: selectedRowIndex === idx ? "#faf7ff" : "transparent" }}
+                onClick={() => setSelectedRowIndex(idx)}
+              >
+                <td style={{ padding: 10 }}>
+                  <textarea defaultValue={row.objective || ""} />
+                  {selectedRowIndex === idx && (
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        className="btn btn-danger"
+                        type="button"
+                        title="Remove row"
+                        aria-label="Remove row"
+                        style={{ padding: "2px 10px", lineHeight: 1 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveRow(idx);
+                          setSelectedRowIndex(null);
+                        }}
+                      >
+                        X
+                      </button>
+                    </div>
+                  )}
+                </td>
                 <td style={{ padding: 10 }}><textarea defaultValue={row.keyResults || ""} /></td>
                 <td style={{ padding: 10 }}>
                   <select defaultValue={row.bscLink || ""}>
@@ -290,40 +334,38 @@ export default function IndividualGoalsPage() {
     });
   }
   function updateGoalSupervisorRating(sectionKey, rowIndex, value) {
-    if (rowIndex === "add_row") {
-      setGoalSupervisorRatings((prev) => ({
-        ...prev,
-        [sectionKey]: [...(prev[sectionKey] || []), ""],
-      }));
-      if (sectionKey === "last_review") {
-        setLastReviewRows((prev) => [...prev, { ...EMPTY_GOAL_ROW }]);
-      } else {
-        setNextReviewRows((prev) => [...prev, { ...EMPTY_GOAL_ROW }]);
-      }
-      return;
-    }
-    if (rowIndex === "remove_row") {
-      if (sectionKey === "last_review") {
-        setLastReviewRows((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
-      } else {
-        setNextReviewRows((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
-      }
-      setGoalSupervisorRatings((prev) => {
-        const currentRows = prev[sectionKey] || [];
-        if (currentRows.length <= 1) return prev;
-        return {
-          ...prev,
-          [sectionKey]: currentRows.slice(0, -1),
-        };
-      });
-      return;
-    }
     setGoalSupervisorRatings((prev) => {
       const next = { ...prev };
       const arr = [...(next[sectionKey] || [])];
       arr[rowIndex] = value;
       next[sectionKey] = arr;
       return next;
+    });
+  }
+  function addGoalRow(sectionKey) {
+    setGoalSupervisorRatings((prev) => ({
+      ...prev,
+      [sectionKey]: [...(prev[sectionKey] || []), ""],
+    }));
+    if (sectionKey === "last_review") {
+      setLastReviewRows((prev) => [...prev, { ...EMPTY_GOAL_ROW }]);
+    } else {
+      setNextReviewRows((prev) => [...prev, { ...EMPTY_GOAL_ROW }]);
+    }
+  }
+  function removeGoalRow(sectionKey, rowIndex) {
+    if (sectionKey === "last_review") {
+      setLastReviewRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== rowIndex) : prev));
+    } else {
+      setNextReviewRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== rowIndex) : prev));
+    }
+    setGoalSupervisorRatings((prev) => {
+      const currentRows = prev[sectionKey] || [];
+      if (currentRows.length <= 1) return prev;
+      return {
+        ...prev,
+        [sectionKey]: currentRows.filter((_, idx) => idx !== rowIndex),
+      };
     });
   }
 
@@ -406,12 +448,16 @@ export default function IndividualGoalsPage() {
               defaultRows={lastReviewRows}
               supervisorValues={goalSupervisorRatings.last_review || []}
               onSupervisorChange={(idx, value) => updateGoalSupervisorRating("last_review", idx, value)}
+              onAddRow={() => addGoalRow("last_review")}
+              onRemoveRow={(idx) => removeGoalRow("last_review", idx)}
             />
             <GoalsTable
               title="New goals for the next review period"
               defaultRows={nextReviewRows}
               supervisorValues={goalSupervisorRatings.next_review || []}
               onSupervisorChange={(idx, value) => updateGoalSupervisorRating("next_review", idx, value)}
+              onAddRow={() => addGoalRow("next_review")}
+              onRemoveRow={(idx) => removeGoalRow("next_review", idx)}
             />
 
             <div style={{ fontWeight: 900, marginTop: 14 }}>Section 6: Overall Performance Summary</div>
