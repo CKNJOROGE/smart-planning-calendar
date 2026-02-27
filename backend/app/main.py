@@ -6,6 +6,7 @@ from uuid import uuid4
 import json
 import hashlib
 import secrets
+import logging
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Request, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -110,7 +111,9 @@ from .config import settings
 from .ws_manager import ConnectionManager
 from .leave_service import compute_leave_balance, validate_leave_request
 from .storage import object_storage
-from .email_service import send_email, smtp_ready
+from .email_service import send_email, smtp_ready, smtp_configuration_errors
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Smart Planning Calendar API")
 ws_manager = ConnectionManager()
@@ -186,7 +189,10 @@ def _assert_startup_settings():
         if not settings.trusted_hosts_list:
             raise RuntimeError("TRUSTED_HOSTS must be configured in production.")
         if not smtp_ready():
-            print("WARNING: SMTP + FRONTEND_BASE_URL not configured. Forgot-password emails are disabled.")
+            logger.warning(
+                "SMTP/forgot-password is not ready at startup: %s",
+                "; ".join(smtp_configuration_errors()),
+            )
 
 
 @app.on_event("startup")
@@ -784,6 +790,10 @@ def forgot_password(payload: ForgotPasswordIn, db: Session = Depends(get_db)):
     if not user:
         return generic
     if not smtp_ready():
+        logger.warning(
+            "Forgot-password skipped because SMTP is not ready: %s",
+            "; ".join(smtp_configuration_errors()),
+        )
         return generic
 
     now = datetime.utcnow()
@@ -819,9 +829,15 @@ def forgot_password(payload: ForgotPasswordIn, db: Session = Depends(get_db)):
     )
     try:
         send_email(user.email, "Password reset instructions", body)
-    except Exception:
+        logger.info("Password reset email sent for user_id=%s to=%s", user.id, user.email)
+    except Exception as exc:
         # Keep response generic; avoid leaking delivery details.
-        pass
+        logger.exception(
+            "Failed to send password reset email for user_id=%s to=%s: %s",
+            user.id,
+            user.email,
+            exc,
+        )
 
     return generic
 
