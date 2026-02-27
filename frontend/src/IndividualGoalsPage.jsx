@@ -430,6 +430,18 @@ export default function IndividualGoalsPage() {
               </div>
             </div>
 
+            <div style={{ fontWeight: 900, marginTop: 14 }}>Section 8: Final Comments</div>
+            <div className="row">
+              <div className="field" style={{ flex: "1 1 360px" }}>
+                <label>HR Comment</label>
+                <textarea />
+              </div>
+              <div className="field" style={{ flex: "1 1 360px" }}>
+                <label>CEO Comment</label>
+                <textarea />
+              </div>
+            </div>
+
             <div className="row" style={{ marginTop: 8 }}>
               <button className="btn" type="button" onClick={() => navigate("/performance-management")}>
                 Back to Department Goals
