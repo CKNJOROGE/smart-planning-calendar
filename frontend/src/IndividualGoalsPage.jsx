@@ -353,15 +353,6 @@ export default function IndividualGoalsPage() {
             ))}
 
             <div style={{ fontWeight: 900, marginTop: 14 }}>Section 5: Goal Setting - OKR Framework</div>
-            <div className="field" style={{ marginTop: 6 }}>
-              <label>BSC Alignment</label>
-              <div className="row">
-                <label><input type="checkbox" /> Financial</label>
-                <label><input type="checkbox" /> Client</label>
-                <label><input type="checkbox" /> Internal Process</label>
-                <label><input type="checkbox" /> Learning & Growth</label>
-              </div>
-            </div>
 
             <GoalsTable
               title="Goals set in the last review period"
