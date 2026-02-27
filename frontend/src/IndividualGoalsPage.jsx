@@ -3,6 +3,54 @@ import { useNavigate } from "react-router-dom";
 import { me } from "./api";
 
 const RATING_OPTIONS = ["", "1", "2", "3", "4", "5"];
+const KPI_SECTIONS = [
+  {
+    key: "financial",
+    title: "Section 1: Financial (Weight: 15%)",
+    weight: 15,
+    rows: [
+      "Timely completion of billable client tasks",
+      "Contribution to successful recruitment placements",
+      "Efficient use of time and resources",
+      "Support retention of assigned clients",
+    ],
+  },
+  {
+    key: "client",
+    title: "Section 2: Client (Weight: 35%)",
+    weight: 35,
+    rows: [
+      "Responsiveness to client requests",
+      "Professional client communication",
+      "SLA adherence",
+      "Candidate experience standards",
+      "Accuracy of client deliverables",
+    ],
+  },
+  {
+    key: "internal_process",
+    title: "Section 3: Internal Process (Weight: 25%)",
+    weight: 25,
+    rows: [
+      "HR documentation completeness",
+      "SOP compliance",
+      "Monthly reporting accuracy",
+      "Recruitment workflow execution",
+      "Record keeping and organisation",
+    ],
+  },
+  {
+    key: "learning_growth",
+    title: "Section 4: Learning & Growth (Weight: 25%)",
+    weight: 25,
+    rows: [
+      "HR skills improvement",
+      "Initiative taken",
+      "Application of feedback",
+      "Collaboration and knowledge sharing",
+    ],
+  },
+];
 
 function normalize(v) {
   return String(v || "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -16,7 +64,7 @@ function currentQuarter() {
   return "Q4";
 }
 
-function KpiTable({ title, rows }) {
+function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange }) {
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ fontWeight: 900, marginBottom: 6 }}>{title}</div>
@@ -42,7 +90,10 @@ function KpiTable({ title, rows }) {
                   </select>
                 </td>
                 <td style={{ padding: 10 }}>
-                  <select defaultValue="">
+                  <select
+                    value={supervisorValues[idx] || ""}
+                    onChange={(e) => onSupervisorChange(idx, e.target.value)}
+                  >
                     {RATING_OPTIONS.map((v) => (
                       <option key={`sup-${kpi}-${v}`} value={v}>{v || "-"}</option>
                     ))}
@@ -126,16 +177,54 @@ export default function IndividualGoalsPage() {
   const navigate = useNavigate();
   const [current, setCurrent] = useState(null);
   const [selectedQuarter, setSelectedQuarter] = useState(currentQuarter());
+  const [supervisorRatings, setSupervisorRatings] = useState(() =>
+    KPI_SECTIONS.reduce((acc, section) => {
+      acc[section.key] = section.rows.map(() => "");
+      return acc;
+    }, {})
+  );
 
   const isJuniorHrOutsourcing = useMemo(() => {
     const dept = normalize(current?.department);
     const desig = normalize(current?.designation);
     return dept === normalize("HR OUTSOURCING DEPARTMENT") && desig === normalize("Junior HR Consultant");
   }, [current?.department, current?.designation]);
+  const averageWeightedScore = useMemo(() => {
+    let hasAnyRating = false;
+    let weighted = 0;
+    for (const section of KPI_SECTIONS) {
+      const vals = (supervisorRatings[section.key] || [])
+        .map((v) => Number(v))
+        .filter((n) => Number.isFinite(n) && n >= 1 && n <= 5);
+      if (!vals.length) continue;
+      hasAnyRating = true;
+      const sectionPercent = (vals.reduce((a, b) => a + b, 0) / (vals.length * 5)) * 100;
+      weighted += sectionPercent * (section.weight / 100);
+    }
+    if (!hasAnyRating) return null;
+    return Math.round(weighted * 10) / 10;
+  }, [supervisorRatings]);
+  const performanceCategory = useMemo(() => {
+    if (averageWeightedScore == null) return "";
+    if (averageWeightedScore <= 40) return "Unsatisfactory";
+    if (averageWeightedScore <= 60) return "Needs Improvement";
+    if (averageWeightedScore <= 70) return "Meets Expectations";
+    if (averageWeightedScore <= 90) return "Strong";
+    return "Exceptional";
+  }, [averageWeightedScore]);
 
   useEffect(() => {
     me().then(setCurrent).catch(() => setCurrent(null));
   }, []);
+  function updateSupervisorRating(sectionKey, rowIndex, value) {
+    setSupervisorRatings((prev) => {
+      const next = { ...prev };
+      const arr = [...(next[sectionKey] || [])];
+      arr[rowIndex] = value;
+      next[sectionKey] = arr;
+      return next;
+    });
+  }
 
   return (
     <div className="page-wrap">
@@ -197,47 +286,15 @@ export default function IndividualGoalsPage() {
               Rating Scale: 5 Exceptional, 4 Strong, 3 Meets, 2 Needs Improvement, 1 Unsatisfactory
             </div>
 
-            <KpiTable
-              title="Section 1: Financial (Weight: 15%)"
-              rows={[
-                "Timely completion of billable client tasks",
-                "Contribution to successful recruitment placements",
-                "Efficient use of time and resources",
-                "Support retention of assigned clients",
-              ]}
-            />
-
-            <KpiTable
-              title="Section 2: Client (Weight: 35%)"
-              rows={[
-                "Responsiveness to client requests",
-                "Professional client communication",
-                "SLA adherence",
-                "Candidate experience standards",
-                "Accuracy of client deliverables",
-              ]}
-            />
-
-            <KpiTable
-              title="Section 3: Internal Process (Weight: 25%)"
-              rows={[
-                "HR documentation completeness",
-                "SOP compliance",
-                "Monthly reporting accuracy",
-                "Recruitment workflow execution",
-                "Record keeping and organisation",
-              ]}
-            />
-
-            <KpiTable
-              title="Section 4: Learning & Growth (Weight: 25%)"
-              rows={[
-                "HR skills improvement",
-                "Initiative taken",
-                "Application of feedback",
-                "Collaboration and knowledge sharing",
-              ]}
-            />
+            {KPI_SECTIONS.map((section) => (
+              <KpiTable
+                key={section.key}
+                title={section.title}
+                rows={section.rows}
+                supervisorValues={supervisorRatings[section.key] || []}
+                onSupervisorChange={(idx, value) => updateSupervisorRating(section.key, idx, value)}
+              />
+            ))}
 
             <div style={{ fontWeight: 900, marginTop: 14 }}>Section 5: Goal Setting - OKR Framework</div>
             <div className="field" style={{ marginTop: 6 }}>
@@ -301,18 +358,22 @@ export default function IndividualGoalsPage() {
             <div className="row">
               <div className="field" style={{ flex: "1 1 220px" }}>
                 <label>Average Weighted Score</label>
-                <input />
+                <input value={averageWeightedScore == null ? "" : `${averageWeightedScore}%`} readOnly />
               </div>
               <div className="field" style={{ flex: "2 1 420px" }}>
                 <label>Performance Category</label>
-                <select>
-                  <option>Exceptional</option>
-                  <option>Strong</option>
-                  <option>Meets Expectations</option>
-                  <option>Needs Improvement</option>
-                  <option>Unsatisfactory</option>
+                <select value={performanceCategory} disabled>
+                  <option value="">-</option>
+                  <option value="Exceptional">Exceptional</option>
+                  <option value="Strong">Strong</option>
+                  <option value="Meets Expectations">Meets Expectations</option>
+                  <option value="Needs Improvement">Needs Improvement</option>
+                  <option value="Unsatisfactory">Unsatisfactory</option>
                 </select>
               </div>
+            </div>
+            <div className="helper" style={{ marginTop: 4 }}>
+              Auto-calculated from supervisor ratings in Sections 1-4.
             </div>
 
             <div style={{ fontWeight: 900, marginTop: 14 }}>Section 7: Reflection & Supervisor Review</div>
