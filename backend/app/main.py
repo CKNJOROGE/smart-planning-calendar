@@ -186,7 +186,7 @@ def _assert_startup_settings():
         if not settings.trusted_hosts_list:
             raise RuntimeError("TRUSTED_HOSTS must be configured in production.")
         if not smtp_ready():
-            raise RuntimeError("SMTP + FRONTEND_BASE_URL must be configured in production for password reset.")
+            print("WARNING: SMTP + FRONTEND_BASE_URL not configured. Forgot-password emails are disabled.")
 
 
 @app.on_event("startup")
