@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { me } from "./api";
 
 const RATING_OPTIONS = ["", "1", "2", "3", "4", "5"];
+const HR_OUTSOURCING_APPRAISAL_DESIGNATIONS = new Set([
+  normalize("Junior HR Consultant"),
+  normalize("HR Admin Assistant"),
+]);
 const KPI_SECTIONS = [
   {
     key: "financial",
@@ -230,10 +234,10 @@ export default function IndividualGoalsPage() {
     next_review: Array.from({ length: NEXT_REVIEW_GOALS_DEFAULT_ROWS.length }).map(() => ""),
   });
 
-  const isJuniorHrOutsourcing = useMemo(() => {
+  const hasHrOutsourcingAppraisalForm = useMemo(() => {
     const dept = normalize(current?.department);
     const desig = normalize(current?.designation);
-    return dept === normalize("HR OUTSOURCING DEPARTMENT") && desig === normalize("Junior HR Consultant");
+    return dept === normalize("HR OUTSOURCING DEPARTMENT") && HR_OUTSOURCING_APPRAISAL_DESIGNATIONS.has(desig);
   }, [current?.department, current?.designation]);
   const averageWeightedScore = useMemo(() => {
     const sectionRatings = KPI_SECTIONS.flatMap((section) => supervisorRatings[section.key] || []);
@@ -290,10 +294,10 @@ export default function IndividualGoalsPage() {
       </div>
 
       <div className="card">
-        {!isJuniorHrOutsourcing ? (
+        {!hasHrOutsourcingAppraisalForm ? (
           <>
             <div className="muted" style={{ marginBottom: 10 }}>
-              This appraisal form is currently configured for: HR OUTSOURCING DEPARTMENT / Junior HR Consultant.
+              This appraisal form is currently configured for: HR OUTSOURCING DEPARTMENT / Junior HR Consultant, HR Admin Assistant.
             </div>
             <button className="btn" type="button" onClick={() => navigate("/performance-management")}>
               Back to Performance Management
@@ -313,7 +317,9 @@ export default function IndividualGoalsPage() {
             </div>
 
             <div style={{ fontWeight: 900, marginBottom: 4 }}>SUSTENIR HR CONSULTANCY</div>
-            <div style={{ fontWeight: 800, marginBottom: 8 }}>PERFORMANCE APPRAISAL FORM - JUNIOR HR CONSULTANT</div>
+            <div style={{ fontWeight: 800, marginBottom: 8 }}>
+              PERFORMANCE APPRAISAL FORM - {(current?.designation || "HR OUTSOURCING STAFF").toUpperCase()}
+            </div>
 
             <div className="row">
               <div className="field" style={{ flex: "1 1 200px" }}>
