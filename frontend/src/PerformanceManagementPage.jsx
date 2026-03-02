@@ -293,8 +293,6 @@ export default function PerformanceManagementPage() {
                   <thead>
                     <tr style={{ background: "#f8fafc" }}>
                       <th style={{ textAlign: "left", padding: 10 }}>Goal</th>
-                      <th style={{ textAlign: "left", padding: 10 }}>Owner</th>
-                      <th style={{ textAlign: "left", padding: 10 }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -303,13 +301,16 @@ export default function PerformanceManagementPage() {
                         <td style={{ padding: 10 }}>
                           <div style={{ fontWeight: 700 }}>{g.title}</div>
                           {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
+                          {canManageCompany && (
+                            <div style={{ marginTop: 8 }}>
+                              <button className="btn" type="button" onClick={() => editCompany(g)}>Edit</button>
+                            </div>
+                          )}
                         </td>
-                        <td style={{ padding: 10 }}>{g.created_by?.name || "-"}</td>
-                        <td style={{ padding: 10 }}>{canManageCompany ? <button className="btn" type="button" onClick={() => editCompany(g)}>Edit</button> : "-"}</td>
                       </tr>
                     ))}
                     {!(groupedCompanyGoals[p.value] || []).length && (
-                      <tr><td colSpan={3} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
+                      <tr><td colSpan={1} style={{ padding: 12 }} className="muted">No goals under this perspective yet.</td></tr>
                     )}
                   </tbody>
                 </table>
