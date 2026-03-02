@@ -6,8 +6,9 @@ const RATING_OPTIONS = ["", "1", "2", "3", "4", "5"];
 const HR_OUTSOURCING_APPRAISAL_DESIGNATIONS = new Set([
   normalize("Junior HR Consultant"),
   normalize("HR Admin Assistant"),
+  normalize("Senior HR Consultant"),
 ]);
-const KPI_SECTIONS = [
+const DEFAULT_KPI_SECTIONS = [
   {
     key: "financial",
     title: "Section 1: Financial",
@@ -48,6 +49,52 @@ const KPI_SECTIONS = [
       "Initiative taken",
       "Application of feedback",
       "Collaboration and knowledge sharing",
+    ],
+  },
+];
+const SENIOR_HR_CONSULTANT_KPI_SECTIONS = [
+  {
+    key: "financial",
+    title: "Section 1: Financial",
+    rows: [
+      "Revenue contribution from client portfolio",
+      "Retainer renewal and client retention",
+      "Recruitment revenue within portfolio",
+      "Identification of upsell opportunities",
+      "Efficient resource utilisation",
+    ],
+  },
+  {
+    key: "client",
+    title: "Section 2: Client",
+    rows: [
+      "Client satisfaction and trust",
+      "Quality of HR advisory",
+      "Policy dissemination effectiveness",
+      "Training delivery impact",
+      "Escalation management",
+    ],
+  },
+  {
+    key: "internal_process",
+    title: "Section 3: Internal Process",
+    rows: [
+      "Quality assurance of team outputs",
+      "HR project delivery (policies, audits, PMS etc.)",
+      "Recruitment oversight and workflow efficiency",
+      "Documentation standards across clients",
+      "SOP enforcement and improvement",
+    ],
+  },
+  {
+    key: "learning_growth",
+    title: "Section 4: Learning & Growth / Leadership",
+    rows: [
+      "Team supervision and coaching",
+      "Capability building of consultants",
+      "Knowledge sharing",
+      "Service innovation",
+      "Thought leadership / brand support",
     ],
   },
 ];
@@ -113,6 +160,13 @@ function currentQuarter() {
   if (month <= 6) return "Q2";
   if (month <= 9) return "Q3";
   return "Q4";
+}
+
+function makeSupervisorRatingsBySections(sections) {
+  return sections.reduce((acc, section) => {
+    acc[section.key] = section.rows.map(() => "");
+    return acc;
+  }, {});
 }
 
 function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange }) {
@@ -274,11 +328,13 @@ export default function IndividualGoalsPage() {
   const navigate = useNavigate();
   const [current, setCurrent] = useState(null);
   const [selectedQuarter, setSelectedQuarter] = useState(currentQuarter());
+  const activeKpiSections = useMemo(() => (
+    normalize(current?.designation) === normalize("Senior HR Consultant")
+      ? SENIOR_HR_CONSULTANT_KPI_SECTIONS
+      : DEFAULT_KPI_SECTIONS
+  ), [current?.designation]);
   const [supervisorRatings, setSupervisorRatings] = useState(() =>
-    KPI_SECTIONS.reduce((acc, section) => {
-      acc[section.key] = section.rows.map(() => "");
-      return acc;
-    }, {})
+    makeSupervisorRatingsBySections(DEFAULT_KPI_SECTIONS)
   );
   const [goalSupervisorRatings, setGoalSupervisorRatings] = useState({
     last_review: Array.from({ length: LAST_REVIEW_GOALS_COUNT }).map(() => ""),
@@ -296,8 +352,18 @@ export default function IndividualGoalsPage() {
     const desig = normalize(current?.designation);
     return dept === normalize("HR OUTSOURCING DEPARTMENT") && HR_OUTSOURCING_APPRAISAL_DESIGNATIONS.has(desig);
   }, [current?.department, current?.designation]);
+  useEffect(() => {
+    setSupervisorRatings((prev) => {
+      const next = makeSupervisorRatingsBySections(activeKpiSections);
+      for (const section of activeKpiSections) {
+        const oldArr = prev[section.key] || [];
+        next[section.key] = section.rows.map((_, idx) => oldArr[idx] || "");
+      }
+      return next;
+    });
+  }, [activeKpiSections]);
   const averageWeightedScore = useMemo(() => {
-    const sectionRatings = KPI_SECTIONS.flatMap((section) => supervisorRatings[section.key] || []);
+    const sectionRatings = activeKpiSections.flatMap((section) => supervisorRatings[section.key] || []);
     const allRatings = [
       ...sectionRatings,
       ...(goalSupervisorRatings.last_review || []),
@@ -311,7 +377,7 @@ export default function IndividualGoalsPage() {
     const maxPossible = allRatings.length * 5;
     if (!maxPossible || earned <= 0) return null;
     return Math.round(((earned / maxPossible) * 100) * 10) / 10;
-  }, [supervisorRatings, goalSupervisorRatings]);
+  }, [activeKpiSections, supervisorRatings, goalSupervisorRatings]);
   const performanceCategory = useMemo(() => {
     if (averageWeightedScore == null) return "";
     if (averageWeightedScore <= 40) return "Unsatisfactory";
@@ -380,7 +446,7 @@ export default function IndividualGoalsPage() {
         {!hasHrOutsourcingAppraisalForm ? (
           <>
             <div className="muted" style={{ marginBottom: 10 }}>
-              This appraisal form is currently configured for: HR OUTSOURCING DEPARTMENT / Junior HR Consultant, HR Admin Assistant.
+              This appraisal form is currently configured for: HR OUTSOURCING DEPARTMENT / Junior HR Consultant, Senior HR Consultant, HR Admin Assistant.
             </div>
             <button className="btn" type="button" onClick={() => navigate("/performance-management")}>
               Back to Performance Management
@@ -431,7 +497,7 @@ export default function IndividualGoalsPage() {
               Rating Scale: 5 Exceptional, 4 Strong, 3 Meets, 2 Needs Improvement, 1 Unsatisfactory
             </div>
 
-            {KPI_SECTIONS.map((section) => (
+            {activeKpiSections.map((section) => (
               <KpiTable
                 key={section.key}
                 title={section.title}
