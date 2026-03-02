@@ -464,19 +464,41 @@ export function listTodoHistory(filters = {}) {
   return request(`/dashboard/activities/history${suffix}`);
 }
 
-export function getCashReimbursementDraft() {
-  return request("/finance/reimbursements/draft");
+export function listCashReimbursementPeriods() {
+  return request("/finance/reimbursements/periods");
 }
 
-export function saveCashReimbursementDraft(manualItems) {
-  return request("/finance/reimbursements/draft", {
+export function getCashReimbursementDraft(periodStart = null, periodEnd = null) {
+  const qs = new URLSearchParams();
+  if (periodStart && periodEnd) {
+    qs.set("period_start", periodStart);
+    qs.set("period_end", periodEnd);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/finance/reimbursements/draft${suffix}`);
+}
+
+export function saveCashReimbursementDraft(manualItems, periodStart = null, periodEnd = null) {
+  const qs = new URLSearchParams();
+  if (periodStart && periodEnd) {
+    qs.set("period_start", periodStart);
+    qs.set("period_end", periodEnd);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/finance/reimbursements/draft${suffix}`, {
     method: "POST",
     body: { manual_items: manualItems || [] },
   });
 }
 
-export function submitCashReimbursement(manualItems) {
-  return request("/finance/reimbursements/submit", {
+export function submitCashReimbursement(manualItems, periodStart = null, periodEnd = null) {
+  const qs = new URLSearchParams();
+  if (periodStart && periodEnd) {
+    qs.set("period_start", periodStart);
+    qs.set("period_end", periodEnd);
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/finance/reimbursements/submit${suffix}`, {
     method: "POST",
     body: { manual_items: manualItems || [] },
   });

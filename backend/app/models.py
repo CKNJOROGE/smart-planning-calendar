@@ -204,6 +204,7 @@ class CashReimbursementRequest(Base):
     period_end = Column(Date, nullable=False, index=True)
     total_amount = Column(Numeric(12, 2), nullable=False, default=0)
     status = Column(String(40), nullable=False, default="pending_approval")
+    is_late_submission = Column(Boolean, nullable=False, default=False)
     submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     ceo_decision = Column(String(20), nullable=True)

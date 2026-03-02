@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   me,
+  listCashReimbursementPeriods,
   getCashReimbursementDraft,
   saveCashReimbursementDraft,
   submitCashReimbursement,
@@ -57,13 +58,14 @@ function statusPillClass(status) {
   return "dashboard-status-warn";
 }
 
-function statusLabel(status) {
+function statusLabel(status, isLateSubmission = false) {
   const s = (status || "").toLowerCase();
-  if (s === "pending_approval") return "pending approval (awaiting approvals)";
-  if (s === "pending_reimbursement") return "pending reimbursement (approved, waiting payout)";
-  if (s === "amount_reimbursed") return "amount reimbursed (paid)";
-  if (s === "rejected") return "rejected";
-  return status || "-";
+  let label = status || "-";
+  if (s === "pending_approval") label = "pending approval (awaiting approvals)";
+  else if (s === "pending_reimbursement") label = "pending reimbursement (approved, waiting payout)";
+  else if (s === "amount_reimbursed") label = "amount reimbursed (paid)";
+  else if (s === "rejected") label = "rejected";
+  return isLateSubmission ? `${label} - late submission` : label;
 }
 
 function decisionLabel(decision) {
@@ -107,6 +109,17 @@ function emptyManual() {
   return { item_date: toDateInput(new Date()), description: "", amount: "", source_event_id: null };
 }
 
+function reimbursementPeriodKey(periodStart, periodEnd) {
+  if (!periodStart || !periodEnd) return "";
+  return `${periodStart}|${periodEnd}`;
+}
+
+function parseReimbursementPeriodKey(key) {
+  const [periodStart, periodEnd] = String(key || "").split("|");
+  if (!periodStart || !periodEnd) return { periodStart: null, periodEnd: null };
+  return { periodStart, periodEnd };
+}
+
 export default function FinanceRequestsPage() {
   const { showToast } = useToast();
   const [current, setCurrent] = useState(null);
@@ -114,6 +127,8 @@ export default function FinanceRequestsPage() {
   const [err, setErr] = useState("");
 
   const [draft, setDraft] = useState({ period_start: "", period_end: "", auto_items: [], can_edit_manual: true });
+  const [reimbursementPeriods, setReimbursementPeriods] = useState([]);
+  const [selectedReimbursementPeriod, setSelectedReimbursementPeriod] = useState("");
   const [manualItems, setManualItems] = useState([emptyManual()]);
   const [myRequests, setMyRequests] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
@@ -165,6 +180,10 @@ export default function FinanceRequestsPage() {
     const role = (current?.role || "").toLowerCase();
     return role !== "admin" && role !== "ceo";
   }, [current?.role]);
+  const selectedReimbursementMeta = useMemo(
+    () => (reimbursementPeriods || []).find((p) => reimbursementPeriodKey(p.period_start, p.period_end) === selectedReimbursementPeriod) || null,
+    [reimbursementPeriods, selectedReimbursementPeriod]
+  );
 
   const totalAmount = useMemo(() => {
     const autoTotal = (draft.auto_items || []).reduce((acc, x) => acc + Number(x.amount || 0), 0);
@@ -172,24 +191,48 @@ export default function FinanceRequestsPage() {
     return autoTotal + manualTotal;
   }, [draft.auto_items, manualItems]);
 
+  function applyDraftState(draftData) {
+    setDraft(draftData || { period_start: "", period_end: "", auto_items: [], can_edit_manual: true });
+    const savedManualRows = (draftData?.manual_items || []).map((x) => ({
+      item_date: x.item_date ? toDateInput(x.item_date) : "",
+      description: String(x.description || ""),
+      amount: x.amount == null ? "" : String(x.amount),
+      source_event_id: x.source_event_id ?? null,
+    }));
+    setManualItems(savedManualRows.length ? savedManualRows : [emptyManual()]);
+  }
+
+  async function loadReimbursementDraftForSelected(periodKey) {
+    const { periodStart, periodEnd } = parseReimbursementPeriodKey(periodKey);
+    const draftData = await getCashReimbursementDraft(periodStart, periodEnd);
+    applyDraftState(draftData);
+  }
+
   async function loadData() {
     setBusy(true);
     setErr("");
     try {
       const user = await me();
       setCurrent(user);
-      const [draftData, mine] = await Promise.all([
-        getCashReimbursementDraft(),
+      const [periods, mine] = await Promise.all([
+        listCashReimbursementPeriods(),
         listMyCashReimbursements(),
       ]);
-      setDraft(draftData || { period_start: "", period_end: "", auto_items: [], can_edit_manual: true });
-      const savedManualRows = (draftData?.manual_items || []).map((x) => ({
-        item_date: x.item_date ? toDateInput(x.item_date) : "",
-        description: String(x.description || ""),
-        amount: x.amount == null ? "" : String(x.amount),
-        source_event_id: x.source_event_id ?? null,
-      }));
-      setManualItems(savedManualRows.length ? savedManualRows : [emptyManual()]);
+      const periodRows = periods || [];
+      setReimbursementPeriods(periodRows);
+      const periodKeys = new Set(periodRows.map((p) => reimbursementPeriodKey(p.period_start, p.period_end)));
+      const currentKey = reimbursementPeriodKey(
+        periodRows.find((p) => p.is_current)?.period_start,
+        periodRows.find((p) => p.is_current)?.period_end
+      );
+      const fallbackKey = currentKey || (periodRows[0] ? reimbursementPeriodKey(periodRows[0].period_start, periodRows[0].period_end) : "");
+      const effectivePeriodKey = periodKeys.has(selectedReimbursementPeriod) ? selectedReimbursementPeriod : fallbackKey;
+      if (effectivePeriodKey) {
+        setSelectedReimbursementPeriod(effectivePeriodKey);
+        await loadReimbursementDraftForSelected(effectivePeriodKey);
+      } else {
+        applyDraftState(null);
+      }
       setMyRequests(mine || []);
       const myReqs = await listMyCashRequisitions();
       setMyRequisitions(myReqs || []);
@@ -263,6 +306,19 @@ export default function FinanceRequestsPage() {
     setManualItems((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   }
 
+  async function changeReimbursementPeriod(nextKey) {
+    setErr("");
+    setSelectedReimbursementPeriod(nextKey);
+    setBusy(true);
+    try {
+      await loadReimbursementDraftForSelected(nextKey);
+    } catch (e) {
+      setErr(String(e.message || e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitReimbursement() {
     setErr("");
     const cleaned = (manualItems || [])
@@ -290,7 +346,10 @@ export default function FinanceRequestsPage() {
     }
 
     try {
-      await submitCashReimbursement(cleaned);
+      const { periodStart, periodEnd } = parseReimbursementPeriodKey(
+        selectedReimbursementPeriod || reimbursementPeriodKey(draft.period_start, draft.period_end)
+      );
+      await submitCashReimbursement(cleaned, periodStart, periodEnd);
       setManualItems([emptyManual()]);
       await loadData();
       showToast("Cash reimbursement submitted for approval", "success");
@@ -318,15 +377,11 @@ export default function FinanceRequestsPage() {
       return;
     }
     try {
-      const saved = await saveCashReimbursementDraft(payload);
-      const savedManualRows = (saved?.manual_items || []).map((x) => ({
-        item_date: x.item_date ? toDateInput(x.item_date) : "",
-        description: String(x.description || ""),
-        amount: x.amount == null ? "" : String(x.amount),
-        source_event_id: x.source_event_id ?? null,
-      }));
-      setDraft(saved || draft);
-      setManualItems(savedManualRows.length ? savedManualRows : [emptyManual()]);
+      const { periodStart, periodEnd } = parseReimbursementPeriodKey(
+        selectedReimbursementPeriod || reimbursementPeriodKey(draft.period_start, draft.period_end)
+      );
+      const saved = await saveCashReimbursementDraft(payload, periodStart, periodEnd);
+      applyDraftState(saved || draft);
       showToast("Manual reimbursement draft saved", "success");
     } catch (e) {
       const msg = String(e.message || e);
@@ -664,7 +719,7 @@ export default function FinanceRequestsPage() {
       {activeSection === "cash_reimbursement" && (
         <>
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Reimbursement (Current 2-Week Window)</div>
+        <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Reimbursement</div>
         {(current?.role === "admin" || current?.role === "ceo") && (
           <div style={{ marginBottom: 12 }}>
             <button
@@ -724,12 +779,37 @@ export default function FinanceRequestsPage() {
         )}
         {canApplyReimbursement && (
           <>
+            <div className="field" style={{ maxWidth: 420, marginBottom: 10 }}>
+              <label>Reimbursement Period</label>
+              <select
+                value={selectedReimbursementPeriod}
+                onChange={(e) => changeReimbursementPeriod(e.target.value)}
+              >
+                {(reimbursementPeriods || []).map((p) => {
+                  const k = reimbursementPeriodKey(p.period_start, p.period_end);
+                  const statusBits = [];
+                  if (p.is_current) statusBits.push("Current");
+                  if (p.has_submission) statusBits.push(`Submitted: ${statusLabel(p.submission_status, p.is_late_submission)}`);
+                  else if (p.can_submit && !p.is_current) statusBits.push("Late submission open");
+                  return (
+                    <option key={k} value={k}>
+                      {p.period_start} to {p.period_end}{statusBits.length ? ` (${statusBits.join(", ")})` : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
             <div className="muted" style={{ marginBottom: 10 }}>
               Period: {draft.period_start || "-"} to {draft.period_end || "-"}
             </div>
             <div className="muted" style={{ marginBottom: 10 }}>
               {draft.submit_message || "Cash reimbursement can be submitted on the 15th and 30th of each month, and Feb 28."}
             </div>
+            {selectedReimbursementMeta?.has_submission && (
+              <div className="muted" style={{ marginBottom: 10 }}>
+                Submission status: {statusLabel(selectedReimbursementMeta.submission_status, selectedReimbursementMeta.is_late_submission)}
+              </div>
+            )}
 
             <div style={{ width: "100%", overflowX: "auto" }}>
               <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -800,7 +880,7 @@ export default function FinanceRequestsPage() {
               <button className="btn" type="button" onClick={saveManualDraft} disabled={!draft.can_edit_manual}>Save Draft</button>
               {draft.can_submit && (
                 <button className="btn btn-primary" type="button" onClick={submitReimbursement} disabled={busy}>
-                  Submit 2-Week Reimbursement
+                  {selectedReimbursementMeta && !selectedReimbursementMeta.is_current ? "Submit Late Reimbursement" : "Submit 2-Week Reimbursement"}
                 </button>
               )}
               <span className="pill">Total: {fmtCurrency(totalAmount)}</span>
@@ -828,7 +908,7 @@ export default function FinanceRequestsPage() {
                     <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
                     <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
                             <td style={{ padding: 10 }}>
-                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status)}</span>
+                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission)}</span>
                             </td>
                     <td style={{ padding: 10 }}>
                       <div>CEO: {decisionLabel(r.ceo_decision)}</div>
@@ -962,7 +1042,7 @@ export default function FinanceRequestsPage() {
                             <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
                             <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
                             <td style={{ padding: 10 }}>
-                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status)}</span>
+                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission)}</span>
                             </td>
                             <td style={{ padding: 10 }}>
                               {String(current?.role || "").toLowerCase() === "ceo" && r.status === "pending_reimbursement" ? (

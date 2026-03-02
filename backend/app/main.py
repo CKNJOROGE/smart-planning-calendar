@@ -78,6 +78,7 @@ from .schemas import (
     TaskReminderOut,
     DashboardOverviewOut,
     CashReimbursementDraftOut,
+    CashReimbursementPeriodOut,
     CashReimbursementDraftItemOut,
     CashReimbursementSubmitIn,
     CashReimbursementRequestOut,
@@ -582,6 +583,59 @@ def _reimbursement_due_message(today: date, can_submit: bool) -> str:
     if today.month == 2:
         return "Cash reimbursement can be submitted on February 28."
     return "Cash reimbursement can be submitted on the 15th and 30th of each month."
+
+
+def _resolve_reimbursement_period(
+    today: date,
+    period_start: Optional[date],
+    period_end: Optional[date],
+) -> tuple[date, date]:
+    if period_start is None and period_end is None:
+        return _biweekly_period_for(today)
+    if period_start is None or period_end is None:
+        raise HTTPException(status_code=400, detail="period_start and period_end must both be provided")
+    if period_end < period_start:
+        raise HTTPException(status_code=400, detail="period_end cannot be before period_start")
+    expected_start, expected_end = _biweekly_period_for(period_start)
+    if expected_start != period_start or expected_end != period_end:
+        raise HTTPException(status_code=400, detail="Invalid reimbursement period")
+    return period_start, period_end
+
+
+def _reimbursement_can_submit(
+    today: date,
+    target_period_start: date,
+    target_period_end: date,
+    already_submitted_for_period: bool,
+) -> bool:
+    if already_submitted_for_period:
+        return False
+    current_start, current_end = _biweekly_period_for(today)
+    is_current_period = target_period_start == current_start and target_period_end == current_end
+    if is_current_period:
+        return _is_reimbursement_due_day(today)
+    # Allow late submissions for past periods.
+    return target_period_end < current_start
+
+
+def _reimbursement_submit_message_for_period(
+    today: date,
+    target_period_start: date,
+    target_period_end: date,
+    can_submit: bool,
+    already_submitted_for_period: bool,
+) -> str:
+    if already_submitted_for_period:
+        return "You already submitted this period's reimbursement."
+    current_start, current_end = _biweekly_period_for(today)
+    is_current_period = target_period_start == current_start and target_period_end == current_end
+    if is_current_period:
+        return _reimbursement_due_message(today, can_submit)
+    if target_period_end < current_start:
+        if can_submit:
+            return "Late submission is open for this past period."
+        return "Late submission for this period is not available."
+    return "You can only submit current due period or past missed periods."
 
 
 def _parse_todo_entries(raw_text: Optional[str]) -> list[str]:
@@ -1728,11 +1782,13 @@ def delete_client_task(
 
 @app.get("/finance/reimbursements/draft", response_model=CashReimbursementDraftOut)
 def get_cash_reimbursement_draft(
+    period_start: Optional[date] = Query(default=None),
+    period_end: Optional[date] = Query(default=None),
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
     today = date.today()
-    period_start, period_end = _biweekly_period_for(today)
+    period_start, period_end = _resolve_reimbursement_period(today, period_start, period_end)
     due_today = _is_reimbursement_due_day(today)
     already_submitted_for_period = bool(
         db.query(CashReimbursementRequest.id)
@@ -1743,7 +1799,7 @@ def get_cash_reimbursement_draft(
         )
         .first()
     )
-    can_submit = due_today and not already_submitted_for_period
+    can_submit = _reimbursement_can_submit(today, period_start, period_end, already_submitted_for_period)
     saved_draft = (
         db.query(CashReimbursementDraft)
         .filter(
@@ -1824,22 +1880,80 @@ def get_cash_reimbursement_draft(
         can_edit_manual=not already_submitted_for_period,
         can_submit=can_submit,
         submit_due_today=due_today,
-        submit_message=(
-            "You already submitted this period's reimbursement."
-            if already_submitted_for_period
-            else _reimbursement_due_message(today, can_submit)
+        submit_message=_reimbursement_submit_message_for_period(
+            today,
+            period_start,
+            period_end,
+            can_submit,
+            already_submitted_for_period,
         ),
     )
+
+
+@app.get("/finance/reimbursements/periods", response_model=List[CashReimbursementPeriodOut])
+def list_cash_reimbursement_periods(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    today = date.today()
+    current_start, current_end = _biweekly_period_for(today)
+
+    draft_rows = (
+        db.query(CashReimbursementDraft.period_start, CashReimbursementDraft.period_end)
+        .filter(CashReimbursementDraft.user_id == current.id)
+        .all()
+    )
+    request_rows = (
+        db.query(CashReimbursementRequest)
+        .filter(CashReimbursementRequest.user_id == current.id)
+        .all()
+    )
+    request_by_period = {
+        (row.period_start, row.period_end): row
+        for row in request_rows
+    }
+    draft_periods = {(row.period_start, row.period_end) for row in draft_rows}
+    periods: set[tuple[date, date]] = {(current_start, current_end)}
+    periods.update(draft_periods)
+    periods.update((row.period_start, row.period_end) for row in request_rows)
+
+    out: list[CashReimbursementPeriodOut] = []
+    for p_start, p_end in sorted(periods, key=lambda x: (x[0], x[1]), reverse=True):
+        req = request_by_period.get((p_start, p_end))
+        has_submission = req is not None
+        can_submit = _reimbursement_can_submit(today, p_start, p_end, has_submission)
+        out.append(
+            CashReimbursementPeriodOut(
+                period_start=p_start,
+                period_end=p_end,
+                is_current=(p_start == current_start and p_end == current_end),
+                has_draft=((p_start, p_end) in draft_periods),
+                has_submission=has_submission,
+                submission_status=req.status if req else None,
+                is_late_submission=bool(req.is_late_submission) if req else False,
+                can_submit=can_submit,
+                submit_message=_reimbursement_submit_message_for_period(
+                    today,
+                    p_start,
+                    p_end,
+                    can_submit=can_submit,
+                    already_submitted_for_period=has_submission,
+                ),
+            )
+        )
+    return out
 
 
 @app.post("/finance/reimbursements/draft", response_model=CashReimbursementDraftOut)
 def save_cash_reimbursement_draft(
     payload: CashReimbursementDraftSaveIn,
+    period_start: Optional[date] = Query(default=None),
+    period_end: Optional[date] = Query(default=None),
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
     today = date.today()
-    period_start, period_end = _biweekly_period_for(today)
+    period_start, period_end = _resolve_reimbursement_period(today, period_start, period_end)
 
     existing_submission = (
         db.query(CashReimbursementRequest.id)
@@ -1909,7 +2023,7 @@ def save_cash_reimbursement_draft(
         db.add(draft)
 
     db.commit()
-    return get_cash_reimbursement_draft(db=db, current=current)
+    return get_cash_reimbursement_draft(period_start=period_start, period_end=period_end, db=db, current=current)
 
 
 def _load_reimbursement_request(db: Session, request_id: int) -> Optional[CashReimbursementRequest]:
@@ -1981,17 +2095,13 @@ def list_approved_cash_reimbursements(
 @app.post("/finance/reimbursements/submit", response_model=CashReimbursementRequestOut)
 def submit_cash_reimbursement(
     payload: CashReimbursementSubmitIn,
+    period_start: Optional[date] = Query(default=None),
+    period_end: Optional[date] = Query(default=None),
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
     today = date.today()
-    if not _is_reimbursement_due_day(today):
-        raise HTTPException(
-            status_code=400,
-            detail=_reimbursement_due_message(today, False),
-        )
-
-    period_start, period_end = _biweekly_period_for(today)
+    period_start, period_end = _resolve_reimbursement_period(today, period_start, period_end)
     existing = (
         db.query(CashReimbursementRequest)
         .filter(
@@ -2003,6 +2113,20 @@ def submit_cash_reimbursement(
     )
     if existing:
         raise HTTPException(status_code=400, detail="Cash reimbursement already submitted for this biweekly period")
+    can_submit = _reimbursement_can_submit(today, period_start, period_end, already_submitted_for_period=False)
+    if not can_submit:
+        raise HTTPException(
+            status_code=400,
+            detail=_reimbursement_submit_message_for_period(
+                today,
+                period_start,
+                period_end,
+                can_submit=False,
+                already_submitted_for_period=False,
+            ),
+        )
+    current_start, current_end = _biweekly_period_for(today)
+    is_late_submission = not (period_start == current_start and period_end == current_end)
 
     used_event_ids = {
         int(x[0]) for x in db.query(CashReimbursementItem.source_event_id)
@@ -2082,6 +2206,7 @@ def submit_cash_reimbursement(
         period_end=period_end,
         total_amount=total,
         status="pending_approval",
+        is_late_submission=is_late_submission,
     )
     db.add(req)
     db.flush()

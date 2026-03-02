@@ -449,6 +449,18 @@ class CashReimbursementDraftOut(BaseModel):
     submit_message: Optional[str] = None
 
 
+class CashReimbursementPeriodOut(BaseModel):
+    period_start: date
+    period_end: date
+    is_current: bool = False
+    has_draft: bool = False
+    has_submission: bool = False
+    submission_status: Optional[str] = None
+    is_late_submission: bool = False
+    can_submit: bool = False
+    submit_message: Optional[str] = None
+
+
 class CashReimbursementSubmitIn(BaseModel):
     manual_items: List[CashReimbursementItemIn] = []
 
@@ -496,6 +508,7 @@ class CashReimbursementRequestOut(BaseModel):
     period_end: date
     total_amount: float
     status: str
+    is_late_submission: bool = False
     submitted_at: datetime
     ceo_decision: Optional[str] = None
     ceo_comment: Optional[str] = None
