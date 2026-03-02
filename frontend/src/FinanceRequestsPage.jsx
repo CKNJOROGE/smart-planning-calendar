@@ -535,10 +535,31 @@ export default function FinanceRequestsPage() {
     pendingSalaryAdvances,
     current?.role,
   ]);
-  const totalAttentionCount = useMemo(
-    () => Object.values(attentionCounts).reduce((sum, n) => sum + Number(n || 0), 0),
-    [attentionCounts]
-  );
+  function notifBadge(count) {
+    if (!(count > 0)) return null;
+    return (
+      <span
+        style={{
+          position: "absolute",
+          top: -8,
+          right: -8,
+          minWidth: 18,
+          height: 18,
+          borderRadius: 999,
+          background: "#dc2626",
+          color: "#fff",
+          fontSize: 11,
+          fontWeight: 800,
+          lineHeight: "18px",
+          textAlign: "center",
+          padding: "0 4px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+        }}
+      >
+        {count > 99 ? "99+" : String(count)}
+      </span>
+    );
+  }
 
   async function submitAuthorityToIncur() {
     setErr("");
@@ -739,55 +760,33 @@ export default function FinanceRequestsPage() {
         <div className="card" style={{ flex: "1 1 220px", minWidth: 220 }}>
           <div style={{ fontWeight: 800, marginBottom: 8 }}>Request Types</div>
           <div style={{ display: "grid", gap: 8 }}>
-            <button className={`btn ${activeSection === "cash_reimbursement" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("cash_reimbursement")}>
-              Cash Reimbursement{attentionCounts.cash_reimbursement > 0 ? ` (${attentionCounts.cash_reimbursement})` : ""}
+            <button className={`btn ${activeSection === "cash_reimbursement" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("cash_reimbursement")} style={{ position: "relative" }}>
+              Cash Reimbursement
+              {notifBadge(attentionCounts.cash_reimbursement)}
             </button>
-            <button className={`btn ${activeSection === "cash_requisition" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("cash_requisition")}>
-              Cash Requisition{attentionCounts.cash_requisition > 0 ? ` (${attentionCounts.cash_requisition})` : ""}
+            <button className={`btn ${activeSection === "cash_requisition" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("cash_requisition")} style={{ position: "relative" }}>
+              Cash Requisition
+              {notifBadge(attentionCounts.cash_requisition)}
             </button>
-            <button className={`btn ${activeSection === "authority_to_incur" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("authority_to_incur")}>
-              Authority To Incur Expenditure{attentionCounts.authority_to_incur > 0 ? ` (${attentionCounts.authority_to_incur})` : ""}
+            <button className={`btn ${activeSection === "authority_to_incur" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("authority_to_incur")} style={{ position: "relative" }}>
+              Authority To Incur Expenditure
+              {notifBadge(attentionCounts.authority_to_incur)}
             </button>
-            <button className={`btn ${activeSection === "salary_advance" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("salary_advance")}>
-              Salary Advance Request{attentionCounts.salary_advance > 0 ? ` (${attentionCounts.salary_advance})` : ""}
+            <button className={`btn ${activeSection === "salary_advance" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("salary_advance")} style={{ position: "relative" }}>
+              Salary Advance Request
+              {notifBadge(attentionCounts.salary_advance)}
             </button>
           </div>
         </div>
 
         <div style={{ flex: "999 1 520px", minWidth: 0 }}>
-      {canReview && (
-        <div className="card" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>Needs Attention</div>
-          {totalAttentionCount > 0 ? (
-            <>
-              <div className="muted" style={{ marginBottom: 8 }}>
-                You have {totalAttentionCount} finance request(s) awaiting your action.
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {attentionCounts.cash_reimbursement > 0 && (
-                  <span className="pill">Cash Reimbursement: {attentionCounts.cash_reimbursement}</span>
-                )}
-                {attentionCounts.cash_requisition > 0 && (
-                  <span className="pill">Cash Requisition: {attentionCounts.cash_requisition}</span>
-                )}
-                {attentionCounts.authority_to_incur > 0 && (
-                  <span className="pill">Authority To Incur: {attentionCounts.authority_to_incur}</span>
-                )}
-                {attentionCounts.salary_advance > 0 && (
-                  <span className="pill">Salary Advance: {attentionCounts.salary_advance}</span>
-                )}
-              </div>
-            </>
-          ) : (
-            <div className="muted">No finance requests need your action right now.</div>
-          )}
-        </div>
-      )}
-
       {activeSection === "cash_reimbursement" && (
         <>
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Reimbursement</div>
+        <div style={{ fontWeight: 900, marginBottom: 8, position: "relative", display: "inline-flex", alignItems: "center", paddingRight: 6 }}>
+          Cash Reimbursement
+          {canReview ? notifBadge(attentionCounts.cash_reimbursement) : null}
+        </div>
         {(current?.role === "admin" || current?.role === "ceo") && (
           <div style={{ marginBottom: 12 }}>
             <button
@@ -1139,7 +1138,10 @@ export default function FinanceRequestsPage() {
       {activeSection === "cash_requisition" && (
         <>
           <div className="card" style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Requisition</div>
+            <div style={{ fontWeight: 900, marginBottom: 8, position: "relative", display: "inline-flex", alignItems: "center", paddingRight: 6 }}>
+              Cash Requisition
+              {canReview ? notifBadge(attentionCounts.cash_requisition) : null}
+            </div>
             <div className="muted" style={{ marginBottom: 10 }}>
               Workflow: Finance review {"->"} CEO/Admin approval {"->"} Disbursement.
             </div>
@@ -1326,7 +1328,10 @@ export default function FinanceRequestsPage() {
       {activeSection === "authority_to_incur" && (
         <>
           <div className="card" style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 8 }}>Authority To Incur Expenditure</div>
+            <div style={{ fontWeight: 900, marginBottom: 8, position: "relative", display: "inline-flex", alignItems: "center", paddingRight: 6 }}>
+              Authority To Incur Expenditure
+              {canReview ? notifBadge(attentionCounts.authority_to_incur) : null}
+            </div>
             <div className="muted" style={{ marginBottom: 10 }}>
               Workflow: Finance review {"->"} CEO/Admin approval {"->"} Mark expenditure incurred.
             </div>
@@ -1523,7 +1528,10 @@ export default function FinanceRequestsPage() {
       {activeSection === "salary_advance" && (
         <>
           <div className="card" style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 8 }}>Salary Advance Request</div>
+            <div style={{ fontWeight: 900, marginBottom: 8, position: "relative", display: "inline-flex", alignItems: "center", paddingRight: 6 }}>
+              Salary Advance Request
+              {canReview ? notifBadge(attentionCounts.salary_advance) : null}
+            </div>
             <div className="muted" style={{ marginBottom: 10 }}>
               Workflow: Finance review {"->"} CEO/Admin approval {"->"} Payroll disbursement.
             </div>
