@@ -479,6 +479,15 @@ export default function FinanceRequestsPage() {
     }
   }
 
+  function canCurrentRoleDecideReimbursement(r) {
+    const role = (current?.role || "").toLowerCase();
+    const status = (r?.status || "").toLowerCase();
+    if (status !== "pending_approval") return false;
+    if (role === "finance") return !r?.finance_decision;
+    if (role === "admin" || role === "ceo") return !r?.ceo_decision;
+    return false;
+  }
+
   function canCurrentRoleDecideRequisition(r) {
     const role = (current?.role || "").toLowerCase();
     if (role === "finance") return (r.status || "").toLowerCase() === "pending_finance_review";
@@ -502,6 +511,34 @@ export default function FinanceRequestsPage() {
     if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
     return false;
   }
+
+  const attentionCounts = useMemo(() => {
+    if (!canReview) {
+      return {
+        cash_reimbursement: 0,
+        cash_requisition: 0,
+        authority_to_incur: 0,
+        salary_advance: 0,
+      };
+    }
+    return {
+      cash_reimbursement: (pendingRequests || []).filter(canCurrentRoleDecideReimbursement).length,
+      cash_requisition: (pendingRequisitions || []).filter(canCurrentRoleDecideRequisition).length,
+      authority_to_incur: (pendingAtiRequests || []).filter(canCurrentRoleDecideAuthority).length,
+      salary_advance: (pendingSalaryAdvances || []).filter(canCurrentRoleDecideSalaryAdvance).length,
+    };
+  }, [
+    canReview,
+    pendingRequests,
+    pendingRequisitions,
+    pendingAtiRequests,
+    pendingSalaryAdvances,
+    current?.role,
+  ]);
+  const totalAttentionCount = useMemo(
+    () => Object.values(attentionCounts).reduce((sum, n) => sum + Number(n || 0), 0),
+    [attentionCounts]
+  );
 
   async function submitAuthorityToIncur() {
     setErr("");
@@ -703,21 +740,49 @@ export default function FinanceRequestsPage() {
           <div style={{ fontWeight: 800, marginBottom: 8 }}>Request Types</div>
           <div style={{ display: "grid", gap: 8 }}>
             <button className={`btn ${activeSection === "cash_reimbursement" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("cash_reimbursement")}>
-              Cash Reimbursement
+              Cash Reimbursement{attentionCounts.cash_reimbursement > 0 ? ` (${attentionCounts.cash_reimbursement})` : ""}
             </button>
             <button className={`btn ${activeSection === "cash_requisition" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("cash_requisition")}>
-              Cash Requisition
+              Cash Requisition{attentionCounts.cash_requisition > 0 ? ` (${attentionCounts.cash_requisition})` : ""}
             </button>
             <button className={`btn ${activeSection === "authority_to_incur" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("authority_to_incur")}>
-              Authority To Incur Expenditure
+              Authority To Incur Expenditure{attentionCounts.authority_to_incur > 0 ? ` (${attentionCounts.authority_to_incur})` : ""}
             </button>
             <button className={`btn ${activeSection === "salary_advance" ? "btn-primary" : ""}`} type="button" onClick={() => setActiveSection("salary_advance")}>
-              Salary Advance Request
+              Salary Advance Request{attentionCounts.salary_advance > 0 ? ` (${attentionCounts.salary_advance})` : ""}
             </button>
           </div>
         </div>
 
         <div style={{ flex: "999 1 520px", minWidth: 0 }}>
+      {canReview && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>Needs Attention</div>
+          {totalAttentionCount > 0 ? (
+            <>
+              <div className="muted" style={{ marginBottom: 8 }}>
+                You have {totalAttentionCount} finance request(s) awaiting your action.
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {attentionCounts.cash_reimbursement > 0 && (
+                  <span className="pill">Cash Reimbursement: {attentionCounts.cash_reimbursement}</span>
+                )}
+                {attentionCounts.cash_requisition > 0 && (
+                  <span className="pill">Cash Requisition: {attentionCounts.cash_requisition}</span>
+                )}
+                {attentionCounts.authority_to_incur > 0 && (
+                  <span className="pill">Authority To Incur: {attentionCounts.authority_to_incur}</span>
+                )}
+                {attentionCounts.salary_advance > 0 && (
+                  <span className="pill">Salary Advance: {attentionCounts.salary_advance}</span>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="muted">No finance requests need your action right now.</div>
+          )}
+        </div>
+      )}
 
       {activeSection === "cash_reimbursement" && (
         <>
