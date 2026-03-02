@@ -3293,6 +3293,7 @@ def get_dashboard_overview(
     )
     for item in todays_activities:
         _ = item.user
+        _ = item.client
 
     history_rows = (
         db.query(DailyActivity)
@@ -3309,6 +3310,7 @@ def get_dashboard_overview(
     )
     for item in history_rows:
         _ = item.user
+        _ = item.client
 
     carried_over_rows = (
         db.query(DailyActivity)
@@ -3326,6 +3328,7 @@ def get_dashboard_overview(
     )
     for item in carried_over_rows:
         _ = item.user
+        _ = item.client
 
     unfinished_count = (
         db.query(DailyActivity)
@@ -3414,12 +3417,18 @@ def create_todays_activity(
     for line in entries:
         if len(line) > 1000:
             raise HTTPException(status_code=400, detail="each activity must be <= 1000 characters")
+    client_id: Optional[int] = payload.client_id
+    if client_id is not None:
+        exists = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
+        if not exists:
+            raise HTTPException(status_code=400, detail="Selected client does not exist")
 
     created: list[DailyActivity] = []
     group_id = uuid4().hex
     for line in entries:
         row = DailyActivity(
             user_id=current.id,
+            client_id=client_id,
             post_group_id=group_id,
             activity_date=date.today(),
             activity=line,
@@ -3433,6 +3442,7 @@ def create_todays_activity(
     for row in created:
         db.refresh(row)
         _ = row.user
+        _ = row.client
     return created
 
 
@@ -3454,6 +3464,7 @@ def update_todays_activity(
     db.commit()
     db.refresh(row)
     _ = row.user
+    _ = row.client
     return row
 
 
@@ -3463,6 +3474,7 @@ def list_todo_history(
     end_date: Optional[date] = None,
     user_id: Optional[int] = None,
     user_query: Optional[str] = None,
+    client_id: Optional[int] = None,
     days: int = Query(default=30, ge=1, le=365),
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
@@ -3481,6 +3493,8 @@ def list_todo_history(
     if start_date is None and end_date is None:
         history_start = today - timedelta(days=days)
         q = q.filter(DailyActivity.activity_date >= history_start)
+    if client_id is not None:
+        q = q.filter(DailyActivity.client_id == client_id)
 
     if _is_admin_like(current.role):
         if user_id is not None:
@@ -3505,6 +3519,7 @@ def list_todo_history(
     )
     for item in rows:
         _ = item.user
+        _ = item.client
     return rows
 
 

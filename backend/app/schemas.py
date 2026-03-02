@@ -371,6 +371,7 @@ class ClientTaskOut(BaseModel):
 # -------------------------
 class DailyActivityCreate(BaseModel):
     activity: str
+    client_id: Optional[int] = None
 
 
 class DailyActivityUpdate(BaseModel):
@@ -380,6 +381,8 @@ class DailyActivityUpdate(BaseModel):
 class DailyActivityOut(BaseModel):
     id: int
     user_id: int
+    client_id: Optional[int] = None
+    client_name: Optional[str] = None
     post_group_id: Optional[str] = None
     activity_date: date
     activity: str

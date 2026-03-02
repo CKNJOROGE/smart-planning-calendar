@@ -182,6 +182,7 @@ class DailyActivity(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=True, index=True)
     post_group_id = Column(String(40), nullable=True, index=True)
     activity_date = Column(Date, nullable=False, index=True)
     activity = Column(Text, nullable=False)
@@ -190,6 +191,11 @@ class DailyActivity(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User", back_populates="daily_activities", foreign_keys=[user_id])
+    client = relationship("ClientAccount", foreign_keys=[client_id])
+
+    @property
+    def client_name(self) -> str | None:
+        return self.client.name if self.client else None
 
 
 class CashReimbursementRequest(Base):

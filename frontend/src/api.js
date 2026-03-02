@@ -439,10 +439,15 @@ export function listDashboardOverview() {
   return request("/dashboard/overview");
 }
 
-export function createTodayActivity(activity) {
+export function createTodayActivity(activity, clientId = null) {
+  const activityText = typeof activity === "string" ? activity : String(activity?.activity || "");
+  const payload = { activity: activityText };
+  if (clientId != null && Number.isFinite(Number(clientId))) {
+    payload.client_id = Number(clientId);
+  }
   return request("/dashboard/activities/today", {
     method: "POST",
-    body: { activity },
+    body: payload,
   });
 }
 
@@ -459,6 +464,7 @@ export function listTodoHistory(filters = {}) {
   if (filters.end_date) qs.set("end_date", filters.end_date);
   if (filters.user_id) qs.set("user_id", String(filters.user_id));
   if (filters.user_query) qs.set("user_query", String(filters.user_query));
+  if (filters.client_id) qs.set("client_id", String(filters.client_id));
   if (filters.days) qs.set("days", String(filters.days));
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return request(`/dashboard/activities/history${suffix}`);

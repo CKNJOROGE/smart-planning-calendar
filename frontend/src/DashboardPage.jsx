@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { createTodayActivity, listDashboardOverview, listTodoHistory, me, updateTodayActivity } from "./api";
+import { createTodayActivity, listDashboardOverview, listTaskClients, listTodoHistory, me, updateTodayActivity } from "./api";
 import { useToast } from "./ToastProvider";
 
 function formatDate(v) {
@@ -89,8 +89,10 @@ export default function DashboardPage() {
   const [togglingIds, setTogglingIds] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyRows, setHistoryRows] = useState([]);
-  const [historyFilters, setHistoryFilters] = useState({ user_query: "", start_date: "", end_date: "" });
-  const [historyDraft, setHistoryDraft] = useState({ user_query: "", start_date: "", end_date: "" });
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [historyFilters, setHistoryFilters] = useState({ user_query: "", start_date: "", end_date: "", client_id: "" });
+  const [historyDraft, setHistoryDraft] = useState({ user_query: "", start_date: "", end_date: "", client_id: "" });
   const [overview, setOverview] = useState({
     today: "",
     todays_activities: [],
@@ -188,6 +190,7 @@ export default function DashboardPage() {
       const filters = { days: 90 };
       if (historyFilters.start_date) filters.start_date = historyFilters.start_date;
       if (historyFilters.end_date) filters.end_date = historyFilters.end_date;
+      if (historyFilters.client_id) filters.client_id = historyFilters.client_id;
       if (isCeo && historyFilters.user_query.trim()) filters.user_query = historyFilters.user_query.trim();
       const rows = await listTodoHistory(filters);
       setHistoryRows(rows || []);
@@ -205,8 +208,8 @@ export default function DashboardPage() {
     }
 
     const filtersLine = isCeo
-      ? `Filters: user="${historyFilters.user_query || "all"}", from="${historyFilters.start_date || "all"}", to="${historyFilters.end_date || "all"}"`
-      : `Filters: from="${historyFilters.start_date || "all"}", to="${historyFilters.end_date || "all"}"`;
+      ? `Filters: user="${historyFilters.user_query || "all"}", client="${clients.find((c) => String(c.id) === String(historyFilters.client_id))?.name || "all"}", from="${historyFilters.start_date || "all"}", to="${historyFilters.end_date || "all"}"`
+      : `Filters: client="${clients.find((c) => String(c.id) === String(historyFilters.client_id))?.name || "all"}", from="${historyFilters.start_date || "all"}", to="${historyFilters.end_date || "all"}"`;
 
     const bodyHtml = historyByDate.map((day) => `
       <section style="margin:0 0 16px 0;">
@@ -220,7 +223,7 @@ export default function DashboardPage() {
             <ul style="margin:0;padding-left:18px;">
               ${post.items.map((item) => `
                 <li style="margin:0 0 4px 0;">
-                  [${item.completed ? "x" : " "}] ${escapeHtml(item.activity)}
+                  [${item.completed ? "x" : " "}] ${escapeHtml(item.activity)}${item.client_name ? ` <span style="color:#555;">(Client: ${escapeHtml(item.client_name)})</span>` : ""}
                 </li>
               `).join("")}
             </ul>
@@ -284,9 +287,20 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    (async () => {
+      try {
+        const rows = await listTaskClients();
+        setClients(rows || []);
+      } catch {
+        setClients([]);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
     loadHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id, currentUser?.role, historyFilters.user_query, historyFilters.start_date, historyFilters.end_date]);
+  }, [currentUser?.id, currentUser?.role, historyFilters.user_query, historyFilters.start_date, historyFilters.end_date, historyFilters.client_id]);
 
   async function handlePostActivity(e) {
     e.preventDefault();
@@ -296,8 +310,9 @@ export default function DashboardPage() {
       return;
     }
     try {
-      await createTodayActivity(text);
+      await createTodayActivity(text, selectedClientId ? Number(selectedClientId) : null);
       setNewActivity("");
+      setSelectedClientId("");
       await loadOverview();
       showToast("To-do list posted", "success");
     } catch (e2) {
@@ -403,6 +418,15 @@ export default function DashboardPage() {
         </div>
         <form onSubmit={handlePostActivity}>
           <div className="field">
+            <label>Client</label>
+            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)}>
+              <option value="">No client</option>
+              {clients.map((c) => (
+                <option key={c.id} value={String(c.id)}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
             <textarea
               value={newActivity}
               onChange={(e) => setNewActivity(e.target.value)}
@@ -447,6 +471,9 @@ export default function DashboardPage() {
                             style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
                           >
                             {item.activity}
+                            {item.client_name ? (
+                              <div className="muted" style={{ marginTop: 2, fontSize: 12 }}>Client: {item.client_name}</div>
+                            ) : null}
                           </div>
                         </label>
                       ))}
@@ -494,6 +521,9 @@ export default function DashboardPage() {
                                 />
                                 <div className="dashboard-feed-text" style={{ color: "#b91c1c", fontWeight: 600 }}>
                                   {item.activity}
+                                  {item.client_name ? (
+                                    <div className="muted" style={{ marginTop: 2, fontSize: 12 }}>Client: {item.client_name}</div>
+                                  ) : null}
                                 </div>
                               </label>
                             ))}
@@ -527,6 +557,18 @@ export default function DashboardPage() {
                 </div>
               )}
               <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                <label>Client</label>
+                <select
+                  value={historyDraft.client_id}
+                  onChange={(e) => setHistoryDraft((prev) => ({ ...prev, client_id: e.target.value }))}
+                >
+                  <option value="">All clients</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={String(c.id)}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
                 <label>From</label>
                 <input
                   type="date"
@@ -555,7 +597,7 @@ export default function DashboardPage() {
                   className="btn"
                   type="button"
                   onClick={() => {
-                    const reset = { user_query: "", start_date: "", end_date: "" };
+                    const reset = { user_query: "", start_date: "", end_date: "", client_id: "" };
                     setHistoryDraft(reset);
                     setHistoryFilters(reset);
                   }}
@@ -592,6 +634,9 @@ export default function DashboardPage() {
                                   style={{ opacity: item.completed ? 0.7 : 1 }}
                                 >
                                   {item.activity}
+                                  {item.client_name ? (
+                                    <div className="muted" style={{ marginTop: 2, fontSize: 12 }}>Client: {item.client_name}</div>
+                                  ) : null}
                                 </div>
                               </label>
                             ))}
