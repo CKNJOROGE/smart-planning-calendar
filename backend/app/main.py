@@ -2381,7 +2381,7 @@ def list_pending_cash_requisitions(
     if role == "finance":
         q = q.filter(CashRequisitionRequest.status == "pending_finance_review")
     else:
-        q = q.filter(CashRequisitionRequest.status == "pending_ceo_approval")
+        q = q.filter(CashRequisitionRequest.status.in_(["pending_finance_review", "pending_ceo_approval"]))
 
     rows = q.order_by(CashRequisitionRequest.submitted_at.asc(), CashRequisitionRequest.id.asc()).all()
     for r in rows:
@@ -2438,8 +2438,8 @@ def decide_cash_requisition(
         req.finance_decided_by_id = current.id
         req.status = "pending_ceo_approval" if decision == "approved" else "rejected"
     elif role in {"admin", "ceo"}:
-        if req.status != "pending_ceo_approval":
-            raise HTTPException(status_code=400, detail="CEO/Admin can only decide pending CEO approval requests")
+        if req.status not in {"pending_finance_review", "pending_ceo_approval"}:
+            raise HTTPException(status_code=400, detail="CEO/Admin can only decide pending requisition approvals")
         req.ceo_decision = decision
         req.ceo_comment = comment or None
         req.ceo_decided_at = now

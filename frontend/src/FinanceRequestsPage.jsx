@@ -482,7 +482,10 @@ export default function FinanceRequestsPage() {
   function canCurrentRoleDecideRequisition(r) {
     const role = (current?.role || "").toLowerCase();
     if (role === "finance") return (r.status || "").toLowerCase() === "pending_finance_review";
-    if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
+    if (role === "admin" || role === "ceo") {
+      const s = (r.status || "").toLowerCase();
+      return s === "pending_finance_review" || s === "pending_ceo_approval";
+    }
     return false;
   }
 
