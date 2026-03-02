@@ -11,6 +11,7 @@ import {
   openProtectedFile,
 } from "./api";
 import Avatar from "./Avatar";
+import LoadingState from "./LoadingState";
 
 const PROFILE_DOCUMENTS = [
   { key: "id_copy", label: "ID Copy", field: "id_copy_url" },
@@ -115,7 +116,15 @@ export default function MyProfilePage() {
   }
 
   if (err) return <div style={{ color: "crimson" }}>{err}</div>;
-  if (!profile) return <div>Loading...</div>;
+  if (!profile) {
+    return (
+      <div className="page-wrap">
+        <div className="card">
+          <LoadingState label="Loading profile..." />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-wrap profile-page">

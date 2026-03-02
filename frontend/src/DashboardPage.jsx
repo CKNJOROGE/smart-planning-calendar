@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createTodayActivity, listDashboardOverview, listTaskClients, listTodoHistory, me, updateTodayActivity } from "./api";
 import { useToast } from "./ToastProvider";
+import LoadingState from "./LoadingState";
 
 function formatDate(v) {
   if (!v) return "-";
@@ -368,6 +369,16 @@ export default function DashboardPage() {
     );
   }
 
+  if (busy && !overview.today) {
+    return (
+      <div className="page-wrap">
+        <div className="card">
+          <LoadingState label="Loading dashboard..." />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard-page">
       <div className="dashboard-hero card">
@@ -608,7 +619,7 @@ export default function DashboardPage() {
               </div>
             </div>
             {historyLoading ? (
-              <div className="muted">Loading history...</div>
+              <LoadingState label="Loading history..." compact />
             ) : !historyByDate.length ? (
               <div className="muted">No historical to-do lists yet.</div>
             ) : (

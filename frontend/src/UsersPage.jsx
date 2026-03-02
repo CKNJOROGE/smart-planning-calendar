@@ -14,6 +14,7 @@ import {
 } from "./api";
 import { Link } from "react-router-dom";
 import Avatar from "./Avatar";
+import LoadingState from "./LoadingState";
 
 export default function UsersPage() {
   const [current, setCurrent] = useState(null);
@@ -90,7 +91,7 @@ export default function UsersPage() {
       <div className="page-wrap users-page">
         <div className="card" style={{ padding: 16 }}>
           <div style={{ fontWeight: 800, marginBottom: 6 }}>Users</div>
-          <div className="muted">Loading...</div>
+          <LoadingState label="Loading users..." compact />
           {err && <div style={{ marginTop: 10, color: "crimson", whiteSpace: "pre-wrap" }}>{err}</div>}
         </div>
       </div>

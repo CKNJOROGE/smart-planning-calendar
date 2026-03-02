@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
 import { me, listUsers, listDepartments, listDesignations, adminGetUserProfile, adminUpdateUserProfile, adminUploadUserDocument, adminGetUserLeaveBalance, openProtectedFile } from "./api";
 import { useToast } from "./ToastProvider";
+import LoadingState from "./LoadingState";
 
 const PROFILE_DOCUMENTS = [
   { key: "id_copy", label: "ID Copy", field: "id_copy_url" },
@@ -49,7 +50,15 @@ export default function UserProfilePage() {
 
   if (current && current.role !== "admin" && current.role !== "ceo") return <Navigate to="/" replace />;
   if (err) return <div style={{ color: "crimson" }}>{err}</div>;
-  if (!profile) return <div>Loading...</div>;
+  if (!profile) {
+    return (
+      <div className="page-wrap">
+        <div className="card">
+          <LoadingState label="Loading user profile..." />
+        </div>
+      </div>
+    );
+  }
 
   async function handleDocumentUpload(docKey, e) {
     const file = e.target.files?.[0];

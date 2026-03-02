@@ -10,6 +10,7 @@ import {
   deleteClientTask,
 } from "./api";
 import { useToast } from "./ToastProvider";
+import LoadingState from "./LoadingState";
 
 const QUARTERS = [1, 2, 3, 4];
 
@@ -206,6 +207,16 @@ export default function ClientTaskManagerPage() {
       setErr(msg);
       showToast(msg, "error");
     }
+  }
+
+  if (busy && !current) {
+    return (
+      <div className="page-wrap">
+        <div className="card">
+          <LoadingState label="Loading task manager..." />
+        </div>
+      </div>
+    );
   }
 
   return (

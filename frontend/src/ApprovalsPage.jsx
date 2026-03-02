@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { me, listLeaveRequests, approveLeaveRequest, rejectLeaveRequest } from "./api";
 import { useToast } from "./ToastProvider";
+import LoadingState from "./LoadingState";
 
 function fmtDateRange(e) {
   const from = new Date(e.start_ts).toLocaleDateString();
@@ -124,7 +125,7 @@ export default function ApprovalsPage() {
 
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ padding: 12, borderBottom: "1px solid #e2e8f0", fontWeight: 800 }}>
-          {loading ? "Loading..." : `${items.length} request(s)`}
+          {loading ? <LoadingState label="Loading requests..." compact /> : `${items.length} request(s)`}
         </div>
 
         <div style={{ width: "100%", overflowX: "auto" }}>

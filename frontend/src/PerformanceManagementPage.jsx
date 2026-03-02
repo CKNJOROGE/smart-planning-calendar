@@ -11,6 +11,7 @@ import {
   updateDepartmentGoal,
 } from "./api";
 import { useToast } from "./ToastProvider";
+import LoadingState from "./LoadingState";
 
 const PERSPECTIVE_OPTIONS = [
   { value: "financial", label: "Financial Perspective" },
@@ -453,7 +454,7 @@ export default function PerformanceManagementPage() {
         )}
       </div>
 
-      {busy && <div className="muted" style={{ marginTop: 10 }}>Loading...</div>}
+      {busy && <LoadingState label="Loading performance data..." compact />}
     </div>
   );
 }

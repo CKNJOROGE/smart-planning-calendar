@@ -9,6 +9,7 @@ import {
   openProtectedFile,
 } from "./api";
 import { useToast } from "./ToastProvider";
+import LoadingState from "./LoadingState";
 
 export default function LibraryPage() {
   const [user, setUser] = useState(null);
@@ -132,7 +133,15 @@ export default function LibraryPage() {
     }
   }
 
-  if (loading) return <div>Loading library...</div>;
+  if (loading) {
+    return (
+      <div className="page-wrap">
+        <div className="card">
+          <LoadingState label="Loading library..." />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-wrap library-page">

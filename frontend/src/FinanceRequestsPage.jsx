@@ -33,6 +33,7 @@ import {
   updateTaskClient,
 } from "./api";
 import { useToast } from "./ToastProvider";
+import LoadingState from "./LoadingState";
 
 function toDateInput(v) {
   if (!v) return "";
@@ -558,6 +559,16 @@ export default function FinanceRequestsPage() {
       >
         {count > 99 ? "99+" : String(count)}
       </span>
+    );
+  }
+
+  if (busy && !current) {
+    return (
+      <div className="page-wrap">
+        <div className="card">
+          <LoadingState label="Loading finance requests..." />
+        </div>
+      </div>
     );
   }
 
