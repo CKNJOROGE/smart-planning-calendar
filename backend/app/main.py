@@ -2269,7 +2269,7 @@ def decide_cash_reimbursement(
 
     if req.ceo_decision == "rejected" or req.finance_decision == "rejected":
         req.status = "rejected"
-    elif req.ceo_decision == "approved" and req.finance_decision == "approved":
+    elif req.ceo_decision == "approved":
         req.status = "pending_reimbursement"
     else:
         req.status = "pending_approval"
