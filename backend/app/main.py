@@ -82,6 +82,7 @@ from .schemas import (
     CashReimbursementDraftItemOut,
     CashReimbursementSubmitIn,
     CashReimbursementRequestOut,
+    FinanceAttentionOut,
     CashReimbursementDecisionIn,
     CashReimbursementDraftSaveIn,
     CashReimbursementDraftManualItemOut,
@@ -2090,6 +2091,54 @@ def list_approved_cash_reimbursements(
         _ = r.user
         _ = r.items
     return rows
+
+
+@app.get("/finance/attention", response_model=FinanceAttentionOut)
+def get_finance_attention(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        return FinanceAttentionOut()
+
+    if role == "finance":
+        cash_reimbursement = db.query(CashReimbursementRequest.id).filter(
+            CashReimbursementRequest.status == "pending_approval",
+            CashReimbursementRequest.finance_decision.is_(None),
+        ).count()
+        cash_requisition = db.query(CashRequisitionRequest.id).filter(
+            CashRequisitionRequest.status == "pending_finance_review",
+        ).count()
+        authority_to_incur = db.query(AuthorityToIncurRequest.id).filter(
+            AuthorityToIncurRequest.status == "pending_finance_review",
+        ).count()
+        salary_advance = db.query(SalaryAdvanceRequest.id).filter(
+            SalaryAdvanceRequest.status == "pending_finance_review",
+        ).count()
+    else:
+        cash_reimbursement = db.query(CashReimbursementRequest.id).filter(
+            CashReimbursementRequest.status == "pending_approval",
+            CashReimbursementRequest.ceo_decision.is_(None),
+        ).count()
+        cash_requisition = db.query(CashRequisitionRequest.id).filter(
+            CashRequisitionRequest.status.in_(["pending_finance_review", "pending_ceo_approval"]),
+        ).count()
+        authority_to_incur = db.query(AuthorityToIncurRequest.id).filter(
+            AuthorityToIncurRequest.status == "pending_ceo_approval",
+        ).count()
+        salary_advance = db.query(SalaryAdvanceRequest.id).filter(
+            SalaryAdvanceRequest.status == "pending_ceo_approval",
+        ).count()
+
+    total = cash_reimbursement + cash_requisition + authority_to_incur + salary_advance
+    return FinanceAttentionOut(
+        cash_reimbursement=cash_reimbursement,
+        cash_requisition=cash_requisition,
+        authority_to_incur=authority_to_incur,
+        salary_advance=salary_advance,
+        total=total,
+    )
 
 
 @app.post("/finance/reimbursements/submit", response_model=CashReimbursementRequestOut)

@@ -530,6 +530,10 @@ export function markCashReimbursed(requestId) {
   });
 }
 
+export function getFinanceAttention() {
+  return request("/finance/attention");
+}
+
 export function submitCashRequisition(payload) {
   return request("/finance/requisitions", { method: "POST", body: payload });
 }

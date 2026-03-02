@@ -14,12 +14,13 @@ import PerformanceManagementPage from "./PerformanceManagementPage";
 import IndividualGoalsPage from "./IndividualGoalsPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
 import ResetPasswordPage from "./ResetPasswordPage";
-import { getToken, clearToken } from "./api";
+import { getToken, clearToken, getFinanceAttention } from "./api";
 import { me } from "./api";
 import { ToastProvider } from "./ToastProvider";
 
 function Shell({ onLogout }) {
   const [user, setUser] = useState(null);
+  const [financeAttentionTotal, setFinanceAttentionTotal] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
   const nav = useNavigate();
@@ -27,6 +28,29 @@ function Shell({ onLogout }) {
   useEffect(() => {
     me().then(setUser).catch(() => setUser(null));
   }, []);
+
+  useEffect(() => {
+    const role = (user?.role || "").toLowerCase();
+    if (!["finance", "admin", "ceo"].includes(role)) {
+      setFinanceAttentionTotal(0);
+      return;
+    }
+    let cancelled = false;
+    async function loadAttention() {
+      try {
+        const data = await getFinanceAttention();
+        if (!cancelled) setFinanceAttentionTotal(Number(data?.total || 0));
+      } catch {
+        if (!cancelled) setFinanceAttentionTotal(0);
+      }
+    }
+    loadAttention();
+    const timer = setInterval(loadAttention, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [user?.role]);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -65,8 +89,32 @@ function Shell({ onLogout }) {
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/client-task-manager">
               <span className="sidebar-link-text">Client Task Manager</span>
             </NavLink>
-            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/finance-requests">
+            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/finance-requests" style={{ position: "relative" }}>
               <span className="sidebar-link-text">Finance Requests</span>
+              {financeAttentionTotal > 0 && (
+                <span
+                  aria-label={`${financeAttentionTotal} finance request notifications`}
+                  title={`${financeAttentionTotal} finance request(s) need attention`}
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    bottom: 6,
+                    minWidth: 18,
+                    height: 18,
+                    padding: "0 5px",
+                    borderRadius: 999,
+                    background: "#dc2626",
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    lineHeight: "18px",
+                    textAlign: "center",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                  }}
+                >
+                  {financeAttentionTotal > 99 ? "99+" : financeAttentionTotal}
+                </span>
+              )}
             </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/performance-management">
               <span className="sidebar-link-text">Performance Management</span>

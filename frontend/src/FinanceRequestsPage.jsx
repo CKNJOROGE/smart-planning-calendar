@@ -783,10 +783,7 @@ export default function FinanceRequestsPage() {
       {activeSection === "cash_reimbursement" && (
         <>
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 900, marginBottom: 8, position: "relative", display: "inline-flex", alignItems: "center", paddingRight: 6 }}>
-          Cash Reimbursement
-          {canReview ? notifBadge(attentionCounts.cash_reimbursement) : null}
-        </div>
+        <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Reimbursement</div>
         {(current?.role === "admin" || current?.role === "ceo") && (
           <div style={{ marginBottom: 12 }}>
             <button
@@ -1138,10 +1135,7 @@ export default function FinanceRequestsPage() {
       {activeSection === "cash_requisition" && (
         <>
           <div className="card" style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 8, position: "relative", display: "inline-flex", alignItems: "center", paddingRight: 6 }}>
-              Cash Requisition
-              {canReview ? notifBadge(attentionCounts.cash_requisition) : null}
-            </div>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>Cash Requisition</div>
             <div className="muted" style={{ marginBottom: 10 }}>
               Workflow: Finance review {"->"} CEO/Admin approval {"->"} Disbursement.
             </div>
@@ -1328,10 +1322,7 @@ export default function FinanceRequestsPage() {
       {activeSection === "authority_to_incur" && (
         <>
           <div className="card" style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 8, position: "relative", display: "inline-flex", alignItems: "center", paddingRight: 6 }}>
-              Authority To Incur Expenditure
-              {canReview ? notifBadge(attentionCounts.authority_to_incur) : null}
-            </div>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>Authority To Incur Expenditure</div>
             <div className="muted" style={{ marginBottom: 10 }}>
               Workflow: Finance review {"->"} CEO/Admin approval {"->"} Mark expenditure incurred.
             </div>
@@ -1528,10 +1519,7 @@ export default function FinanceRequestsPage() {
       {activeSection === "salary_advance" && (
         <>
           <div className="card" style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 8, position: "relative", display: "inline-flex", alignItems: "center", paddingRight: 6 }}>
-              Salary Advance Request
-              {canReview ? notifBadge(attentionCounts.salary_advance) : null}
-            </div>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>Salary Advance Request</div>
             <div className="muted" style={{ marginBottom: 10 }}>
               Workflow: Finance review {"->"} CEO/Admin approval {"->"} Payroll disbursement.
             </div>

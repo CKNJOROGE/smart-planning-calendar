@@ -525,6 +525,14 @@ class CashReimbursementRequestOut(BaseModel):
         from_attributes = True
 
 
+class FinanceAttentionOut(BaseModel):
+    cash_reimbursement: int = 0
+    cash_requisition: int = 0
+    authority_to_incur: int = 0
+    salary_advance: int = 0
+    total: int = 0
+
+
 class CashRequisitionCreateIn(BaseModel):
     amount: float
     purpose: str
