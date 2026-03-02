@@ -299,13 +299,13 @@ export default function PerformanceManagementPage() {
                     {(groupedCompanyGoals[p.value] || []).map((g) => (
                       <tr key={`cg_${g.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                         <td style={{ padding: 10 }}>
-                          <div style={{ fontWeight: 700 }}>{g.title}</div>
-                          {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
-                          {canManageCompany && (
-                            <div style={{ marginTop: 8 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                            <div style={{ fontWeight: 700, flex: 1 }}>{g.title}</div>
+                            {canManageCompany && (
                               <button className="btn" type="button" onClick={() => editCompany(g)}>Edit</button>
-                            </div>
-                          )}
+                            )}
+                          </div>
+                          {g.description && <div className="muted" style={{ fontSize: 12 }}>{g.description}</div>}
                         </td>
                       </tr>
                     ))}
