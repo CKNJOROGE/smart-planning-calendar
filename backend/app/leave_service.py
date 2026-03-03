@@ -242,3 +242,23 @@ def validate_leave_request(
     requested_days = float((end_ts.date() - start_ts.date()).days)
     if requested_days <= 0:
         raise ValueError("Invalid leave duration")
+
+    # Block duplicate/overlapping leave windows for the same user.
+    overlap_q = (
+        db.query(Event)
+        .filter(
+            Event.user_id == user.id,
+            Event.type.in_(["Leave", "Hospital"]),
+            Event.status != "rejected",
+            Event.start_ts < end_ts,
+            Event.end_ts > start_ts,
+        )
+    )
+    if exclude_event_id is not None:
+        overlap_q = overlap_q.filter(Event.id != exclude_event_id)
+    conflict = overlap_q.order_by(Event.start_ts.asc()).first()
+    if conflict:
+        raise ValueError(
+            f"You already have a leave request overlapping this period "
+            f"({conflict.start_ts.date()} to {conflict.end_ts.date()})."
+        )
