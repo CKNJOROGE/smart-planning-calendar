@@ -30,6 +30,28 @@ function resolveFileUrl(url) {
   return url;
 }
 
+function extractErrorMessage(status, statusText, text) {
+  const raw = String(text || "").trim();
+  if (!raw) return `${status} ${statusText}`.trim();
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.detail === "string" && parsed.detail.trim()) {
+      return parsed.detail.trim();
+    }
+    if (Array.isArray(parsed?.detail) && parsed.detail.length) {
+      const first = parsed.detail[0];
+      if (typeof first === "string" && first.trim()) return first.trim();
+      if (first && typeof first.msg === "string" && first.msg.trim()) return first.msg.trim();
+    }
+    if (typeof parsed?.message === "string" && parsed.message.trim()) {
+      return parsed.message.trim();
+    }
+  } catch {
+    // non-json response body
+  }
+  return raw;
+}
+
 async function request(path, { method = "GET", body } = {}) {
   const token = getToken();
 
@@ -107,7 +129,7 @@ export async function deleteDepartment(departmentId) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
   return res.json();
 }
