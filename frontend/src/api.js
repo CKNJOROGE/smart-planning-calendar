@@ -66,7 +66,7 @@ async function request(path, { method = "GET", body } = {}) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
 
   return res.json();
@@ -85,7 +85,7 @@ export async function login(email, password) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
 
   return res.json();
@@ -153,7 +153,7 @@ export async function deleteDesignation(designationId) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
   return res.json();
 }
@@ -212,7 +212,7 @@ export async function uploadEventSickNote(eventId, file) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
   return res.json();
 }
@@ -225,7 +225,7 @@ export async function deleteEvent(id) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
   return res.json();
 }
@@ -251,7 +251,7 @@ export async function uploadMyAvatar(file) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
 
   return res.json();
@@ -270,7 +270,7 @@ export async function uploadMyDocument(docType, file) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
 
   return res.json();
@@ -300,7 +300,7 @@ export async function adminUploadUserDocument(userId, docType, file) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
 
   return res.json();
@@ -318,7 +318,7 @@ export async function deleteUser(userId) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
   return res.json();
 }
@@ -386,7 +386,7 @@ export async function uploadLibraryDocument({ title, category, file }) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
   return res.json();
 }
@@ -399,7 +399,7 @@ export async function deleteLibraryDocument(docId) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
   return res.json();
 }
@@ -452,7 +452,7 @@ export async function deleteClientTask(taskId) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
   return res.json();
 }
@@ -706,7 +706,7 @@ export async function setSalaryAdvanceDeductionStart(requestId, deductionStartDa
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
   return res.json();
 }
@@ -722,7 +722,7 @@ export async function openProtectedFile(url) {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
 
   const blob = await res.blob();
@@ -733,4 +733,5 @@ export async function openProtectedFile(url) {
   }
   setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
 }
+
 
