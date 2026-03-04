@@ -169,7 +169,7 @@ function makeSupervisorRatingsBySections(sections) {
   }, {});
 }
 
-function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange }) {
+function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange, canEditSupervisor = false }) {
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ fontWeight: 900, marginBottom: 6 }}>{title}</div>
@@ -198,6 +198,7 @@ function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange }) {
                   <select
                     value={supervisorValues[idx] || ""}
                     onChange={(e) => onSupervisorChange(idx, e.target.value)}
+                    disabled={!canEditSupervisor}
                   >
                     {RATING_OPTIONS.map((v) => (
                       <option key={`sup-${kpi}-${v}`} value={v}>{v || "-"}</option>
@@ -205,7 +206,7 @@ function KpiTable({ title, rows, supervisorValues = [], onSupervisorChange }) {
                   </select>
                 </td>
                 <td style={{ padding: 10 }}>
-                  <input placeholder="Comments" />
+                  <input placeholder="Comments" disabled={!canEditSupervisor} />
                 </td>
               </tr>
             ))}
@@ -223,6 +224,7 @@ function GoalsTable({
   onSupervisorChange = () => {},
   onAddRow = () => {},
   onRemoveRow = () => {},
+  canEditSupervisor = false,
 }) {
   const rows = defaultRows.length ? defaultRows : Array.from({ length: 5 }).map(() => ({ ...EMPTY_GOAL_ROW }));
   const tableRef = useRef(null);
@@ -309,6 +311,7 @@ function GoalsTable({
                   <select
                     value={supervisorValues[idx] || row.supervisorRating || ""}
                     onChange={(e) => onSupervisorChange(idx, e.target.value)}
+                    disabled={!canEditSupervisor}
                   >
                     {RATING_OPTIONS.map((v) => (
                       <option key={`${title}-supervisor-${idx}-${v}`} value={v}>{v || "-"}</option>
@@ -345,6 +348,10 @@ export default function IndividualGoalsPage() {
   );
   const [nextReviewRows, setNextReviewRows] = useState(() =>
     NEXT_REVIEW_GOALS_DEFAULT_ROWS.map((r) => ({ ...r }))
+  );
+  const canEditSupervisorInputs = useMemo(
+    () => normalize(current?.role) === "supervisor",
+    [current?.role]
   );
 
   const hasHrOutsourcingAppraisalForm = useMemo(() => {
@@ -496,6 +503,11 @@ export default function IndividualGoalsPage() {
             <div className="helper" style={{ marginBottom: 6, fontWeight: 700 }}>
               Rating Scale: 5 Exceptional, 4 Strong, 3 Meets, 2 Needs Improvement, 1 Unsatisfactory
             </div>
+            {!canEditSupervisorInputs && (
+              <div className="helper" style={{ marginBottom: 8 }}>
+                Supervisor ratings/comments can only be filled by your assigned supervisor.
+              </div>
+            )}
 
             {activeKpiSections.map((section) => (
               <KpiTable
@@ -504,6 +516,7 @@ export default function IndividualGoalsPage() {
                 rows={section.rows}
                 supervisorValues={supervisorRatings[section.key] || []}
                 onSupervisorChange={(idx, value) => updateSupervisorRating(section.key, idx, value)}
+                canEditSupervisor={canEditSupervisorInputs}
               />
             ))}
 
@@ -516,6 +529,7 @@ export default function IndividualGoalsPage() {
               onSupervisorChange={(idx, value) => updateGoalSupervisorRating("last_review", idx, value)}
               onAddRow={() => addGoalRow("last_review")}
               onRemoveRow={(idx) => removeGoalRow("last_review", idx)}
+              canEditSupervisor={canEditSupervisorInputs}
             />
             <GoalsTable
               title="New goals for the next review period"
@@ -524,6 +538,7 @@ export default function IndividualGoalsPage() {
               onSupervisorChange={(idx, value) => updateGoalSupervisorRating("next_review", idx, value)}
               onAddRow={() => addGoalRow("next_review")}
               onRemoveRow={(idx) => removeGoalRow("next_review", idx)}
+              canEditSupervisor={canEditSupervisorInputs}
             />
 
             <div style={{ fontWeight: 900, marginTop: 14 }}>Section 6: Overall Performance Summary</div>
