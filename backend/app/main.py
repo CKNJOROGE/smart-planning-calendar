@@ -3928,7 +3928,12 @@ async def update_event(
     if e.user_id != user.id:
         raise HTTPException(status_code=403, detail="Only the requesting user can edit this event")
 
+    def _is_leave_like_type(value: Optional[str]) -> bool:
+        return (value or "").strip().lower() in {"leave", "hospital"}
+
     # Prepare prospective values for leave validation
+    original_start = e.start_ts
+    original_end = e.end_ts
     new_start = payload.start_ts if payload.start_ts is not None else e.start_ts
     new_end = payload.end_ts if payload.end_ts is not None else e.end_ts
     new_type = payload.type if payload.type is not None else e.type
@@ -3978,6 +3983,22 @@ async def update_event(
     e.one_time_client_name = new_one_time_client_name
     if payload.note is not None:
         e.note = payload.note or None
+
+    # If approved leave dates are adjusted before leave starts, require fresh approval.
+    dates_changed = (new_start != original_start) or (new_end != original_end)
+    if (
+        dates_changed
+        and _is_leave_like_type(new_type)
+        and (e.status or "").strip().lower() == "approved"
+        and date.today() < new_start.date()
+    ):
+        e.status = "pending"
+        e.requested_by_id = e.user_id
+        e.approved_by_id = None
+        e.first_approved_by_id = None
+        e.second_approved_by_id = None
+        e.approved_at = None
+        e.rejection_reason = None
 
     e.updated_at = datetime.utcnow()
     _sync_client_visit_todos(db, e)
