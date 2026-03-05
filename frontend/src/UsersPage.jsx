@@ -25,6 +25,7 @@ export default function UsersPage() {
   const [err, setErr] = useState("");
   const [departmentName, setDepartmentName] = useState("");
   const [designationDraftByDepartment, setDesignationDraftByDepartment] = useState({});
+  const [selectedDesignationByDepartment, setSelectedDesignationByDepartment] = useState({});
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -169,6 +170,12 @@ export default function UsersPage() {
     }
   }
 
+  function selectedDesignationForDepartment(departmentId) {
+    const options = designationsForDepartment(departmentId);
+    const selectedId = Number(selectedDesignationByDepartment[departmentId] || 0);
+    return options.find((d) => Number(d.id) === selectedId) || null;
+  }
+
   async function handleDeleteUser(user) {
     setErr("");
     if (!confirm(`Delete user "${user.name}" (${user.email})?`)) return;
@@ -245,22 +252,30 @@ export default function UsersPage() {
                 <tr key={`dept_${d.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                   <td style={{ padding: 12 }}>{d.name}</td>
                   <td style={{ padding: 12 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                      {designationsForDepartment(d.id).map((x) => (
-                        <span key={`desig_${x.id}`} className="pill" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          {x.name}
-                          <button
-                            type="button"
-                            className="btn btn-danger"
-                            style={{ padding: "2px 8px", lineHeight: 1 }}
-                            onClick={() => handleDeleteDesignation(x)}
-                            disabled={busy}
-                          >
-                            x
-                          </button>
-                        </span>
-                      ))}
-                      {!designationsForDepartment(d.id).length && <span className="muted">No designations</span>}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+                      <select
+                        value={selectedDesignationByDepartment[d.id] || ""}
+                        onChange={(e) => setSelectedDesignationByDepartment((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                        style={{ minWidth: 240 }}
+                        disabled={busy || !designationsForDepartment(d.id).length}
+                      >
+                        <option value="">{designationsForDepartment(d.id).length ? "Select designation" : "No designations"}</option>
+                        {designationsForDepartment(d.id).map((x) => (
+                          <option key={`desig_option_${x.id}`} value={String(x.id)}>{x.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={() => {
+                          const selected = selectedDesignationForDepartment(d.id);
+                          if (!selected) return;
+                          handleDeleteDesignation(selected);
+                        }}
+                        disabled={busy || !selectedDesignationForDepartment(d.id)}
+                      >
+                        Delete Selected
+                      </button>
                     </div>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <input
