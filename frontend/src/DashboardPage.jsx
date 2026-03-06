@@ -495,7 +495,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="card dashboard-panel">
+          <div className="card dashboard-panel dashboard-carryover-panel">
             <div className="dashboard-panel-head">
               <div className="dashboard-panel-title">Carried Over (Unfinished)</div>
             </div>
@@ -548,7 +548,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          <div className="card dashboard-panel">
+          <div className="card dashboard-panel dashboard-history-panel">
             <div className="dashboard-panel-head">
               <div className="dashboard-panel-title">To-Do List History</div>
               <button className="btn" type="button" onClick={exportHistoryPdf} disabled={!historyByDate.length}>
