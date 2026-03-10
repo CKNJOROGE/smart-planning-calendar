@@ -43,6 +43,8 @@ function colorByType(type) {
       return "#6a1b9a";
     case "training":
       return "#ef6c00";
+    case "meeting":
+      return "#00838f";
     default:
       return "#1565c0";
   }
@@ -54,6 +56,13 @@ function toLocalDateInput(d) {
   const mm = String(x.getMonth() + 1).padStart(2, "0");
   const dd = String(x.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function toLocalTimeInput(d) {
+  const x = new Date(d);
+  const hh = String(x.getHours()).padStart(2, "0");
+  const mm = String(x.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
 }
 
 function holidayThemeFromName(name) {
@@ -231,6 +240,10 @@ function isLeaveLikeType(type) {
   return ["leave", "hospital"].includes((type || "").toLowerCase());
 }
 
+function isForcedAllDayType(type) {
+  return isLeaveLikeType(type);
+}
+
 function getReviewBlockReason(apiEvent, currentUser) {
   if (!apiEvent || !currentUser) return "";
   const role = String(currentUser.role || "").toLowerCase();
@@ -315,6 +328,8 @@ export default function CalendarPage() {
     startDate: "",
     endDate: "",
     allDay: true,
+    startTime: "09:00",
+    endTime: "10:00",
     type: "Leave",
     clientSource: "managed",
     clientId: "",
@@ -329,6 +344,9 @@ export default function CalendarPage() {
     id: null,
     startDate: "",
     endDate: "",
+    allDay: true,
+    startTime: "09:00",
+    endTime: "10:00",
     type: "Leave",
     clientSource: "managed",
     clientId: "",
@@ -626,6 +644,8 @@ export default function CalendarPage() {
       startDate: d,
       endDate: d,
       allDay: true,
+      startTime: "09:00",
+      endTime: "10:00",
       type: "Leave",
       clientSource: "managed",
       clientId: "",
@@ -731,16 +751,24 @@ export default function CalendarPage() {
     setError("");
 
     const e = popup.apiEvent;
-
-    const startD = toLocalDateInput(new Date(e.start_ts));
+    const startDt = new Date(e.start_ts);
     const endDt = new Date(e.end_ts);
-    endDt.setDate(endDt.getDate() - 1);
-    const endD = toLocalDateInput(endDt);
+    const endTime = toLocalTimeInput(endDt);
+    const isAllDay = typeof e.all_day === "boolean" ? e.all_day : true;
+    const startD = toLocalDateInput(startDt);
+    let endD = toLocalDateInput(endDt);
+    if (isAllDay) {
+      endDt.setDate(endDt.getDate() - 1);
+      endD = toLocalDateInput(endDt);
+    }
 
     setEditForm({
       id: e.id,
       startDate: startD,
       endDate: endD,
+      allDay: isAllDay,
+      startTime: toLocalTimeInput(startDt),
+      endTime,
       type: e.type || "Other",
       clientSource: e.one_time_client_name ? "one_time" : "managed",
       clientId: e.client_id ? String(e.client_id) : "",
@@ -856,11 +884,31 @@ export default function CalendarPage() {
       setError("Past dates are not allowed.");
       return;
     }
-
-    const startISO = `${form.startDate}T00:00:00`;
-    const end = new Date(form.endDate);
-    end.setDate(end.getDate() + 1);
-    const endISO = end.toISOString().slice(0, 19);
+    const forceAllDay = isForcedAllDayType(form.type);
+    const allDay = forceAllDay ? true : !!form.allDay;
+    let startISO = "";
+    let endISO = "";
+    if (allDay) {
+      startISO = `${form.startDate}T00:00:00`;
+      const end = new Date(form.endDate);
+      end.setDate(end.getDate() + 1);
+      endISO = end.toISOString().slice(0, 19);
+    } else {
+      if (form.startDate !== form.endDate) {
+        setError("Timed entries must start and end on the same date.");
+        return;
+      }
+      if (!form.startTime || !form.endTime) {
+        setError("Please select start and end time.");
+        return;
+      }
+      if (form.endTime <= form.startTime) {
+        setError("End time must be after start time.");
+        return;
+      }
+      startISO = `${form.startDate}T${form.startTime}:00`;
+      endISO = `${form.endDate}T${form.endTime}:00`;
+    }
     const isClientVisit = (form.type || "").toLowerCase() === "client visit";
     const isSickLeave = (form.type || "").toLowerCase() === "hospital";
     if (isClientVisit) {
@@ -888,7 +936,7 @@ export default function CalendarPage() {
         created = await createEvent({
           start_ts: startISO,
           end_ts: endISO,
-          all_day: true,
+          all_day: allDay,
           type: form.type,
           client_id: isClientVisit && form.clientSource === "managed" ? Number(form.clientId) : null,
           one_time_client_name: isClientVisit && form.clientSource === "one_time" ? (form.oneTimeClientName || "").trim() : null,
@@ -930,11 +978,31 @@ export default function CalendarPage() {
       setError("Past dates are not allowed.");
       return;
     }
-
-    const startISO = `${editForm.startDate}T00:00:00`;
-    const end = new Date(editForm.endDate);
-    end.setDate(end.getDate() + 1);
-    const endISO = end.toISOString().slice(0, 19);
+    const forceAllDay = isForcedAllDayType(editForm.type);
+    const allDay = forceAllDay ? true : !!editForm.allDay;
+    let startISO = "";
+    let endISO = "";
+    if (allDay) {
+      startISO = `${editForm.startDate}T00:00:00`;
+      const end = new Date(editForm.endDate);
+      end.setDate(end.getDate() + 1);
+      endISO = end.toISOString().slice(0, 19);
+    } else {
+      if (editForm.startDate !== editForm.endDate) {
+        setError("Timed entries must start and end on the same date.");
+        return;
+      }
+      if (!editForm.startTime || !editForm.endTime) {
+        setError("Please select start and end time.");
+        return;
+      }
+      if (editForm.endTime <= editForm.startTime) {
+        setError("End time must be after start time.");
+        return;
+      }
+      startISO = `${editForm.startDate}T${editForm.startTime}:00`;
+      endISO = `${editForm.endDate}T${editForm.endTime}:00`;
+    }
     const isClientVisit = (editForm.type || "").toLowerCase() === "client visit";
     const isSickLeave = (editForm.type || "").toLowerCase() === "hospital";
     if (isClientVisit) {
@@ -953,7 +1021,7 @@ export default function CalendarPage() {
       const updated = await updateEvent(editForm.id, {
         start_ts: startISO,
         end_ts: endISO,
-        all_day: true,
+        all_day: allDay,
         type: editForm.type,
         client_id: isClientVisit && editForm.clientSource === "managed" ? Number(editForm.clientId) : null,
         one_time_client_name: isClientVisit && editForm.clientSource === "one_time" ? (editForm.oneTimeClientName || "").trim() : null,
@@ -1070,6 +1138,7 @@ export default function CalendarPage() {
                 <option value="Leave">Leave</option>
                 <option value="Hospital">Sick Leave</option>
                 <option value="Client Visit">Client Visit</option>
+                <option value="Meeting">Meeting</option>
                 <option value="Training">Training</option>
                 <option value="Other">Other</option>
                 <option value={PUBLIC_HOLIDAY_TYPE}>{PUBLIC_HOLIDAY_TYPE}</option>
@@ -1331,9 +1400,12 @@ export default function CalendarPage() {
                     value={form.type}
                     onChange={(e) => {
                       const t = e.target.value;
+                      const forceAllDay = isForcedAllDayType(t);
                       setForm((f) => ({
                         ...f,
                         type: t,
+                        allDay: forceAllDay ? true : (t === "Meeting" ? false : f.allDay),
+                        endDate: forceAllDay ? f.endDate : (t === "Meeting" ? f.startDate : f.endDate),
                         clientSource: t === "Client Visit" ? f.clientSource : "managed",
                         clientId: t === "Client Visit" ? f.clientId : "",
                         oneTimeClientName: t === "Client Visit" ? f.oneTimeClientName : "",
@@ -1345,6 +1417,7 @@ export default function CalendarPage() {
                     <option>Leave</option>
                     <option value="Hospital">Sick Leave</option>
                     <option>Client Visit</option>
+                    <option>Meeting</option>
                     <option>Training</option>
                     <option>Other</option>
                   </select>
@@ -1352,10 +1425,24 @@ export default function CalendarPage() {
 
                 <div className="field" style={{ flex: "1 1 180px" }}>
                   <label>All day</label>
-                  <select value="yes" disabled>
+                  <select
+                    value={form.allDay ? "yes" : "no"}
+                    disabled={isForcedAllDayType(form.type)}
+                    onChange={(e) => {
+                      const nextAllDay = e.target.value === "yes";
+                      setForm((f) => ({
+                        ...f,
+                        allDay: nextAllDay,
+                        endDate: nextAllDay ? f.endDate : f.startDate,
+                      }));
+                    }}
+                  >
                     <option value="yes">Yes (recommended)</option>
+                    <option value="no">No (pick time)</option>
                   </select>
-                  <div className="helper">For v1 we store all entries as full-day blocks.</div>
+                  <div className="helper">
+                    {isForcedAllDayType(form.type) ? "Leave and Sick Leave are always full-day." : "Choose No to set a specific time window."}
+                  </div>
                 </div>
               </div>
 
@@ -1436,7 +1523,7 @@ export default function CalendarPage() {
                     min={minDate}
                     onChange={(e) => {
                       const v = e.target.value;
-                      setForm((f) => ({ ...f, startDate: v }));
+                      setForm((f) => ({ ...f, startDate: v, endDate: f.allDay ? f.endDate : v }));
                       if (form.type === "Leave" && v) refreshLeaveBalance(v);
                     }}
                   />
@@ -1448,10 +1535,32 @@ export default function CalendarPage() {
                     type="date"
                     value={form.endDate}
                     min={minDate}
+                    disabled={!form.allDay}
                     onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
                   />
                 </div>
               </div>
+
+              {!form.allDay && (
+                <div className="row">
+                  <div className="field" style={{ flex: "1 1 240px" }}>
+                    <label>Start time</label>
+                    <input
+                      type="time"
+                      value={form.startTime}
+                      onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+                    />
+                  </div>
+                  <div className="field" style={{ flex: "1 1 240px" }}>
+                    <label>End time</label>
+                    <input
+                      type="time"
+                      value={form.endTime}
+                      onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="field">
                 <label>{form.type === "Client Visit" ? "To-Do List" : "Notes (visible to everyone)"}</label>
@@ -1488,9 +1597,12 @@ export default function CalendarPage() {
                     value={editForm.type}
                     onChange={(e) => {
                       const t = e.target.value;
+                      const forceAllDay = isForcedAllDayType(t);
                       setEditForm((f) => ({
                         ...f,
                         type: t,
+                        allDay: forceAllDay ? true : (t === "Meeting" ? false : f.allDay),
+                        endDate: forceAllDay ? f.endDate : (t === "Meeting" ? f.startDate : f.endDate),
                         clientSource: t === "Client Visit" ? f.clientSource : "managed",
                         clientId: t === "Client Visit" ? f.clientId : "",
                         oneTimeClientName: t === "Client Visit" ? f.oneTimeClientName : "",
@@ -1502,9 +1614,31 @@ export default function CalendarPage() {
                     <option>Leave</option>
                     <option value="Hospital">Sick Leave</option>
                     <option>Client Visit</option>
+                    <option>Meeting</option>
                     <option>Training</option>
                     <option>Other</option>
                   </select>
+                </div>
+                <div className="field" style={{ flex: "1 1 180px" }}>
+                  <label>All day</label>
+                  <select
+                    value={editForm.allDay ? "yes" : "no"}
+                    disabled={isForcedAllDayType(editForm.type)}
+                    onChange={(e) => {
+                      const nextAllDay = e.target.value === "yes";
+                      setEditForm((f) => ({
+                        ...f,
+                        allDay: nextAllDay,
+                        endDate: nextAllDay ? f.endDate : f.startDate,
+                      }));
+                    }}
+                  >
+                    <option value="yes">Yes (recommended)</option>
+                    <option value="no">No (pick time)</option>
+                  </select>
+                  <div className="helper">
+                    {isForcedAllDayType(editForm.type) ? "Leave and Sick Leave are always full-day." : "Choose No to set a specific time window."}
+                  </div>
                 </div>
               </div>
 
@@ -1584,7 +1718,7 @@ export default function CalendarPage() {
                     min={minDate}
                     onChange={(e) => {
                       const v = e.target.value;
-                      setEditForm((f) => ({ ...f, startDate: v }));
+                      setEditForm((f) => ({ ...f, startDate: v, endDate: f.allDay ? f.endDate : v }));
                       if (editForm.type === "Leave" && v) refreshLeaveBalance(v);
                     }}
                   />
@@ -1596,10 +1730,32 @@ export default function CalendarPage() {
                     type="date"
                     value={editForm.endDate}
                     min={minDate}
+                    disabled={!editForm.allDay}
                     onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
                   />
                 </div>
               </div>
+
+              {!editForm.allDay && (
+                <div className="row">
+                  <div className="field" style={{ flex: "1 1 240px" }}>
+                    <label>Start time</label>
+                    <input
+                      type="time"
+                      value={editForm.startTime}
+                      onChange={(e) => setEditForm((f) => ({ ...f, startTime: e.target.value }))}
+                    />
+                  </div>
+                  <div className="field" style={{ flex: "1 1 240px" }}>
+                    <label>End time</label>
+                    <input
+                      type="time"
+                      value={editForm.endTime}
+                      onChange={(e) => setEditForm((f) => ({ ...f, endTime: e.target.value }))}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="field">
                 <label>{editForm.type === "Client Visit" ? "To-Do List" : "Notes (visible to everyone)"}</label>
