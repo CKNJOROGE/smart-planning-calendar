@@ -461,6 +461,10 @@ def _is_leave_like_event(e: Event) -> bool:
     return (e.type or "").strip().lower() in {"leave", "hospital"}
 
 
+def _supports_event_client(value: Optional[str]) -> bool:
+    return (value or "").strip().lower() in {"client visit", "meeting"}
+
+
 def _is_past_current_day_event(e: Event) -> bool:
     # Events are stored with end_ts as exclusive boundary for all-day entries.
     return e.end_ts.date() <= date.today()
@@ -3864,15 +3868,15 @@ async def create_event(
     user: User = Depends(get_current_user),
 ):
     normalized_type = (payload.type or "").strip()
-    is_client_visit = normalized_type.lower() == "client visit"
-    client_id: Optional[int] = payload.client_id if is_client_visit else None
-    one_time_client_name: Optional[str] = (payload.one_time_client_name or "").strip() if is_client_visit else None
+    supports_client = _supports_event_client(normalized_type)
+    client_id: Optional[int] = payload.client_id if supports_client else None
+    one_time_client_name: Optional[str] = (payload.one_time_client_name or "").strip() if supports_client else None
     if one_time_client_name == "":
         one_time_client_name = None
 
-    if is_client_visit:
+    if supports_client:
         if bool(client_id) == bool(one_time_client_name):
-            raise HTTPException(status_code=400, detail="Provide either client_id or one_time_client_name for Client Visit")
+            raise HTTPException(status_code=400, detail="Provide either client_id or one_time_client_name for Client Visit or Meeting")
         if client_id is not None:
             exists = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
             if not exists:
@@ -3923,9 +3927,9 @@ async def update_event(
     if not e:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if _is_past_current_day_event(e):
+    if _is_past_current_day_event(e) and not _is_admin_like(user.role):
         raise HTTPException(status_code=403, detail="Past-day events cannot be edited")
-    if e.user_id != user.id:
+    if e.user_id != user.id and not _is_admin_like(user.role):
         raise HTTPException(status_code=403, detail="Only the requesting user can edit this event")
 
     def _is_leave_like_type(value: Optional[str]) -> bool:
@@ -3946,10 +3950,10 @@ async def update_event(
     if new_one_time_client_name == "":
         new_one_time_client_name = None
 
-    is_client_visit = (new_type or "").strip().lower() == "client visit"
-    if is_client_visit:
+    supports_client = _supports_event_client(new_type)
+    if supports_client:
         if bool(new_client_id) == bool(new_one_time_client_name):
-            raise HTTPException(status_code=400, detail="Provide either client_id or one_time_client_name for Client Visit")
+            raise HTTPException(status_code=400, detail="Provide either client_id or one_time_client_name for Client Visit or Meeting")
         if new_client_id is not None:
             exists = db.query(ClientAccount).filter(ClientAccount.id == new_client_id).first()
             if not exists:
@@ -4087,9 +4091,9 @@ async def delete_event(
     if not e:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if _is_past_current_day_event(e):
+    if _is_past_current_day_event(e) and not _is_admin_like(user.role):
         raise HTTPException(status_code=403, detail="Past-day events cannot be deleted")
-    if e.user_id != user.id:
+    if e.user_id != user.id and not _is_admin_like(user.role):
         raise HTTPException(status_code=403, detail="Only the requesting user can delete this event")
 
     old_sick_note_url = e.sick_note_url or ""

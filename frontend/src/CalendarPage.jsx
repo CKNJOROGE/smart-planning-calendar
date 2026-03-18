@@ -240,6 +240,10 @@ function isLeaveLikeType(type) {
   return ["leave", "hospital"].includes((type || "").toLowerCase());
 }
 
+function supportsClientSelection(type) {
+  return ["client visit", "meeting"].includes((type || "").toLowerCase());
+}
+
 function isForcedAllDayType(type) {
   return isLeaveLikeType(type);
 }
@@ -700,12 +704,14 @@ export default function CalendarPage() {
 
   const canEdit = useMemo(() => {
     if (!popup || !user) return false;
+    if (user.role === "admin" || user.role === "ceo") return true;
     if (isPastCurrentDayEvent(popup.apiEvent)) return false;
     return popup.apiEvent.user_id === user.id;
   }, [popup, user]);
 
   const canDelete = useMemo(() => {
     if (!popup || !user) return false;
+    if (user.role === "admin" || user.role === "ceo") return true;
     if (isPastCurrentDayEvent(popup.apiEvent)) return false;
     return popup.apiEvent.user_id === user.id;
   }, [popup, user]);
@@ -721,6 +727,11 @@ export default function CalendarPage() {
   }, [popup, user]);
 
   const canViewSickNote = useMemo(() => {
+    if (!user) return false;
+    return user.role === "admin" || user.role === "ceo";
+  }, [user]);
+
+  const isAdminLike = useMemo(() => {
     if (!user) return false;
     return user.role === "admin" || user.role === "ceo";
   }, [user]);
@@ -909,15 +920,15 @@ export default function CalendarPage() {
       startISO = `${form.startDate}T${form.startTime}:00`;
       endISO = `${form.endDate}T${form.endTime}:00`;
     }
-    const isClientVisit = (form.type || "").toLowerCase() === "client visit";
+    const needsClient = supportsClientSelection(form.type);
     const isSickLeave = (form.type || "").toLowerCase() === "hospital";
-    if (isClientVisit) {
+    if (needsClient) {
       if (form.clientSource === "managed" && !form.clientId) {
-        setError("Please choose a client for Client Visit.");
+        setError(`Please choose a client for ${form.type}.`);
         return;
       }
       if (form.clientSource === "one_time" && !(form.oneTimeClientName || "").trim()) {
-        setError("Please enter a one-time client name for Client Visit.");
+        setError(`Please enter a one-time client name for ${form.type}.`);
         return;
       }
     }
@@ -938,8 +949,8 @@ export default function CalendarPage() {
           end_ts: endISO,
           all_day: allDay,
           type: form.type,
-          client_id: isClientVisit && form.clientSource === "managed" ? Number(form.clientId) : null,
-          one_time_client_name: isClientVisit && form.clientSource === "one_time" ? (form.oneTimeClientName || "").trim() : null,
+          client_id: needsClient && form.clientSource === "managed" ? Number(form.clientId) : null,
+          one_time_client_name: needsClient && form.clientSource === "one_time" ? (form.oneTimeClientName || "").trim() : null,
           note: form.note || null,
         });
       }
@@ -974,7 +985,7 @@ export default function CalendarPage() {
       setError("Please select start and end date.");
       return;
     }
-    if (editForm.startDate < minDate || editForm.endDate < minDate) {
+    if (!isAdminLike && (editForm.startDate < minDate || editForm.endDate < minDate)) {
       setError("Past dates are not allowed.");
       return;
     }
@@ -1003,15 +1014,15 @@ export default function CalendarPage() {
       startISO = `${editForm.startDate}T${editForm.startTime}:00`;
       endISO = `${editForm.endDate}T${editForm.endTime}:00`;
     }
-    const isClientVisit = (editForm.type || "").toLowerCase() === "client visit";
+    const needsClient = supportsClientSelection(editForm.type);
     const isSickLeave = (editForm.type || "").toLowerCase() === "hospital";
-    if (isClientVisit) {
+    if (needsClient) {
       if (editForm.clientSource === "managed" && !editForm.clientId) {
-        setError("Please choose a client for Client Visit.");
+        setError(`Please choose a client for ${editForm.type}.`);
         return;
       }
       if (editForm.clientSource === "one_time" && !(editForm.oneTimeClientName || "").trim()) {
-        setError("Please enter a one-time client name for Client Visit.");
+        setError(`Please enter a one-time client name for ${editForm.type}.`);
         return;
       }
     }
@@ -1023,8 +1034,8 @@ export default function CalendarPage() {
         end_ts: endISO,
         all_day: allDay,
         type: editForm.type,
-        client_id: isClientVisit && editForm.clientSource === "managed" ? Number(editForm.clientId) : null,
-        one_time_client_name: isClientVisit && editForm.clientSource === "one_time" ? (editForm.oneTimeClientName || "").trim() : null,
+        client_id: needsClient && editForm.clientSource === "managed" ? Number(editForm.clientId) : null,
+        one_time_client_name: needsClient && editForm.clientSource === "one_time" ? (editForm.oneTimeClientName || "").trim() : null,
         note: editForm.note || null,
       });
       setEditOpen(false);
@@ -1294,7 +1305,7 @@ export default function CalendarPage() {
                   {formatEventBoundary(popup.apiEvent.end_ts, popup.apiEvent.all_day, true)}
                 </div>
               </div>
-              {(popup.apiEvent.type || "").toLowerCase() === "client visit" && (
+              {supportsClientSelection(popup.apiEvent.type) && (
                 <div className="calendar-popup-field">
                   <div className="calendar-popup-label">Client</div>
                   <div className="calendar-popup-value">{popup.apiEvent.one_time_client_name || clientNameById(popup.apiEvent.client_id)}</div>
@@ -1406,9 +1417,9 @@ export default function CalendarPage() {
                         type: t,
                         allDay: forceAllDay ? true : (t === "Meeting" ? false : f.allDay),
                         endDate: forceAllDay ? f.endDate : (t === "Meeting" ? f.startDate : f.endDate),
-                        clientSource: t === "Client Visit" ? f.clientSource : "managed",
-                        clientId: t === "Client Visit" ? f.clientId : "",
-                        oneTimeClientName: t === "Client Visit" ? f.oneTimeClientName : "",
+                        clientSource: supportsClientSelection(t) ? f.clientSource : "managed",
+                        clientId: supportsClientSelection(t) ? f.clientId : "",
+                        oneTimeClientName: supportsClientSelection(t) ? f.oneTimeClientName : "",
                       }));
                       if (t === "Leave" && form.startDate) refreshLeaveBalance(form.startDate);
                       else setLeaveBalance(null);
@@ -1446,7 +1457,7 @@ export default function CalendarPage() {
                 </div>
               </div>
 
-              {form.type === "Client Visit" && (
+              {supportsClientSelection(form.type) && (
                 <>
                   <div className="field">
                     <label>Client Type</label>
@@ -1603,9 +1614,9 @@ export default function CalendarPage() {
                         type: t,
                         allDay: forceAllDay ? true : (t === "Meeting" ? false : f.allDay),
                         endDate: forceAllDay ? f.endDate : (t === "Meeting" ? f.startDate : f.endDate),
-                        clientSource: t === "Client Visit" ? f.clientSource : "managed",
-                        clientId: t === "Client Visit" ? f.clientId : "",
-                        oneTimeClientName: t === "Client Visit" ? f.oneTimeClientName : "",
+                        clientSource: supportsClientSelection(t) ? f.clientSource : "managed",
+                        clientId: supportsClientSelection(t) ? f.clientId : "",
+                        oneTimeClientName: supportsClientSelection(t) ? f.oneTimeClientName : "",
                       }));
                       if (t === "Leave" && editForm.startDate) refreshLeaveBalance(editForm.startDate);
                       else setLeaveBalance(null);
@@ -1642,7 +1653,7 @@ export default function CalendarPage() {
                 </div>
               </div>
 
-              {editForm.type === "Client Visit" && (
+              {supportsClientSelection(editForm.type) && (
                 <>
                   <div className="field">
                     <label>Client Type</label>
@@ -1715,7 +1726,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={editForm.startDate}
-                    min={minDate}
+                    min={isAdminLike ? undefined : minDate}
                     onChange={(e) => {
                       const v = e.target.value;
                       setEditForm((f) => ({ ...f, startDate: v, endDate: f.allDay ? f.endDate : v }));
@@ -1729,7 +1740,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={editForm.endDate}
-                    min={minDate}
+                    min={isAdminLike ? undefined : minDate}
                     disabled={!editForm.allDay}
                     onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
                   />
