@@ -91,6 +91,14 @@ function emptyRunState() {
   };
 }
 
+function makePayeBandRow(band = {}) {
+  return {
+    label: band?.label || "next",
+    amount: band?.amount == null ? "" : String(band.amount),
+    rate: band?.rate == null ? "" : String(band.rate),
+  };
+}
+
 function statutoryFormFromApi(row) {
   return {
     effective_from: row?.effective_from || monthStartToday(),
@@ -111,9 +119,7 @@ function statutoryFormFromApi(row) {
     nita_levy_monthly: toFieldValue(row?.nita_levy_monthly),
     non_cash_benefit_taxable_threshold: toFieldValue(row?.non_cash_benefit_taxable_threshold),
     disability_exemption_cap_monthly: toFieldValue(row?.disability_exemption_cap_monthly),
-    paye_bands_text: (row?.paye_bands_monthly || [])
-      .map((band) => `${band.label || "band"}|${band.amount ?? ""}|${band.rate ?? ""}`)
-      .join("\n"),
+    paye_bands: (row?.paye_bands_monthly || []).map((band) => makePayeBandRow(band)),
     source_notes_text: (row?.source_notes || []).join("\n"),
   };
 }
@@ -138,18 +144,18 @@ function statutoryPayloadFromState(state) {
     nita_levy_monthly: toNullableNumber(state.nita_levy_monthly) ?? 0,
     non_cash_benefit_taxable_threshold: toNullableNumber(state.non_cash_benefit_taxable_threshold) ?? 0,
     disability_exemption_cap_monthly: toNullableNumber(state.disability_exemption_cap_monthly) ?? 0,
-    paye_bands_monthly: String(state.paye_bands_text || "")
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const [label, amountRaw, rateRaw] = line.split("|").map((part) => String(part || "").trim());
-        const amount = amountRaw ? Number(amountRaw) : null;
-        const rate = Number(rateRaw);
-        return amountRaw
-          ? { label: label || "band", amount, rate }
-          : { label: label || "excess", rate };
-      }),
+    paye_bands_monthly: (state.paye_bands || [])
+      .map((band) => ({
+        label: String(band.label || "").trim() || "next",
+        amount: band.amount === "" ? null : toNullableNumber(band.amount),
+        rate: toNullableNumber(band.rate),
+      }))
+      .filter((band) => band.rate != null)
+      .map((band) => (
+        band.amount == null
+          ? { label: band.label, rate: band.rate }
+          : { label: band.label, amount: band.amount, rate: band.rate }
+      )),
     source_notes: String(state.source_notes_text || "")
       .split("\n")
       .map((line) => line.trim())
@@ -222,6 +228,14 @@ function SelectField({ label, value, onChange, options, disabled = false }) {
       </select>
     </div>
   );
+}
+
+function updatePayeBandRow(rows, idx, key, value) {
+  return rows.map((row, rowIdx) => (rowIdx === idx ? { ...row, [key]: value } : row));
+}
+
+function removePayeBandRow(rows, idx) {
+  return rows.filter((_, rowIdx) => rowIdx !== idx);
 }
 
 export default function PayrollPage() {
@@ -550,12 +564,91 @@ export default function PayrollPage() {
 
             <div className="field" style={{ marginTop: 12 }}>
               <label>PAYE Bands</label>
-              <textarea
-                value={statutoryForm.paye_bands_text}
-                onChange={(e) => setStatutoryForm((p) => ({ ...p, paye_bands_text: e.target.value }))}
-                placeholder={"first|24000|0.10\nnext|8333|0.25\nnext|467667|0.30\nnext|300000|0.325\nexcess||0.35"}
-              />
-              <div className="helper">Use one band per line in the format `label|amount|rate`. Leave amount blank for the top/excess rate.</div>
+              <div className="helper" style={{ marginBottom: 8 }}>
+                Each row means “tax this slice of monthly taxable pay at this rate.” The second row of `KES 8,333 at 25%` is correct because it takes the monthly threshold from `KES 24,000` up to `KES 32,333`.
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc" }}>
+                      <th style={{ textAlign: "left", padding: 10 }}>Band Label</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Band Amount</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Rate</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Meaning</th>
+                      <th style={{ textAlign: "left", padding: 10 }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(statutoryForm.paye_bands || []).map((band, idx) => {
+                      const label = String(band.label || "").trim().toLowerCase();
+                      const amountLabel = band.amount ? fmtCurrency(band.amount) : "No cap";
+                      const rateLabel = band.rate ? `${Number(band.rate) * 100}%` : "-";
+                      const meaning = label === "first"
+                        ? `First ${amountLabel} at ${rateLabel}`
+                        : label === "excess"
+                          ? `Anything above prior bands at ${rateLabel}`
+                          : `Next ${amountLabel} at ${rateLabel}`;
+                      return (
+                        <tr key={`paye_band_${idx}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                          <td style={{ padding: 10 }}>
+                            <select
+                              value={band.label}
+                              onChange={(e) => setStatutoryForm((p) => ({ ...p, paye_bands: updatePayeBandRow(p.paye_bands, idx, "label", e.target.value) }))}
+                            >
+                              <option value="first">first</option>
+                              <option value="next">next</option>
+                              <option value="excess">excess</option>
+                            </select>
+                          </td>
+                          <td style={{ padding: 10 }}>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={band.amount}
+                              disabled={label === "excess"}
+                              onChange={(e) => setStatutoryForm((p) => ({ ...p, paye_bands: updatePayeBandRow(p.paye_bands, idx, "amount", e.target.value) }))}
+                              placeholder={label === "excess" ? "Leave blank" : "0.00"}
+                            />
+                          </td>
+                          <td style={{ padding: 10 }}>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.0001"
+                              value={band.rate}
+                              onChange={(e) => setStatutoryForm((p) => ({ ...p, paye_bands: updatePayeBandRow(p.paye_bands, idx, "rate", e.target.value) }))}
+                              placeholder="0.00"
+                            />
+                          </td>
+                          <td style={{ padding: 10 }}>
+                            <div className="muted">{meaning}</div>
+                          </td>
+                          <td style={{ padding: 10 }}>
+                            <button
+                              className="btn"
+                              type="button"
+                              disabled={statutoryForm.paye_bands.length <= 1}
+                              onClick={() => setStatutoryForm((p) => ({ ...p, paye_bands: removePayeBandRow(p.paye_bands, idx) }))}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => setStatutoryForm((p) => ({ ...p, paye_bands: [...(p.paye_bands || []), makePayeBandRow({ label: "next", amount: "", rate: "" })] }))}
+                >
+                  Add Band
+                </button>
+              </div>
             </div>
 
             <div className="field" style={{ marginTop: 12 }}>
