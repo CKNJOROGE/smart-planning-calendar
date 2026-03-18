@@ -81,6 +81,140 @@ function reimbursementItemStatusLabel(status) {
   return (status || "").toLowerCase() === "rejected" ? "Rejected" : "Included";
 }
 
+function toSearchText(...parts) {
+  return parts
+    .flat()
+    .map((part) => String(part ?? "").toLowerCase())
+    .join(" ");
+}
+
+function matchesSearch(search, ...parts) {
+  const query = String(search || "").trim().toLowerCase();
+  if (!query) return true;
+  return toSearchText(...parts).includes(query);
+}
+
+function downloadTextFile(filename, content) {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function fmtDateTime(v) {
+  if (!v) return "-";
+  try {
+    return new Date(v).toLocaleString();
+  } catch {
+    return String(v);
+  }
+}
+
+function financeSectionLabel(section) {
+  switch (section) {
+    case "cash_reimbursement":
+      return "Cash Reimbursement";
+    case "cash_requisition":
+      return "Cash Requisition";
+    case "authority_to_incur":
+      return "Authority To Incur";
+    case "salary_advance":
+      return "Salary Advance";
+    default:
+      return "Finance Request";
+  }
+}
+
+function buildReimbursementRecordText(r) {
+  const itemLines = (r.items || []).map((item, idx) => (
+    `${idx + 1}. ${item.item_date} | ${item.description} | ${fmtCurrency(item.amount)} | ${reimbursementItemStatusLabel(item.review_status)}${item.review_comment ? ` | Comment: ${item.review_comment}` : ""}`
+  ));
+  return [
+    "Finance Record",
+    `Module: Cash Reimbursement`,
+    `Requester: ${r.user?.name || `User #${r.user_id}`}`,
+    `Period: ${r.period_start} to ${r.period_end}`,
+    `Total: ${fmtCurrency(r.total_amount)}`,
+    `Status: ${statusLabel(r.status, !!r.is_late_submission)}`,
+    `Submitted: ${fmtDateTime(r.submitted_at)}`,
+    `CEO Decision: ${decisionLabel(r.ceo_decision)}`,
+    `CEO Comment: ${r.ceo_comment || "-"}`,
+    `Finance Decision: ${decisionLabel(r.finance_decision)}`,
+    `Finance Comment: ${r.finance_comment || "-"}`,
+    `Reimbursed At: ${fmtDateTime(r.reimbursed_at)}`,
+    "",
+    "Items:",
+    ...(itemLines.length ? itemLines : ["No submitted items."]),
+  ].join("\n");
+}
+
+function buildCashRequisitionRecordText(r) {
+  return [
+    "Finance Record",
+    `Module: Cash Requisition`,
+    `Requester: ${r.user?.name || `User #${r.user_id}`}`,
+    `Purpose: ${r.purpose}`,
+    `Amount: ${fmtCurrency(r.amount)}`,
+    `Needed By: ${r.needed_by || "-"}`,
+    `Status: ${requisitionStatusLabel(r.status)}`,
+    `Submitted: ${fmtDateTime(r.submitted_at)}`,
+    `Details: ${r.details || "-"}`,
+    `Finance Decision: ${decisionLabel(r.finance_decision)}`,
+    `Finance Comment: ${r.finance_comment || "-"}`,
+    `CEO Decision: ${decisionLabel(r.ceo_decision)}`,
+    `CEO Comment: ${r.ceo_comment || "-"}`,
+    `Disbursed At: ${fmtDateTime(r.disbursed_at)}`,
+    `Disbursement Note: ${r.disbursed_note || "-"}`,
+  ].join("\n");
+}
+
+function buildAuthorityRecordText(r) {
+  return [
+    "Finance Record",
+    `Module: Authority To Incur`,
+    `Requester: ${r.user?.name || `User #${r.user_id}`}`,
+    `Title: ${r.title}`,
+    `Amount: ${fmtCurrency(r.amount)}`,
+    `Payee: ${r.payee || "-"}`,
+    `Needed By: ${r.needed_by || "-"}`,
+    `Status: ${authorityStatusLabel(r.status)}`,
+    `Submitted: ${fmtDateTime(r.submitted_at)}`,
+    `Details: ${r.details || "-"}`,
+    `Finance Decision: ${decisionLabel(r.finance_decision)}`,
+    `Finance Comment: ${r.finance_comment || "-"}`,
+    `CEO Decision: ${decisionLabel(r.ceo_decision)}`,
+    `CEO Comment: ${r.ceo_comment || "-"}`,
+    `Incurred At: ${fmtDateTime(r.incurred_at)}`,
+    `Incurrence Note: ${r.incurred_note || "-"}`,
+  ].join("\n");
+}
+
+function buildSalaryAdvanceRecordText(r) {
+  return [
+    "Finance Record",
+    `Module: Salary Advance`,
+    `Requester: ${r.user?.name || `User #${r.user_id}`}`,
+    `Reason: ${r.reason}`,
+    `Amount: ${fmtCurrency(r.amount)}`,
+    `Repayment Months: ${r.repayment_months}`,
+    `Deduction Start: ${r.deduction_start_date || "-"}`,
+    `Status: ${salaryAdvanceStatusLabel(r.status)}`,
+    `Submitted: ${fmtDateTime(r.submitted_at)}`,
+    `Details: ${r.details || "-"}`,
+    `Finance Decision: ${decisionLabel(r.finance_decision)}`,
+    `Finance Comment: ${r.finance_comment || "-"}`,
+    `CEO Decision: ${decisionLabel(r.ceo_decision)}`,
+    `CEO Comment: ${r.ceo_comment || "-"}`,
+    `Disbursed At: ${fmtDateTime(r.disbursed_at)}`,
+    `Disbursement Note: ${r.disbursed_note || "-"}`,
+  ].join("\n");
+}
+
 function requisitionStatusLabel(status) {
   const s = (status || "").toLowerCase();
   if (s === "pending_finance_review") return "pending finance review";
@@ -171,6 +305,12 @@ export default function FinanceRequestsPage() {
   const [mySalaryAdvances, setMySalaryAdvances] = useState([]);
   const [pendingSalaryAdvances, setPendingSalaryAdvances] = useState([]);
   const [approvedSalaryAdvances, setApprovedSalaryAdvances] = useState([]);
+  const [searchBySection, setSearchBySection] = useState({
+    cash_reimbursement: "",
+    cash_requisition: "",
+    authority_to_incur: "",
+    salary_advance: "",
+  });
 
   const canReview = useMemo(() => {
     const role = (current?.role || "").toLowerCase();
@@ -186,6 +326,10 @@ export default function FinanceRequestsPage() {
     const role = (current?.role || "").toLowerCase();
     return role !== "admin" && role !== "ceo";
   }, [current?.role]);
+  const canDownloadRecords = useMemo(() => {
+    const role = (current?.role || "").toLowerCase();
+    return role === "admin" || role === "ceo";
+  }, [current?.role]);
   const selectedReimbursementMeta = useMemo(
     () => (reimbursementPeriods || []).find((p) => reimbursementPeriodKey(p.period_start, p.period_end) === selectedReimbursementPeriod) || null,
     [reimbursementPeriods, selectedReimbursementPeriod]
@@ -196,6 +340,7 @@ export default function FinanceRequestsPage() {
     const manualTotal = (manualItems || []).reduce((acc, x) => acc + Number(x.amount || 0), 0);
     return autoTotal + manualTotal;
   }, [draft.auto_items, manualItems]);
+  const activeSearch = searchBySection[activeSection] || "";
 
   function applyDraftState(draftData) {
     setDraft(draftData || { period_start: "", period_end: "", auto_items: [], can_edit_manual: true });
@@ -442,6 +587,27 @@ export default function FinanceRequestsPage() {
     }
   }
 
+  function downloadRecord(section, record) {
+    let content = "";
+    let filename = "";
+    if (section === "cash_reimbursement") {
+      content = buildReimbursementRecordText(record);
+      filename = `cash-reimbursement-${record.id}.txt`;
+    } else if (section === "cash_requisition") {
+      content = buildCashRequisitionRecordText(record);
+      filename = `cash-requisition-${record.id}.txt`;
+    } else if (section === "authority_to_incur") {
+      content = buildAuthorityRecordText(record);
+      filename = `authority-to-incur-${record.id}.txt`;
+    } else if (section === "salary_advance") {
+      content = buildSalaryAdvanceRecordText(record);
+      filename = `salary-advance-${record.id}.txt`;
+    }
+    if (!content || !filename) return;
+    downloadTextFile(filename, content);
+    showToast(`${financeSectionLabel(section)} record downloaded`, "success");
+  }
+
   async function submitRequisition() {
     setErr("");
     const amount = Number(reqForm.amount || 0);
@@ -534,6 +700,55 @@ export default function FinanceRequestsPage() {
     if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
     return false;
   }
+
+  const filteredMyRequests = useMemo(
+    () => (myRequests || []).filter((r) => matchesSearch(activeSearch, r.user?.name, r.period_start, r.period_end, r.status, r.ceo_comment, r.finance_comment)),
+    [myRequests, activeSearch]
+  );
+  const filteredPendingRequests = useMemo(
+    () => (pendingRequests || []).filter((r) => matchesSearch(activeSearch, r.user?.name, r.period_start, r.period_end, r.status, ...(r.items || []).map((item) => `${item.description} ${item.review_comment || ""}`))),
+    [pendingRequests, activeSearch]
+  );
+  const filteredApprovedRequests = useMemo(
+    () => (approvedRequests || []).filter((r) => matchesSearch(activeSearch, r.user?.name, r.period_start, r.period_end, r.status, r.ceo_comment, r.finance_comment)),
+    [approvedRequests, activeSearch]
+  );
+  const filteredMyRequisitions = useMemo(
+    () => (myRequisitions || []).filter((r) => matchesSearch(activeSearch, r.purpose, r.details, r.status, r.finance_comment, r.ceo_comment)),
+    [myRequisitions, activeSearch]
+  );
+  const filteredPendingRequisitions = useMemo(
+    () => (pendingRequisitions || []).filter((r) => matchesSearch(activeSearch, r.user?.name, r.purpose, r.details, r.status)),
+    [pendingRequisitions, activeSearch]
+  );
+  const filteredApprovedRequisitions = useMemo(
+    () => (approvedRequisitions || []).filter((r) => matchesSearch(activeSearch, r.user?.name, r.purpose, r.details, r.status, r.disbursed_note, r.finance_comment, r.ceo_comment)),
+    [approvedRequisitions, activeSearch]
+  );
+  const filteredMyAtiRequests = useMemo(
+    () => (myAtiRequests || []).filter((r) => matchesSearch(activeSearch, r.title, r.payee, r.details, r.status, r.finance_comment, r.ceo_comment, r.incurred_note)),
+    [myAtiRequests, activeSearch]
+  );
+  const filteredPendingAtiRequests = useMemo(
+    () => (pendingAtiRequests || []).filter((r) => matchesSearch(activeSearch, r.user?.name, r.title, r.payee, r.details, r.status)),
+    [pendingAtiRequests, activeSearch]
+  );
+  const filteredApprovedAtiRequests = useMemo(
+    () => (approvedAtiRequests || []).filter((r) => matchesSearch(activeSearch, r.user?.name, r.title, r.payee, r.details, r.status, r.incurred_note, r.finance_comment, r.ceo_comment)),
+    [approvedAtiRequests, activeSearch]
+  );
+  const filteredMySalaryAdvances = useMemo(
+    () => (mySalaryAdvances || []).filter((r) => matchesSearch(activeSearch, r.reason, r.details, r.status, r.finance_comment, r.ceo_comment, r.disbursed_note)),
+    [mySalaryAdvances, activeSearch]
+  );
+  const filteredPendingSalaryAdvances = useMemo(
+    () => (pendingSalaryAdvances || []).filter((r) => matchesSearch(activeSearch, r.user?.name, r.reason, r.details, r.status)),
+    [pendingSalaryAdvances, activeSearch]
+  );
+  const filteredApprovedSalaryAdvances = useMemo(
+    () => (approvedSalaryAdvances || []).filter((r) => matchesSearch(activeSearch, r.user?.name, r.reason, r.details, r.status, r.disbursed_note, r.finance_comment, r.ceo_comment)),
+    [approvedSalaryAdvances, activeSearch]
+  );
 
   const attentionCounts = useMemo(() => {
     if (!canReview) {
@@ -813,6 +1028,17 @@ export default function FinanceRequestsPage() {
         </div>
 
         <div style={{ flex: "999 1 520px", minWidth: 0 }}>
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>{financeSectionLabel(activeSection)} Search</div>
+        <div className="field" style={{ marginBottom: 0 }}>
+          <label>Filter records</label>
+          <input
+            value={activeSearch}
+            onChange={(e) => setSearchBySection((prev) => ({ ...prev, [activeSection]: e.target.value }))}
+            placeholder={`Search ${financeSectionLabel(activeSection).toLowerCase()} records by requester, status, title, comments, or details`}
+          />
+        </div>
+      </div>
       {activeSection === "cash_reimbursement" && (
         <>
       <div className="card" style={{ marginBottom: 12 }}>
@@ -1000,7 +1226,7 @@ export default function FinanceRequestsPage() {
                 </tr>
               </thead>
               <tbody>
-                {(myRequests || []).map((r) => (
+                {filteredMyRequests.map((r) => (
                   <tr key={r.id} style={{ borderTop: "1px solid #eef2f7" }}>
                     <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
                     <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
@@ -1023,7 +1249,7 @@ export default function FinanceRequestsPage() {
                     </td>
                   </tr>
                 ))}
-                {!myRequests.length && (
+                {!filteredMyRequests.length && (
                   <tr><td colSpan={4} style={{ padding: 14 }} className="muted">No submissions yet.</td></tr>
                 )}
               </tbody>
@@ -1046,7 +1272,7 @@ export default function FinanceRequestsPage() {
                 </tr>
               </thead>
               <tbody>
-                {(pendingRequests || []).map((r) => (
+                {filteredPendingRequests.map((r) => (
                   <React.Fragment key={r.id}>
                     <tr style={{ borderTop: "1px solid #eef2f7" }}>
                       <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
@@ -1057,6 +1283,9 @@ export default function FinanceRequestsPage() {
                           <div style={{ display: "flex", gap: 8 }}>
                             <button className="btn btn-primary" onClick={() => takeDecision(r.id, true)}>Approve</button>
                             <button className="btn btn-danger" onClick={() => takeDecision(r.id, false)}>Reject</button>
+                            {canDownloadRecords && (
+                              <button className="btn" type="button" onClick={() => downloadRecord("cash_reimbursement", r)}>Download Record</button>
+                            )}
                           </div>
                         ) : (
                           <span className="muted">
@@ -1138,7 +1367,7 @@ export default function FinanceRequestsPage() {
                     </tr>
                   </React.Fragment>
                 ))}
-                {!pendingRequests.length && (
+                {!filteredPendingRequests.length && (
                   <tr><td colSpan={4} style={{ padding: 14 }} className="muted">No pending reimbursement requests.</td></tr>
                 )}
               </tbody>
@@ -1162,7 +1391,7 @@ export default function FinanceRequestsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {(approvedRequests || []).map((r) => (
+                        {filteredApprovedRequests.map((r) => (
                           <tr key={`approved_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                             <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
                             <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
@@ -1171,19 +1400,26 @@ export default function FinanceRequestsPage() {
                               <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission)}</span>
                             </td>
                             <td style={{ padding: 10 }}>
-                              {String(current?.role || "").toLowerCase() === "ceo" && r.status === "pending_reimbursement" ? (
-                                <button className="btn btn-primary" type="button" onClick={() => markReimbursed(r.id)}>
-                                  Mark Reimbursed
-                                </button>
-                              ) : r.status === "amount_reimbursed" ? (
-                                <span className="muted">Paid on {r.reimbursed_at ? new Date(r.reimbursed_at).toLocaleString() : "-"}</span>
-                              ) : (
-                                <span className="muted">Pending CEO reimbursement</span>
-                              )}
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                                {String(current?.role || "").toLowerCase() === "ceo" && r.status === "pending_reimbursement" ? (
+                                  <button className="btn btn-primary" type="button" onClick={() => markReimbursed(r.id)}>
+                                    Mark Reimbursed
+                                  </button>
+                                ) : r.status === "amount_reimbursed" ? (
+                                  <span className="muted">Paid on {r.reimbursed_at ? new Date(r.reimbursed_at).toLocaleString() : "-"}</span>
+                                ) : (
+                                  <span className="muted">Pending CEO reimbursement</span>
+                                )}
+                                {canDownloadRecords && (
+                                  <button className="btn" type="button" onClick={() => downloadRecord("cash_reimbursement", r)}>
+                                    Download Record
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
-                        {!approvedRequests.length && (
+                        {!filteredApprovedRequests.length && (
                           <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No approved reimbursements yet.</td></tr>
                         )}
                       </tbody>
@@ -1258,7 +1494,7 @@ export default function FinanceRequestsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(myRequisitions || []).map((r) => (
+                  {filteredMyRequisitions.map((r) => (
                     <tr key={`my_req_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                       <td style={{ padding: 10 }}>{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "-"}</td>
                       <td style={{ padding: 10 }}>
@@ -1279,7 +1515,7 @@ export default function FinanceRequestsPage() {
                       </td>
                     </tr>
                   ))}
-                  {!myRequisitions.length && (
+                  {!filteredMyRequisitions.length && (
                     <tr><td colSpan={6} style={{ padding: 14 }} className="muted">No cash requisitions submitted yet.</td></tr>
                   )}
                 </tbody>
@@ -1302,7 +1538,7 @@ export default function FinanceRequestsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(pendingRequisitions || []).map((r) => (
+                    {filteredPendingRequisitions.map((r) => (
                       <tr key={`pending_req_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                         <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
                         <td style={{ padding: 10 }}>
@@ -1313,9 +1549,12 @@ export default function FinanceRequestsPage() {
                         <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
                         <td style={{ padding: 10 }}>
                           {canCurrentRoleDecideRequisition(r) ? (
-                            <div style={{ display: "flex", gap: 8 }}>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                               <button className="btn btn-primary" onClick={() => takeRequisitionDecision(r.id, true)}>Approve</button>
                               <button className="btn btn-danger" onClick={() => takeRequisitionDecision(r.id, false)}>Reject</button>
+                              {canDownloadRecords && (
+                                <button className="btn" type="button" onClick={() => downloadRecord("cash_requisition", r)}>Download Record</button>
+                              )}
                             </div>
                           ) : (
                             <span className="muted">Not actionable for your role.</span>
@@ -1323,7 +1562,7 @@ export default function FinanceRequestsPage() {
                         </td>
                       </tr>
                     ))}
-                    {!pendingRequisitions.length && (
+                    {!filteredPendingRequisitions.length && (
                       <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No pending requisition approvals.</td></tr>
                     )}
                   </tbody>
@@ -1347,7 +1586,7 @@ export default function FinanceRequestsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(approvedRequisitions || []).map((r) => (
+                    {filteredApprovedRequisitions.map((r) => (
                       <tr key={`approved_req_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                         <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
                         <td style={{ padding: 10 }}>
@@ -1359,19 +1598,24 @@ export default function FinanceRequestsPage() {
                           <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{requisitionStatusLabel(r.status)}</span>
                         </td>
                         <td style={{ padding: 10 }}>
-                          {(r.status || "").toLowerCase() === "pending_disbursement" ? (
-                            <button className="btn btn-primary" type="button" onClick={() => markRequisitionDisbursed(r.id)}>
-                              Mark Disbursed
-                            </button>
-                          ) : (r.status || "").toLowerCase() === "disbursed" ? (
-                            <span className="muted">Disbursed on {r.disbursed_at ? new Date(r.disbursed_at).toLocaleString() : "-"}</span>
-                          ) : (
-                            <span className="muted">No disbursement action</span>
-                          )}
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                            {(r.status || "").toLowerCase() === "pending_disbursement" ? (
+                              <button className="btn btn-primary" type="button" onClick={() => markRequisitionDisbursed(r.id)}>
+                                Mark Disbursed
+                              </button>
+                            ) : (r.status || "").toLowerCase() === "disbursed" ? (
+                              <span className="muted">Disbursed on {r.disbursed_at ? new Date(r.disbursed_at).toLocaleString() : "-"}</span>
+                            ) : (
+                              <span className="muted">No disbursement action</span>
+                            )}
+                            {canDownloadRecords && (
+                              <button className="btn" type="button" onClick={() => downloadRecord("cash_requisition", r)}>Download Record</button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
-                    {!approvedRequisitions.length && (
+                    {!filteredApprovedRequisitions.length && (
                       <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No approved/disbursed requisitions.</td></tr>
                     )}
                   </tbody>
@@ -1453,7 +1697,7 @@ export default function FinanceRequestsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(myAtiRequests || []).map((r) => (
+                  {filteredMyAtiRequests.map((r) => (
                     <tr key={`my_ati_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                       <td style={{ padding: 10 }}>{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "-"}</td>
                       <td style={{ padding: 10 }}>
@@ -1475,7 +1719,7 @@ export default function FinanceRequestsPage() {
                       </td>
                     </tr>
                   ))}
-                  {!myAtiRequests.length && (
+                  {!filteredMyAtiRequests.length && (
                     <tr><td colSpan={6} style={{ padding: 14 }} className="muted">No authority requests submitted yet.</td></tr>
                   )}
                 </tbody>
@@ -1498,7 +1742,7 @@ export default function FinanceRequestsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(pendingAtiRequests || []).map((r) => (
+                    {filteredPendingAtiRequests.map((r) => (
                       <tr key={`pending_ati_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                         <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
                         <td style={{ padding: 10 }}>
@@ -1510,9 +1754,12 @@ export default function FinanceRequestsPage() {
                         <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
                         <td style={{ padding: 10 }}>
                           {canCurrentRoleDecideAuthority(r) ? (
-                            <div style={{ display: "flex", gap: 8 }}>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                               <button className="btn btn-primary" onClick={() => takeAuthorityDecision(r.id, true)}>Approve</button>
                               <button className="btn btn-danger" onClick={() => takeAuthorityDecision(r.id, false)}>Reject</button>
+                              {canDownloadRecords && (
+                                <button className="btn" type="button" onClick={() => downloadRecord("authority_to_incur", r)}>Download Record</button>
+                              )}
                             </div>
                           ) : (
                             <span className="muted">Not actionable for your role.</span>
@@ -1520,7 +1767,7 @@ export default function FinanceRequestsPage() {
                         </td>
                       </tr>
                     ))}
-                    {!pendingAtiRequests.length && (
+                    {!filteredPendingAtiRequests.length && (
                       <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No pending authority approvals.</td></tr>
                     )}
                   </tbody>
@@ -1544,7 +1791,7 @@ export default function FinanceRequestsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(approvedAtiRequests || []).map((r) => (
+                    {filteredApprovedAtiRequests.map((r) => (
                       <tr key={`approved_ati_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                         <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
                         <td style={{ padding: 10 }}>
@@ -1556,19 +1803,24 @@ export default function FinanceRequestsPage() {
                           <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{authorityStatusLabel(r.status)}</span>
                         </td>
                         <td style={{ padding: 10 }}>
-                          {(r.status || "").toLowerCase() === "pending_incurrence" ? (
-                            <button className="btn btn-primary" type="button" onClick={() => markAuthorityIncurred(r.id)}>
-                              Mark Incurred
-                            </button>
-                          ) : (r.status || "").toLowerCase() === "incurred" ? (
-                            <span className="muted">Incurred on {r.incurred_at ? new Date(r.incurred_at).toLocaleString() : "-"}</span>
-                          ) : (
-                            <span className="muted">No final action</span>
-                          )}
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                            {(r.status || "").toLowerCase() === "pending_incurrence" ? (
+                              <button className="btn btn-primary" type="button" onClick={() => markAuthorityIncurred(r.id)}>
+                                Mark Incurred
+                              </button>
+                            ) : (r.status || "").toLowerCase() === "incurred" ? (
+                              <span className="muted">Incurred on {r.incurred_at ? new Date(r.incurred_at).toLocaleString() : "-"}</span>
+                            ) : (
+                              <span className="muted">No final action</span>
+                            )}
+                            {canDownloadRecords && (
+                              <button className="btn" type="button" onClick={() => downloadRecord("authority_to_incur", r)}>Download Record</button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
-                    {!approvedAtiRequests.length && (
+                    {!filteredApprovedAtiRequests.length && (
                       <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No approved/incurred authority requests.</td></tr>
                     )}
                   </tbody>
@@ -1645,7 +1897,7 @@ export default function FinanceRequestsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(mySalaryAdvances || []).map((r) => (
+                  {filteredMySalaryAdvances.map((r) => (
                     <tr key={`my_sa_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                       <td style={{ padding: 10 }}>{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "-"}</td>
                       <td style={{ padding: 10 }}>
@@ -1669,7 +1921,7 @@ export default function FinanceRequestsPage() {
                       </td>
                     </tr>
                   ))}
-                  {!mySalaryAdvances.length && (
+                  {!filteredMySalaryAdvances.length && (
                     <tr><td colSpan={6} style={{ padding: 14 }} className="muted">No salary advance requests submitted yet.</td></tr>
                   )}
                 </tbody>
@@ -1692,7 +1944,7 @@ export default function FinanceRequestsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(pendingSalaryAdvances || []).map((r) => (
+                    {filteredPendingSalaryAdvances.map((r) => (
                       <tr key={`pending_sa_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                         <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
                         <td style={{ padding: 10 }}>
@@ -1706,9 +1958,12 @@ export default function FinanceRequestsPage() {
                         </td>
                         <td style={{ padding: 10 }}>
                           {canCurrentRoleDecideSalaryAdvance(r) ? (
-                            <div style={{ display: "flex", gap: 8 }}>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                               <button className="btn btn-primary" onClick={() => takeSalaryAdvanceDecision(r.id, true)}>Approve</button>
                               <button className="btn btn-danger" onClick={() => takeSalaryAdvanceDecision(r.id, false)}>Reject</button>
+                              {canDownloadRecords && (
+                                <button className="btn" type="button" onClick={() => downloadRecord("salary_advance", r)}>Download Record</button>
+                              )}
                             </div>
                           ) : (
                             <span className="muted">Not actionable for your role.</span>
@@ -1716,7 +1971,7 @@ export default function FinanceRequestsPage() {
                         </td>
                       </tr>
                     ))}
-                    {!pendingSalaryAdvances.length && (
+                    {!filteredPendingSalaryAdvances.length && (
                       <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No pending salary advance approvals.</td></tr>
                     )}
                   </tbody>
@@ -1740,7 +1995,7 @@ export default function FinanceRequestsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(approvedSalaryAdvances || []).map((r) => (
+                    {filteredApprovedSalaryAdvances.map((r) => (
                       <tr key={`approved_sa_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
                         <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
                         <td style={{ padding: 10 }}>
@@ -1752,24 +2007,29 @@ export default function FinanceRequestsPage() {
                           <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{salaryAdvanceStatusLabel(r.status)}</span>
                         </td>
                         <td style={{ padding: 10 }}>
-                          {(r.status || "").toLowerCase() === "pending_disbursement" ? (
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <button className="btn" type="button" onClick={() => setDeductionStartDate(r.id)}>
-                                {r.deduction_start_date ? "Update Deduction Start" : "Set Deduction Start"}
-                              </button>
-                              <button className="btn btn-primary" type="button" onClick={() => markSalaryAdvancePaid(r.id)}>
-                                Mark Disbursed
-                              </button>
-                            </div>
-                          ) : (r.status || "").toLowerCase() === "disbursed" ? (
-                            <span className="muted">Disbursed on {r.disbursed_at ? new Date(r.disbursed_at).toLocaleString() : "-"}</span>
-                          ) : (
-                            <span className="muted">No disbursement action</span>
-                          )}
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                            {(r.status || "").toLowerCase() === "pending_disbursement" ? (
+                              <>
+                                <button className="btn" type="button" onClick={() => setDeductionStartDate(r.id)}>
+                                  {r.deduction_start_date ? "Update Deduction Start" : "Set Deduction Start"}
+                                </button>
+                                <button className="btn btn-primary" type="button" onClick={() => markSalaryAdvancePaid(r.id)}>
+                                  Mark Disbursed
+                                </button>
+                              </>
+                            ) : (r.status || "").toLowerCase() === "disbursed" ? (
+                              <span className="muted">Disbursed on {r.disbursed_at ? new Date(r.disbursed_at).toLocaleString() : "-"}</span>
+                            ) : (
+                              <span className="muted">No disbursement action</span>
+                            )}
+                            {canDownloadRecords && (
+                              <button className="btn" type="button" onClick={() => downloadRecord("salary_advance", r)}>Download Record</button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
-                    {!approvedSalaryAdvances.length && (
+                    {!filteredApprovedSalaryAdvances.length && (
                       <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No approved/disbursed salary advances.</td></tr>
                     )}
                   </tbody>
