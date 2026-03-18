@@ -4362,6 +4362,17 @@ async def delete_event(
     if e.user_id != user.id and not _is_admin_like(user.role):
         raise HTTPException(status_code=403, detail="Only the requesting user can delete this event")
 
+    reimbursement_ref = (
+        db.query(CashReimbursementItem)
+        .filter(CashReimbursementItem.source_event_id == e.id)
+        .first()
+    )
+    if reimbursement_ref:
+        raise HTTPException(
+            status_code=400,
+            detail="This event cannot be deleted because it is already attached to a submitted cash reimbursement.",
+        )
+
     old_sick_note_url = e.sick_note_url or ""
     old_prefixes = [
         "/uploads/sick_notes/",
