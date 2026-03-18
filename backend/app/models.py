@@ -44,6 +44,7 @@ class User(Base):
     # admin-only notes
     notes_private = Column(Text, nullable=True)
     require_two_step_leave_approval = Column(Boolean, nullable=False, default=False)
+    supervisor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     first_approver_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     second_approver_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
@@ -54,6 +55,7 @@ class User(Base):
         back_populates="user",
         foreign_keys="Event.user_id",
     )
+    supervisor = relationship("User", foreign_keys=[supervisor_id], remote_side=[id])
     client_tasks = relationship("ClientTask", back_populates="user", foreign_keys="ClientTask.user_id")
     daily_activities = relationship("DailyActivity", back_populates="user", cascade="all, delete-orphan")
 
@@ -437,3 +439,25 @@ class PerformanceEmployeeGoal(Base):
     user = relationship("User", foreign_keys=[user_id])
     created_by = relationship("User", foreign_keys=[created_by_id])
     updated_by = relationship("User", foreign_keys=[updated_by_id])
+
+
+class PerformanceAppraisal(Base):
+    __tablename__ = "performance_appraisals"
+    __table_args__ = (
+        UniqueConstraint("employee_id", "review_year", "review_quarter", name="uq_performance_appraisals_employee_period"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    employee_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    review_year = Column(Integer, nullable=False, index=True)
+    review_quarter = Column(String(2), nullable=False, index=True)
+    employee_payload_json = Column(Text, nullable=False, default="{}")
+    supervisor_payload_json = Column(Text, nullable=False, default="{}")
+    supervisor_reviewed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    employee_updated_at = Column(DateTime, nullable=True)
+    supervisor_updated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    employee = relationship("User", foreign_keys=[employee_id])
+    supervisor_reviewed_by = relationship("User", foreign_keys=[supervisor_reviewed_by_id])

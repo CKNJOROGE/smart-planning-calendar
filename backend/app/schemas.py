@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime, date
-from typing import List, Optional
+from typing import Any, List, Optional
 
 
 # -------------------------
@@ -43,6 +43,8 @@ class UserOut(BaseModel):
     name: str
     email: EmailStr
     role: str
+    supervisor_id: Optional[int] = None
+    supervisor_name: Optional[str] = None
     avatar_url: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
@@ -59,6 +61,7 @@ class UserProfileOut(BaseModel):
     name: str
     email: EmailStr
     role: str
+    supervisor_id: Optional[int] = None
     avatar_url: Optional[str] = None
 
     phone: Optional[str] = None
@@ -130,6 +133,7 @@ class AdminResetUserPasswordIn(BaseModel):
 class AdminUserProfileOut(UserProfileOut):
     notes_private: Optional[str] = None
     require_two_step_leave_approval: bool = False
+    supervisor_id: Optional[int] = None
     first_approver_id: Optional[int] = None
     second_approver_id: Optional[int] = None
     leave_opening_as_of: Optional[date] = None
@@ -141,6 +145,7 @@ class AdminUserProfileUpdate(UserProfileUpdate):
     email: Optional[EmailStr] = None
     role: Optional[str] = None
     notes_private: Optional[str] = None
+    supervisor_id: Optional[int] = None
 
     # NEW: admin can edit hire_date
     hire_date: Optional[date] = None
@@ -774,3 +779,38 @@ class PerformanceAssignableUserOut(BaseModel):
     name: str
     role: str
     department: Optional[str] = None
+    supervisor_id: Optional[int] = None
+
+
+class PerformanceAppraisalEmployeeIn(BaseModel):
+    review_period: Optional[str] = None
+    review_date: Optional[date] = None
+    kpi_self_ratings: dict[str, list[str]] = {}
+    goal_rows_last_review: list[dict[str, Any]] = []
+    goal_rows_next_review: list[dict[str, Any]] = []
+    reflection: dict[str, str] = {}
+
+
+class PerformanceAppraisalSupervisorIn(BaseModel):
+    kpi_supervisor_ratings: dict[str, list[str]] = {}
+    kpi_supervisor_comments: dict[str, list[str]] = {}
+    goal_supervisor_ratings: dict[str, list[str]] = {}
+    supervisor_summary: dict[str, str] = {}
+
+
+class PerformanceAppraisalOut(BaseModel):
+    id: Optional[int] = None
+    employee_id: int
+    review_year: int
+    review_quarter: str
+    employee_payload: dict[str, Any] = {}
+    supervisor_payload: dict[str, Any] = {}
+    can_edit_employee: bool = False
+    can_edit_supervisor: bool = False
+    employee: UserOut
+    assigned_supervisor: Optional[UserOut] = None
+    supervisor_reviewed_by: Optional[UserOut] = None
+    employee_updated_at: Optional[datetime] = None
+    supervisor_updated_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

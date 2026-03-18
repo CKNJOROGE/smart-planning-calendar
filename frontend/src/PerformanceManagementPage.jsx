@@ -9,6 +9,7 @@ import {
   listDepartmentGoals,
   createDepartmentGoal,
   updateDepartmentGoal,
+  listPerformanceDirectReports,
 } from "./api";
 import { useToast } from "./ToastProvider";
 import LoadingState from "./LoadingState";
@@ -35,6 +36,7 @@ export default function PerformanceManagementPage() {
   const [companyGoals, setCompanyGoals] = useState([]);
   const [departmentGoals, setDepartmentGoals] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [directReports, setDirectReports] = useState([]);
 
   const [editingCompanyId, setEditingCompanyId] = useState(null);
   const [editingDepartmentId, setEditingDepartmentId] = useState(null);
@@ -100,10 +102,16 @@ export default function PerformanceManagementPage() {
     try {
       const meData = await me();
       setCurrent(meData);
-      const [cGoals, dGoals, deptRows] = await Promise.all([listCompanyGoals(), listDepartmentGoals(), listDepartments()]);
+      const [cGoals, dGoals, deptRows, reportRows] = await Promise.all([
+        listCompanyGoals(),
+        listDepartmentGoals(),
+        listDepartments(),
+        listPerformanceDirectReports().catch(() => []),
+      ]);
       setCompanyGoals(cGoals || []);
       setDepartmentGoals(dGoals || []);
       setDepartments(deptRows || []);
+      setDirectReports(reportRows || []);
       if ((meData.role || "").toLowerCase() === "supervisor") {
         setDepartmentForm((f) => ({ ...f, department: meData.department || "" }));
       }
@@ -244,9 +252,48 @@ export default function PerformanceManagementPage() {
           Balanced Scorecard flow: Company goals by perspective, then Department goals by the same perspective.
         </div>
         <div className="muted" style={{ marginTop: 6 }}>
-          Individual goals are intentionally deferred and are not part of this version.
+          Individual appraisals are now available with employee self-review and supervisor-only review fields.
         </div>
       </div>
+
+      {!!directReports.length && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>My Team Appraisals</div>
+          <div className="muted" style={{ marginBottom: 10 }}>
+            Open an employee appraisal form to add supervisor review fields for your assigned direct reports.
+          </div>
+          <div style={{ width: "100%", overflowX: "auto" }}>
+            <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#f8fafc" }}>
+                  <th style={{ textAlign: "left", padding: 10 }}>Employee</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Department</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Role</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {directReports.map((row) => (
+                  <tr key={`perf-direct-report-${row.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                    <td style={{ padding: 10, fontWeight: 700 }}>{row.name}</td>
+                    <td style={{ padding: 10 }}>{row.department || "-"}</td>
+                    <td style={{ padding: 10 }}>{row.role}</td>
+                    <td style={{ padding: 10 }}>
+                      <button
+                        className="btn"
+                        type="button"
+                        onClick={() => navigate(`/performance-management/individual-goals?user_id=${row.id}`)}
+                      >
+                        Open Appraisal
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {err && <div className="error">{err}</div>}
 

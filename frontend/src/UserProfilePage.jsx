@@ -100,6 +100,7 @@ export default function UserProfilePage() {
         nssf_number: profile.nssf_number || null,
         nhif_number: profile.nhif_number || null,
         role: profile.role,
+        supervisor_id: profile.supervisor_id ? Number(profile.supervisor_id) : null,
         notes_private: profile.notes_private || null,
         require_two_step_leave_approval: !!profile.require_two_step_leave_approval,
         first_approver_id: profile.first_approver_id ? Number(profile.first_approver_id) : null,
@@ -201,6 +202,18 @@ export default function UserProfilePage() {
                   .map((x) => (
                     <option key={`desig_profile_${x.id}`} value={x.name}>{x.name}</option>
                   ))}
+              </select>
+            </div>
+            <div className="field">
+              <label>Supervisor</label>
+              <select
+                value={profile.supervisor_id || ""}
+                onChange={(e) => setProfile((p) => ({ ...p, supervisor_id: e.target.value === "" ? null : Number(e.target.value) }))}
+              >
+                <option value="">Unassigned</option>
+                {supervisorUsers.map((s) => (
+                  <option key={`supervisor_profile_${s.id}`} value={s.id}>{s.name} (ID {s.id})</option>
+                ))}
               </select>
             </div>
             <Field

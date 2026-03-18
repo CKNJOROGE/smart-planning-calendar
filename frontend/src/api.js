@@ -626,6 +626,10 @@ export function listPerformanceUsers() {
   return request("/performance/users");
 }
 
+export function listPerformanceDirectReports() {
+  return request("/performance/direct-reports");
+}
+
 export function listCompanyGoals() {
   return request("/performance/company-goals");
 }
@@ -663,6 +667,32 @@ export function createEmployeeGoal(payload) {
 
 export function updateEmployeeGoal(goalId, payload) {
   return request(`/performance/employee-goals/${goalId}`, { method: "PATCH", body: payload });
+}
+
+export function getPerformanceAppraisal({ userId = null, year = null, quarter = null } = {}) {
+  const qs = new URLSearchParams();
+  if (userId != null) qs.set("user_id", String(userId));
+  if (year != null) qs.set("year", String(year));
+  if (quarter) qs.set("quarter", quarter);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/performance/appraisals${suffix}`);
+}
+
+export function savePerformanceEmployeeAppraisal(payload, { userId = null, year = null, quarter = null } = {}) {
+  const qs = new URLSearchParams();
+  if (userId != null) qs.set("user_id", String(userId));
+  if (year != null) qs.set("year", String(year));
+  if (quarter) qs.set("quarter", quarter);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/performance/appraisals/employee${suffix}`, { method: "PATCH", body: payload });
+}
+
+export function savePerformanceSupervisorAppraisal(payload, { userId, year = null, quarter = null }) {
+  const qs = new URLSearchParams();
+  qs.set("user_id", String(userId));
+  if (year != null) qs.set("year", String(year));
+  if (quarter) qs.set("quarter", quarter);
+  return request(`/performance/appraisals/supervisor?${qs.toString()}`, { method: "PATCH", body: payload });
 }
 
 export function submitSalaryAdvanceRequest(payload) {

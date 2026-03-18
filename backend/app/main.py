@@ -38,6 +38,7 @@ from .models import (
     PerformanceCompanyGoal,
     PerformanceDepartmentGoal,
     PerformanceEmployeeGoal,
+    PerformanceAppraisal,
     PasswordResetToken,
 )
 from .schemas import (
@@ -106,6 +107,9 @@ from .schemas import (
     PerformanceEmployeeGoalUpdateIn,
     PerformanceEmployeeGoalOut,
     PerformanceAssignableUserOut,
+    PerformanceAppraisalEmployeeIn,
+    PerformanceAppraisalSupervisorIn,
+    PerformanceAppraisalOut,
 )
 from .security import verify_password, create_access_token, hash_password
 from .deps import get_current_user, require_admin, require_leave_approver
@@ -393,6 +397,17 @@ def _is_admin_like(role: Optional[str]) -> bool:
 
 def _is_finance_reviewer(role: Optional[str]) -> bool:
     return (role or "").strip().lower() in {"finance", "admin", "ceo"}
+
+
+def _attach_user_supervisor_metadata(db: Session, user_obj: Optional[User]) -> None:
+    if not user_obj:
+        return
+    setattr(user_obj, "supervisor_name", None)
+    if user_obj.supervisor_id is None:
+        return
+    supervisor = db.query(User).filter(User.id == user_obj.supervisor_id).first()
+    if supervisor:
+        setattr(user_obj, "supervisor_name", supervisor.name)
 
 
 def _normalize_department_name(raw: Optional[str]) -> str:
@@ -955,7 +970,11 @@ def reset_password(payload: ResetPasswordIn, db: Session = Depends(get_db)):
 
 
 @app.get("/me", response_model=UserOut)
-def get_me(user: User = Depends(get_current_user)):
+def get_me(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    _attach_user_supervisor_metadata(db, user)
     return user
 
 
@@ -1086,7 +1105,10 @@ def delete_designation(
 # -------------------------
 @app.get("/users", response_model=List[UserOut])
 def list_users(db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    return db.query(User).order_by(User.name.asc()).all()
+    rows = db.query(User).order_by(User.name.asc()).all()
+    for row in rows:
+        _attach_user_supervisor_metadata(db, row)
+    return rows
 
 
 @app.post("/users", response_model=UserOut)
@@ -1120,6 +1142,7 @@ def create_user(
     db.add(u)
     db.commit()
     db.refresh(u)
+    _attach_user_supervisor_metadata(db, u)
     return u
 
 
@@ -1138,6 +1161,7 @@ def get_user_profile(
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise HTTPException(status_code=404, detail="User not found")
+    _attach_user_supervisor_metadata(db, u)
     return u
 
 
@@ -1182,6 +1206,7 @@ def update_user_profile(
 
     db.commit()
     db.refresh(u)
+    _attach_user_supervisor_metadata(db, u)
     return u
 
 
@@ -1226,6 +1251,10 @@ def delete_user(
     ).count()
     if approver_refs:
         blockers.append(f"is assigned as approver for {approver_refs} user(s)")
+
+    supervisor_refs = db.query(User).filter(User.supervisor_id == u.id).count()
+    if supervisor_refs:
+        blockers.append(f"is assigned as supervisor for {supervisor_refs} user(s)")
 
     if blockers:
         raise HTTPException(
@@ -1327,6 +1356,7 @@ def admin_get_user_profile(
     u = db.query(User).filter(User.id == user_id).first()
     if not u:
         raise HTTPException(status_code=404, detail="User not found")
+    _attach_user_supervisor_metadata(db, u)
     return u
 
 
@@ -1392,11 +1422,17 @@ def admin_update_user_profile(
 
     first_approver_id = incoming.get("first_approver_id", u.first_approver_id)
     second_approver_id = incoming.get("second_approver_id", u.second_approver_id)
+    supervisor_id = incoming.get("supervisor_id", u.supervisor_id)
     requires_two_step = incoming.get(
         "require_two_step_leave_approval",
         u.require_two_step_leave_approval,
     )
 
+    if supervisor_id is not None:
+        if supervisor_id == u.id:
+            raise HTTPException(status_code=400, detail="supervisor_id cannot be the same as the user")
+        if not _is_supervisor_user(db, supervisor_id):
+            raise HTTPException(status_code=400, detail="supervisor_id must be a supervisor user")
     if first_approver_id is not None and not _is_supervisor_user(db, first_approver_id):
         raise HTTPException(status_code=400, detail="first_approver_id must be a supervisor user")
     if second_approver_id is not None and not _is_admin_user(db, second_approver_id):
@@ -1416,6 +1452,7 @@ def admin_update_user_profile(
 
     db.commit()
     db.refresh(u)
+    _attach_user_supervisor_metadata(db, u)
     return u
 
 
@@ -2971,6 +3008,117 @@ def _validate_goal_date_range(period_start: Optional[date], period_end: Optional
         raise HTTPException(status_code=400, detail="period_start cannot be after period_end")
 
 
+def _current_review_quarter() -> str:
+    month = date.today().month
+    if month <= 3:
+        return "Q1"
+    if month <= 6:
+        return "Q2"
+    if month <= 9:
+        return "Q3"
+    return "Q4"
+
+
+def _normalize_review_quarter(raw_quarter: Optional[str]) -> str:
+    value = (raw_quarter or _current_review_quarter()).strip().upper()
+    if value not in {"Q1", "Q2", "Q3", "Q4"}:
+        raise HTTPException(status_code=400, detail="quarter must be one of: Q1, Q2, Q3, Q4")
+    return value
+
+
+def _loads_json_object(raw_json: Optional[str]) -> dict:
+    if not raw_json:
+        return {}
+    try:
+        loaded = json.loads(raw_json)
+    except Exception:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _can_view_performance_appraisal(current: User, employee: User) -> bool:
+    if _is_admin_like(current.role):
+        return True
+    if current.id == employee.id:
+        return True
+    return (current.role or "").strip().lower() == "supervisor" and employee.supervisor_id == current.id
+
+
+def _can_edit_employee_appraisal(current: User, employee: User) -> bool:
+    return current.id == employee.id
+
+
+def _can_edit_supervisor_appraisal(current: User, employee: User) -> bool:
+    return (current.role or "").strip().lower() == "supervisor" and employee.supervisor_id == current.id
+
+
+def _get_or_create_performance_appraisal(
+    db: Session,
+    employee_id: int,
+    review_year: int,
+    review_quarter: str,
+) -> PerformanceAppraisal:
+    row = (
+        db.query(PerformanceAppraisal)
+        .filter(
+            PerformanceAppraisal.employee_id == employee_id,
+            PerformanceAppraisal.review_year == review_year,
+            PerformanceAppraisal.review_quarter == review_quarter,
+        )
+        .first()
+    )
+    if row:
+        return row
+    row = PerformanceAppraisal(
+        employee_id=employee_id,
+        review_year=review_year,
+        review_quarter=review_quarter,
+        employee_payload_json="{}",
+        supervisor_payload_json="{}",
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def _build_performance_appraisal_out(
+    db: Session,
+    row: Optional[PerformanceAppraisal],
+    employee: User,
+    current: User,
+    review_year: int,
+    review_quarter: str,
+) -> PerformanceAppraisalOut:
+    _attach_user_supervisor_metadata(db, employee)
+    assigned_supervisor = None
+    if employee.supervisor_id is not None:
+        assigned_supervisor = db.query(User).filter(User.id == employee.supervisor_id).first()
+        _attach_user_supervisor_metadata(db, assigned_supervisor)
+    supervisor_reviewed_by = None
+    if row and row.supervisor_reviewed_by_id is not None:
+        supervisor_reviewed_by = db.query(User).filter(User.id == row.supervisor_reviewed_by_id).first()
+        _attach_user_supervisor_metadata(db, supervisor_reviewed_by)
+    return PerformanceAppraisalOut(
+        id=row.id if row else None,
+        employee_id=employee.id,
+        review_year=review_year,
+        review_quarter=review_quarter,
+        employee_payload=_loads_json_object(row.employee_payload_json if row else None),
+        supervisor_payload=_loads_json_object(row.supervisor_payload_json if row else None),
+        can_edit_employee=_can_edit_employee_appraisal(current, employee),
+        can_edit_supervisor=_can_edit_supervisor_appraisal(current, employee),
+        employee=employee,
+        assigned_supervisor=assigned_supervisor,
+        supervisor_reviewed_by=supervisor_reviewed_by,
+        employee_updated_at=row.employee_updated_at if row else None,
+        supervisor_updated_at=row.supervisor_updated_at if row else None,
+        created_at=row.created_at if row else None,
+        updated_at=row.updated_at if row else None,
+    )
+
+
 @app.get("/performance/users", response_model=List[PerformanceAssignableUserOut])
 def list_performance_users(
     db: Session = Depends(get_db),
@@ -2998,6 +3146,41 @@ def list_performance_users(
             name=u.name,
             role=u.role,
             department=u.department,
+            supervisor_id=u.supervisor_id,
+        )
+        for u in rows
+    ]
+
+
+@app.get("/performance/direct-reports", response_model=List[PerformanceAssignableUserOut])
+def list_performance_direct_reports(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role == "supervisor":
+        rows = (
+            db.query(User)
+            .filter(User.supervisor_id == current.id)
+            .order_by(User.name.asc())
+            .all()
+        )
+    elif _is_admin_like(role):
+        rows = (
+            db.query(User)
+            .filter(User.supervisor_id.isnot(None))
+            .order_by(User.name.asc())
+            .all()
+        )
+    else:
+        rows = []
+    return [
+        PerformanceAssignableUserOut(
+            id=u.id,
+            name=u.name,
+            role=u.role,
+            department=u.department,
+            supervisor_id=u.supervisor_id,
         )
         for u in rows
     ]
@@ -3234,6 +3417,89 @@ def list_employee_goals(
     current: User = Depends(get_current_user),
 ):
     raise HTTPException(status_code=501, detail="Individual goals are not implemented yet")
+
+
+@app.get("/performance/appraisals", response_model=PerformanceAppraisalOut)
+def get_performance_appraisal(
+    user_id: Optional[int] = Query(default=None),
+    year: Optional[int] = Query(default=None),
+    quarter: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    employee_id = user_id or current.id
+    employee = db.query(User).filter(User.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if not _can_view_performance_appraisal(current, employee):
+        raise HTTPException(status_code=403, detail="Not allowed to view this appraisal")
+
+    review_year = int(year or date.today().year)
+    review_quarter = _normalize_review_quarter(quarter)
+    row = (
+        db.query(PerformanceAppraisal)
+        .filter(
+            PerformanceAppraisal.employee_id == employee.id,
+            PerformanceAppraisal.review_year == review_year,
+            PerformanceAppraisal.review_quarter == review_quarter,
+        )
+        .first()
+    )
+    return _build_performance_appraisal_out(db, row, employee, current, review_year, review_quarter)
+
+
+@app.patch("/performance/appraisals/employee", response_model=PerformanceAppraisalOut)
+def update_performance_appraisal_employee(
+    payload: PerformanceAppraisalEmployeeIn,
+    user_id: Optional[int] = Query(default=None),
+    year: Optional[int] = Query(default=None),
+    quarter: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    employee_id = user_id or current.id
+    employee = db.query(User).filter(User.id == employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if not _can_edit_employee_appraisal(current, employee):
+        raise HTTPException(status_code=403, detail="Only the employee can update this part of the appraisal")
+
+    review_year = int(year or date.today().year)
+    review_quarter = _normalize_review_quarter(quarter)
+    row = _get_or_create_performance_appraisal(db, employee.id, review_year, review_quarter)
+    row.employee_payload_json = json.dumps(payload.model_dump(mode="json"))
+    row.employee_updated_at = datetime.utcnow()
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _build_performance_appraisal_out(db, row, employee, current, review_year, review_quarter)
+
+
+@app.patch("/performance/appraisals/supervisor", response_model=PerformanceAppraisalOut)
+def update_performance_appraisal_supervisor(
+    payload: PerformanceAppraisalSupervisorIn,
+    user_id: int = Query(...),
+    year: Optional[int] = Query(default=None),
+    quarter: Optional[str] = Query(default=None),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    employee = db.query(User).filter(User.id == user_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if not _can_edit_supervisor_appraisal(current, employee):
+        raise HTTPException(status_code=403, detail="Only the assigned supervisor can update supervisor review fields")
+
+    review_year = int(year or date.today().year)
+    review_quarter = _normalize_review_quarter(quarter)
+    row = _get_or_create_performance_appraisal(db, employee.id, review_year, review_quarter)
+    row.supervisor_payload_json = json.dumps(payload.model_dump(mode="json"))
+    row.supervisor_reviewed_by_id = current.id
+    row.supervisor_updated_at = datetime.utcnow()
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    return _build_performance_appraisal_out(db, row, employee, current, review_year, review_quarter)
 
 
 @app.post("/performance/employee-goals", response_model=PerformanceEmployeeGoalOut)
