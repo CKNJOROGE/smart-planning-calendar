@@ -551,6 +551,13 @@ export function decideCashReimbursement(requestId, approve, comment) {
   });
 }
 
+export function decideCashReimbursementItem(requestId, itemId, approve, comment) {
+  return request(`/finance/reimbursements/${requestId}/items/${itemId}/decision`, {
+    method: "POST",
+    body: { approve: !!approve, comment: comment || null },
+  });
+}
+
 export function markCashReimbursed(requestId) {
   return request(`/finance/reimbursements/${requestId}/reimburse`, {
     method: "POST",

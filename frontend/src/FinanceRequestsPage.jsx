@@ -9,6 +9,7 @@ import {
   listPendingCashReimbursements,
   listApprovedCashReimbursements,
   decideCashReimbursement,
+  decideCashReimbursementItem,
   markCashReimbursed,
   submitCashRequisition,
   listMyCashRequisitions,
@@ -74,6 +75,10 @@ function decisionLabel(decision) {
   if (d === "approved") return "Approved";
   if (d === "rejected") return "Rejected";
   return "Pending";
+}
+
+function reimbursementItemStatusLabel(status) {
+  return (status || "").toLowerCase() === "rejected" ? "Rejected" : "Included";
 }
 
 function requisitionStatusLabel(status) {
@@ -401,6 +406,23 @@ export default function FinanceRequestsPage() {
       await decideCashReimbursement(requestId, approve, comment);
       await loadData();
       showToast(approve ? "Request approved" : "Request rejected", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function takeItemDecision(requestId, itemId, approve) {
+    const comment = approve ? "" : (prompt("Reason for rejecting this reimbursement row (required):") || "").trim();
+    if (!approve && !comment) {
+      setErr("Row rejection comment is required.");
+      return;
+    }
+    try {
+      await decideCashReimbursementItem(requestId, itemId, approve, comment);
+      await loadData();
+      showToast(approve ? "Reimbursement row restored" : "Reimbursement row rejected", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
@@ -1065,6 +1087,8 @@ export default function FinanceRequestsPage() {
                                 <th style={{ textAlign: "left", padding: 10 }}>Date</th>
                                 <th style={{ textAlign: "left", padding: 10 }}>Description</th>
                                 <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                                <th style={{ textAlign: "left", padding: 10 }}>Row Status</th>
+                                <th style={{ textAlign: "left", padding: 10 }}>Row Review</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1073,11 +1097,38 @@ export default function FinanceRequestsPage() {
                                   <td style={{ padding: 10 }}>{item.item_date}</td>
                                   <td style={{ padding: 10 }}>{item.description}</td>
                                   <td style={{ padding: 10 }}>{fmtCurrency(item.amount)}</td>
+                                  <td style={{ padding: 10 }}>
+                                    <span className={`dashboard-status-badge ${(item.review_status || "").toLowerCase() === "rejected" ? "dashboard-status-danger" : "dashboard-status-ok"}`}>
+                                      {reimbursementItemStatusLabel(item.review_status)}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: 10 }}>
+                                    {item.review_comment ? (
+                                      <div style={{ marginBottom: 6 }}>{item.review_comment}</div>
+                                    ) : (
+                                      <div className="muted" style={{ marginBottom: 6 }}>No row-specific comment.</div>
+                                    )}
+                                    {((reviewerSlot === "ceo" && !r.ceo_decision) || (reviewerSlot === "finance" && !r.finance_decision)) ? (
+                                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                        {(item.review_status || "").toLowerCase() === "rejected" ? (
+                                          <button className="btn" type="button" onClick={() => takeItemDecision(r.id, item.id, true)}>
+                                            Restore Row
+                                          </button>
+                                        ) : (
+                                          <button className="btn btn-danger" type="button" onClick={() => takeItemDecision(r.id, item.id, false)}>
+                                            Reject Row
+                                          </button>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="muted">Row review is locked after your request decision.</div>
+                                    )}
+                                  </td>
                                 </tr>
                               ))}
                               {!r.items?.length && (
                                 <tr>
-                                  <td colSpan={3} style={{ padding: 10 }} className="muted">No submitted items.</td>
+                                  <td colSpan={5} style={{ padding: 10 }} className="muted">No submitted items.</td>
                                 </tr>
                               )}
                             </tbody>

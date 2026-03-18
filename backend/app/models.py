@@ -240,11 +240,16 @@ class CashReimbursementItem(Base):
     amount = Column(Numeric(12, 2), nullable=False)
     client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=True, index=True)
     source_event_id = Column(Integer, ForeignKey("events.id"), nullable=True, unique=True, index=True)
+    review_status = Column(String(20), nullable=False, default="pending")
+    review_comment = Column(Text, nullable=True)
+    reviewed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     request = relationship("CashReimbursementRequest", back_populates="items")
     client = relationship("ClientAccount", foreign_keys=[client_id])
     source_event = relationship("Event", foreign_keys=[source_event_id])
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_id])
 
 
 class CashReimbursementDraft(Base):

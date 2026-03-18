@@ -87,6 +87,7 @@ from .schemas import (
     CashReimbursementDecisionIn,
     CashReimbursementDraftSaveIn,
     CashReimbursementDraftManualItemOut,
+    CashReimbursementItemDecisionIn,
     CashRequisitionCreateIn,
     CashRequisitionDecisionIn,
     CashRequisitionDisburseIn,
@@ -2077,6 +2078,15 @@ def _load_reimbursement_request(db: Session, request_id: int) -> Optional[CashRe
     return req
 
 
+def _reimbursement_effective_total(req: CashReimbursementRequest) -> Decimal:
+    total = Decimal("0")
+    for item in req.items or []:
+        if (item.review_status or "").strip().lower() == "rejected":
+            continue
+        total += Decimal(str(item.amount or 0))
+    return total
+
+
 @app.get("/finance/reimbursements/my", response_model=List[CashReimbursementRequestOut])
 def list_my_cash_reimbursements(
     db: Session = Depends(get_db),
@@ -2338,11 +2348,14 @@ def decide_cash_reimbursement(
         raise HTTPException(status_code=400, detail="Request already finalized")
     if req.status == "pending_reimbursement":
         raise HTTPException(status_code=400, detail="Request is already approved and awaiting reimbursement")
+    req.total_amount = _reimbursement_effective_total(req)
 
     decision = "approved" if payload.approve else "rejected"
     comment = (payload.comment or "").strip()
     if not payload.approve and not comment:
         raise HTTPException(status_code=400, detail="Comment is required when denying")
+    if payload.approve and req.total_amount <= 0:
+        raise HTTPException(status_code=400, detail="All reimbursement rows are rejected. Reject the request instead.")
 
     role = (current.role or "").strip().lower()
     now = datetime.utcnow()
@@ -2364,6 +2377,48 @@ def decide_cash_reimbursement(
     else:
         req.status = "pending_approval"
 
+    db.commit()
+    db.refresh(req)
+    _ = req.user
+    _ = req.items
+    return req
+
+
+@app.post("/finance/reimbursements/{request_id}/items/{item_id}/decision", response_model=CashReimbursementRequestOut)
+def decide_cash_reimbursement_item(
+    request_id: int,
+    item_id: int,
+    payload: CashReimbursementItemDecisionIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    req = _load_reimbursement_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Reimbursement request not found")
+    if req.status in {"amount_reimbursed", "rejected", "pending_reimbursement"}:
+        raise HTTPException(status_code=400, detail="This reimbursement request can no longer be changed at row level")
+
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if role == "finance" and req.finance_decision is not None:
+        raise HTTPException(status_code=400, detail="Finance already finalized this reimbursement request")
+    if role in {"admin", "ceo"} and req.ceo_decision is not None:
+        raise HTTPException(status_code=400, detail="CEO/Admin already finalized this reimbursement request")
+
+    item = next((row for row in req.items or [] if row.id == item_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="Reimbursement item not found")
+
+    comment = (payload.comment or "").strip()
+    if not payload.approve and not comment:
+        raise HTTPException(status_code=400, detail="Comment is required when rejecting a reimbursement row")
+
+    item.review_status = "pending" if payload.approve else "rejected"
+    item.review_comment = None if payload.approve else comment
+    item.reviewed_by_id = current.id
+    item.reviewed_at = datetime.utcnow()
+    req.total_amount = _reimbursement_effective_total(req)
     db.commit()
     db.refresh(req)
     _ = req.user

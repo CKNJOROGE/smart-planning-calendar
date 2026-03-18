@@ -496,6 +496,11 @@ class CashReimbursementDecisionIn(BaseModel):
     comment: Optional[str] = None
 
 
+class CashReimbursementItemDecisionIn(BaseModel):
+    approve: bool
+    comment: Optional[str] = None
+
+
 class CashReimbursementItemOut(BaseModel):
     id: int
     item_date: date
@@ -503,6 +508,10 @@ class CashReimbursementItemOut(BaseModel):
     amount: float
     client_id: Optional[int] = None
     source_event_id: Optional[int] = None
+    review_status: str = "pending"
+    review_comment: Optional[str] = None
+    reviewed_by_id: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:
