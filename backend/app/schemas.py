@@ -764,8 +764,72 @@ class PayrollRunPreviewIn(PayrollRunInputIn):
     employee_id: int
 
 
+class PayrollStatutoryConfigBase(BaseModel):
+    effective_from: date
+    effective_to: Optional[date] = None
+    active: bool = True
+    paye_bands_monthly: list[dict[str, Any]]
+    personal_relief_monthly: float
+    insurance_relief_rate: float
+    insurance_relief_cap_monthly: float
+    owner_occupier_interest_cap_monthly: float
+    shif_rate: float
+    shif_minimum_monthly: float
+    ahl_rate_employee: float
+    ahl_rate_employer: float
+    nssf_lower_earnings_limit: float
+    nssf_upper_earnings_limit: float
+    nssf_employee_rate: float
+    nssf_employer_rate: float
+    nita_levy_monthly: float
+    non_cash_benefit_taxable_threshold: float
+    disability_exemption_cap_monthly: float
+    source_notes: list[str] = []
+
+
+class PayrollStatutoryConfigCreateIn(PayrollStatutoryConfigBase):
+    pass
+
+
+class PayrollStatutoryConfigUpdateIn(BaseModel):
+    effective_to: Optional[date] = None
+    active: Optional[bool] = None
+    paye_bands_monthly: Optional[list[dict[str, Any]]] = None
+    personal_relief_monthly: Optional[float] = None
+    insurance_relief_rate: Optional[float] = None
+    insurance_relief_cap_monthly: Optional[float] = None
+    owner_occupier_interest_cap_monthly: Optional[float] = None
+    shif_rate: Optional[float] = None
+    shif_minimum_monthly: Optional[float] = None
+    ahl_rate_employee: Optional[float] = None
+    ahl_rate_employer: Optional[float] = None
+    nssf_lower_earnings_limit: Optional[float] = None
+    nssf_upper_earnings_limit: Optional[float] = None
+    nssf_employee_rate: Optional[float] = None
+    nssf_employer_rate: Optional[float] = None
+    nita_levy_monthly: Optional[float] = None
+    non_cash_benefit_taxable_threshold: Optional[float] = None
+    disability_exemption_cap_monthly: Optional[float] = None
+    source_notes: Optional[list[str]] = None
+
+
+class PayrollStatutoryConfigOut(PayrollStatutoryConfigBase):
+    id: int
+    created_by_id: int
+    updated_by_id: int
+    created_at: datetime
+    updated_at: datetime
+    created_by: UserOut
+    updated_by: UserOut
+
+    class Config:
+        from_attributes = True
+
+
 class PayrollStatutoryOut(BaseModel):
+    id: Optional[int] = None
     paye_effective_from: date
+    effective_to: Optional[date] = None
     ahl_effective_from: date
     shif_effective_from: date
     nssf_effective_from: date
@@ -783,6 +847,8 @@ class PayrollStatutoryOut(BaseModel):
     nssf_employee_rate: float
     nssf_employer_rate: float
     nita_levy_monthly: float
+    non_cash_benefit_taxable_threshold: float
+    disability_exemption_cap_monthly: float
     source_notes: list[str]
 
 

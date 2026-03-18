@@ -3,6 +3,9 @@ import { Navigate } from "react-router-dom";
 import {
   me,
   getPayrollStatutoryInfo,
+  listPayrollStatutoryConfigs,
+  createPayrollStatutoryConfig,
+  updatePayrollStatutoryConfig,
   listPayrollEmployees,
   getPayrollProfile,
   updatePayrollProfile,
@@ -88,6 +91,72 @@ function emptyRunState() {
   };
 }
 
+function statutoryFormFromApi(row) {
+  return {
+    effective_from: row?.effective_from || monthStartToday(),
+    effective_to: row?.effective_to || "",
+    active: row?.active ?? true,
+    personal_relief_monthly: toFieldValue(row?.personal_relief_monthly),
+    insurance_relief_rate: toFieldValue(row?.insurance_relief_rate),
+    insurance_relief_cap_monthly: toFieldValue(row?.insurance_relief_cap_monthly),
+    owner_occupier_interest_cap_monthly: toFieldValue(row?.owner_occupier_interest_cap_monthly),
+    shif_rate: toFieldValue(row?.shif_rate),
+    shif_minimum_monthly: toFieldValue(row?.shif_minimum_monthly),
+    ahl_rate_employee: toFieldValue(row?.ahl_rate_employee),
+    ahl_rate_employer: toFieldValue(row?.ahl_rate_employer),
+    nssf_lower_earnings_limit: toFieldValue(row?.nssf_lower_earnings_limit),
+    nssf_upper_earnings_limit: toFieldValue(row?.nssf_upper_earnings_limit),
+    nssf_employee_rate: toFieldValue(row?.nssf_employee_rate),
+    nssf_employer_rate: toFieldValue(row?.nssf_employer_rate),
+    nita_levy_monthly: toFieldValue(row?.nita_levy_monthly),
+    non_cash_benefit_taxable_threshold: toFieldValue(row?.non_cash_benefit_taxable_threshold),
+    disability_exemption_cap_monthly: toFieldValue(row?.disability_exemption_cap_monthly),
+    paye_bands_text: (row?.paye_bands_monthly || [])
+      .map((band) => `${band.label || "band"}|${band.amount ?? ""}|${band.rate ?? ""}`)
+      .join("\n"),
+    source_notes_text: (row?.source_notes || []).join("\n"),
+  };
+}
+
+function statutoryPayloadFromState(state) {
+  return {
+    effective_from: state.effective_from,
+    effective_to: state.effective_to || null,
+    active: !!state.active,
+    personal_relief_monthly: toNullableNumber(state.personal_relief_monthly) ?? 0,
+    insurance_relief_rate: toNullableNumber(state.insurance_relief_rate) ?? 0,
+    insurance_relief_cap_monthly: toNullableNumber(state.insurance_relief_cap_monthly) ?? 0,
+    owner_occupier_interest_cap_monthly: toNullableNumber(state.owner_occupier_interest_cap_monthly) ?? 0,
+    shif_rate: toNullableNumber(state.shif_rate) ?? 0,
+    shif_minimum_monthly: toNullableNumber(state.shif_minimum_monthly) ?? 0,
+    ahl_rate_employee: toNullableNumber(state.ahl_rate_employee) ?? 0,
+    ahl_rate_employer: toNullableNumber(state.ahl_rate_employer) ?? 0,
+    nssf_lower_earnings_limit: toNullableNumber(state.nssf_lower_earnings_limit) ?? 0,
+    nssf_upper_earnings_limit: toNullableNumber(state.nssf_upper_earnings_limit) ?? 0,
+    nssf_employee_rate: toNullableNumber(state.nssf_employee_rate) ?? 0,
+    nssf_employer_rate: toNullableNumber(state.nssf_employer_rate) ?? 0,
+    nita_levy_monthly: toNullableNumber(state.nita_levy_monthly) ?? 0,
+    non_cash_benefit_taxable_threshold: toNullableNumber(state.non_cash_benefit_taxable_threshold) ?? 0,
+    disability_exemption_cap_monthly: toNullableNumber(state.disability_exemption_cap_monthly) ?? 0,
+    paye_bands_monthly: String(state.paye_bands_text || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [label, amountRaw, rateRaw] = line.split("|").map((part) => String(part || "").trim());
+        const amount = amountRaw ? Number(amountRaw) : null;
+        const rate = Number(rateRaw);
+        return amountRaw
+          ? { label: label || "band", amount, rate }
+          : { label: label || "excess", rate };
+      }),
+    source_notes: String(state.source_notes_text || "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean),
+  };
+}
+
 function runPayloadFromState(state, employeeId) {
   return {
     employee_id: Number(employeeId),
@@ -162,6 +231,9 @@ export default function PayrollPage() {
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [statutory, setStatutory] = useState(null);
+  const [statutoryConfigs, setStatutoryConfigs] = useState([]);
+  const [selectedStatutoryConfigId, setSelectedStatutoryConfigId] = useState("");
+  const [statutoryForm, setStatutoryForm] = useState(statutoryFormFromApi(null));
   const [profile, setProfile] = useState(null);
   const [profileForm, setProfileForm] = useState(profileStateFromApi(null));
   const [runForm, setRunForm] = useState(emptyRunState());
@@ -171,6 +243,7 @@ export default function PayrollPage() {
   const [err, setErr] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingRun, setSavingRun] = useState(false);
+  const [savingStatutory, setSavingStatutory] = useState(false);
   const { showToast } = useToast();
 
   const role = String(current?.role || "").toLowerCase();
@@ -185,11 +258,19 @@ export default function PayrollPage() {
         if (!["finance", "admin", "ceo"].includes(String(meData?.role || "").toLowerCase())) {
           return;
         }
-        const [statutoryData, employeeRows] = await Promise.all([
+        const [statutoryData, statutoryConfigRows, employeeRows] = await Promise.all([
           getPayrollStatutoryInfo(),
+          listPayrollStatutoryConfigs(),
           listPayrollEmployees(),
         ]);
         setStatutory(statutoryData);
+        setStatutoryConfigs(statutoryConfigRows || []);
+        if (statutoryConfigRows?.length) {
+          setSelectedStatutoryConfigId(String(statutoryConfigRows[0].id));
+          setStatutoryForm(statutoryFormFromApi(statutoryConfigRows[0]));
+        } else {
+          setStatutoryForm(statutoryFormFromApi(statutoryData));
+        }
         setEmployees(employeeRows || []);
         if (employeeRows?.length) setSelectedEmployeeId(String(employeeRows[0].id));
       } catch (e) {
@@ -257,12 +338,22 @@ export default function PayrollPage() {
     [employees, selectedEmployeeId]
   );
 
+  const selectedStatutoryConfig = useMemo(
+    () => (statutoryConfigs || []).find((row) => Number(row.id) === Number(selectedStatutoryConfigId)) || null,
+    [statutoryConfigs, selectedStatutoryConfigId]
+  );
+
   const profileGross = useMemo(() => (
     Number(profileForm.basic_salary || 0)
     + Number(profileForm.house_allowance || 0)
     + Number(profileForm.transport_allowance || 0)
     + Number(profileForm.other_taxable_allowance || 0)
   ), [profileForm]);
+
+  useEffect(() => {
+    if (!selectedStatutoryConfig) return;
+    setStatutoryForm(statutoryFormFromApi(selectedStatutoryConfig));
+  }, [selectedStatutoryConfigId, selectedStatutoryConfig]);
 
   async function handleSaveProfile() {
     if (!selectedEmployeeId) return;
@@ -341,6 +432,42 @@ export default function PayrollPage() {
     }
   }
 
+  async function refreshStatutoryConfigs() {
+    const [statutoryData, rows] = await Promise.all([
+      getPayrollStatutoryInfo(),
+      listPayrollStatutoryConfigs(),
+    ]);
+    setStatutory(statutoryData);
+    setStatutoryConfigs(rows || []);
+    return rows || [];
+  }
+
+  async function handleSaveStatutoryConfig(asNewVersion) {
+    setSavingStatutory(true);
+    setErr("");
+    try {
+      const payload = statutoryPayloadFromState(statutoryForm);
+      if (asNewVersion || !selectedStatutoryConfigId) {
+        await createPayrollStatutoryConfig(payload);
+      } else {
+        await updatePayrollStatutoryConfig(Number(selectedStatutoryConfigId), payload);
+      }
+      const rows = await refreshStatutoryConfigs();
+      if (rows.length) {
+        const target = asNewVersion ? rows[0] : rows.find((row) => Number(row.id) === Number(selectedStatutoryConfigId)) || rows[0];
+        setSelectedStatutoryConfigId(String(target.id));
+        setStatutoryForm(statutoryFormFromApi(target));
+      }
+      showToast(asNewVersion ? "New statutory config saved" : "Statutory config updated", "success");
+    } catch (e) {
+      const text = String(e.message || e);
+      setErr(text);
+      showToast(text, "error");
+    } finally {
+      setSavingStatutory(false);
+    }
+  }
+
   if (busy) {
     return (
       <div className="page-wrap">
@@ -367,6 +494,89 @@ export default function PayrollPage() {
           {statChip("NSSF", `LEL ${fmtCurrency(statutory?.nssf_lower_earnings_limit || 0)} / UEL ${fmtCurrency(statutory?.nssf_upper_earnings_limit || 0)}`)}
         </div>
         {err && <div className="error" style={{ marginTop: 10 }}>{err}</div>}
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+          <div>
+            <div style={{ fontWeight: 900 }}>Statutory Settings</div>
+            <div className="muted">Create a new effective-dated rule version when Kenya payroll law changes. Old payroll runs keep their stored snapshot.</div>
+          </div>
+          <div className="pill">Current config ID: {statutory?.id || "-"}</div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "260px minmax(0, 1fr)", gap: 12, alignItems: "start" }}>
+          <div>
+            <div className="field" style={{ marginBottom: 10 }}>
+              <label>Available versions</label>
+              <select value={selectedStatutoryConfigId} onChange={(e) => setSelectedStatutoryConfigId(e.target.value)}>
+                {(statutoryConfigs || []).map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.effective_from}{row.effective_to ? ` to ${row.effective_to}` : " onwards"}{row.active ? " | active" : " | inactive"}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button className="btn" type="button" onClick={() => { setSelectedStatutoryConfigId(""); setStatutoryForm(statutoryFormFromApi(statutory)); }}>
+              New Version Draft
+            </button>
+          </div>
+
+          <div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+              <Field label="Effective From" type="date" value={statutoryForm.effective_from} onChange={(v) => setStatutoryForm((p) => ({ ...p, effective_from: v }))} />
+              <Field label="Effective To" type="date" value={statutoryForm.effective_to} onChange={(v) => setStatutoryForm((p) => ({ ...p, effective_to: v }))} />
+              <NumberField label="Personal Relief Monthly" value={statutoryForm.personal_relief_monthly} onChange={(v) => setStatutoryForm((p) => ({ ...p, personal_relief_monthly: v }))} />
+              <NumberField label="Insurance Relief Rate" value={statutoryForm.insurance_relief_rate} onChange={(v) => setStatutoryForm((p) => ({ ...p, insurance_relief_rate: v }))} helpText="Example: 0.15 for 15%." />
+              <NumberField label="Insurance Relief Cap" value={statutoryForm.insurance_relief_cap_monthly} onChange={(v) => setStatutoryForm((p) => ({ ...p, insurance_relief_cap_monthly: v }))} />
+              <NumberField label="Owner Occupier Interest Cap" value={statutoryForm.owner_occupier_interest_cap_monthly} onChange={(v) => setStatutoryForm((p) => ({ ...p, owner_occupier_interest_cap_monthly: v }))} />
+              <NumberField label="SHIF Rate" value={statutoryForm.shif_rate} onChange={(v) => setStatutoryForm((p) => ({ ...p, shif_rate: v }))} />
+              <NumberField label="SHIF Minimum Monthly" value={statutoryForm.shif_minimum_monthly} onChange={(v) => setStatutoryForm((p) => ({ ...p, shif_minimum_monthly: v }))} />
+              <NumberField label="AHL Employee Rate" value={statutoryForm.ahl_rate_employee} onChange={(v) => setStatutoryForm((p) => ({ ...p, ahl_rate_employee: v }))} />
+              <NumberField label="AHL Employer Rate" value={statutoryForm.ahl_rate_employer} onChange={(v) => setStatutoryForm((p) => ({ ...p, ahl_rate_employer: v }))} />
+              <NumberField label="NSSF Lower Earnings Limit" value={statutoryForm.nssf_lower_earnings_limit} onChange={(v) => setStatutoryForm((p) => ({ ...p, nssf_lower_earnings_limit: v }))} />
+              <NumberField label="NSSF Upper Earnings Limit" value={statutoryForm.nssf_upper_earnings_limit} onChange={(v) => setStatutoryForm((p) => ({ ...p, nssf_upper_earnings_limit: v }))} />
+              <NumberField label="NSSF Employee Rate" value={statutoryForm.nssf_employee_rate} onChange={(v) => setStatutoryForm((p) => ({ ...p, nssf_employee_rate: v }))} />
+              <NumberField label="NSSF Employer Rate" value={statutoryForm.nssf_employer_rate} onChange={(v) => setStatutoryForm((p) => ({ ...p, nssf_employer_rate: v }))} />
+              <NumberField label="NITA Levy Monthly" value={statutoryForm.nita_levy_monthly} onChange={(v) => setStatutoryForm((p) => ({ ...p, nita_levy_monthly: v }))} />
+              <NumberField label="Non-cash Benefit Threshold" value={statutoryForm.non_cash_benefit_taxable_threshold} onChange={(v) => setStatutoryForm((p) => ({ ...p, non_cash_benefit_taxable_threshold: v }))} />
+              <NumberField label="Disability Exemption Cap" value={statutoryForm.disability_exemption_cap_monthly} onChange={(v) => setStatutoryForm((p) => ({ ...p, disability_exemption_cap_monthly: v }))} />
+            </div>
+
+            <label style={{ display: "inline-flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+              <input type="checkbox" checked={!!statutoryForm.active} onChange={(e) => setStatutoryForm((p) => ({ ...p, active: e.target.checked }))} />
+              Active configuration
+            </label>
+
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>PAYE Bands</label>
+              <textarea
+                value={statutoryForm.paye_bands_text}
+                onChange={(e) => setStatutoryForm((p) => ({ ...p, paye_bands_text: e.target.value }))}
+                placeholder={"first|24000|0.10\nnext|8333|0.25\nnext|467667|0.30\nnext|300000|0.325\nexcess||0.35"}
+              />
+              <div className="helper">Use one band per line in the format `label|amount|rate`. Leave amount blank for the top/excess rate.</div>
+            </div>
+
+            <div className="field" style={{ marginTop: 12 }}>
+              <label>Source Notes</label>
+              <textarea
+                value={statutoryForm.source_notes_text}
+                onChange={(e) => setStatutoryForm((p) => ({ ...p, source_notes_text: e.target.value }))}
+                placeholder="One source note per line"
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+              <button className="btn" type="button" disabled={savingStatutory} onClick={() => handleSaveStatutoryConfig(false)}>
+                {savingStatutory ? "Saving..." : "Update Selected Version"}
+              </button>
+              <button className="btn btn-primary" type="button" disabled={savingStatutory} onClick={() => handleSaveStatutoryConfig(true)}>
+                {savingStatutory ? "Saving..." : "Save As New Version"}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "320px minmax(0, 1fr)", gap: 12, alignItems: "start" }}>

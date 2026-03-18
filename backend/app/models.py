@@ -373,6 +373,39 @@ class SalaryAdvanceRequest(Base):
     disbursed_by = relationship("User", foreign_keys=[disbursed_by_id])
 
 
+class PayrollStatutoryConfig(Base):
+    __tablename__ = "payroll_statutory_configs"
+
+    id = Column(Integer, primary_key=True)
+    effective_from = Column(Date, nullable=False, unique=True, index=True)
+    effective_to = Column(Date, nullable=True, index=True)
+    active = Column(Boolean, nullable=False, default=True)
+    paye_bands_json = Column(Text, nullable=False, default="[]")
+    personal_relief_monthly = Column(Numeric(12, 2), nullable=False, default=0)
+    insurance_relief_rate = Column(Numeric(8, 4), nullable=False, default=0)
+    insurance_relief_cap_monthly = Column(Numeric(12, 2), nullable=False, default=0)
+    owner_occupier_interest_cap_monthly = Column(Numeric(12, 2), nullable=False, default=0)
+    shif_rate = Column(Numeric(8, 4), nullable=False, default=0)
+    shif_minimum_monthly = Column(Numeric(12, 2), nullable=False, default=0)
+    ahl_rate_employee = Column(Numeric(8, 4), nullable=False, default=0)
+    ahl_rate_employer = Column(Numeric(8, 4), nullable=False, default=0)
+    nssf_lower_earnings_limit = Column(Numeric(12, 2), nullable=False, default=0)
+    nssf_upper_earnings_limit = Column(Numeric(12, 2), nullable=False, default=0)
+    nssf_employee_rate = Column(Numeric(8, 4), nullable=False, default=0)
+    nssf_employer_rate = Column(Numeric(8, 4), nullable=False, default=0)
+    nita_levy_monthly = Column(Numeric(12, 2), nullable=False, default=0)
+    non_cash_benefit_taxable_threshold = Column(Numeric(12, 2), nullable=False, default=0)
+    disability_exemption_cap_monthly = Column(Numeric(12, 2), nullable=False, default=0)
+    source_notes_json = Column(Text, nullable=False, default="[]")
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    updated_by = relationship("User", foreign_keys=[updated_by_id])
+
+
 class PayrollProfile(Base):
     __tablename__ = "payroll_profiles"
 

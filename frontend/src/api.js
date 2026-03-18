@@ -752,6 +752,18 @@ export function getPayrollStatutoryInfo() {
   return request("/payroll/statutory");
 }
 
+export function listPayrollStatutoryConfigs() {
+  return request("/payroll/statutory/configs");
+}
+
+export function createPayrollStatutoryConfig(payload) {
+  return request("/payroll/statutory/configs", { method: "POST", body: payload });
+}
+
+export function updatePayrollStatutoryConfig(configId, payload) {
+  return request(`/payroll/statutory/configs/${configId}`, { method: "PATCH", body: payload });
+}
+
 export function listPayrollEmployees() {
   return request("/payroll/employees");
 }
