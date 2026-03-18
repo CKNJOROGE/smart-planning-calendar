@@ -683,6 +683,145 @@ class SalaryAdvanceRequestOut(BaseModel):
         from_attributes = True
 
 
+class PayrollProfileOut(BaseModel):
+    id: int
+    user_id: int
+    payroll_number: Optional[str] = None
+    kra_pin: Optional[str] = None
+    payment_method: str
+    bank_name: Optional[str] = None
+    bank_account_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    active: bool = True
+    basic_salary: float = 0
+    house_allowance: float = 0
+    transport_allowance: float = 0
+    other_taxable_allowance: float = 0
+    non_cash_benefit: float = 0
+    tax_exempt_allowance: float = 0
+    pension_employee: float = 0
+    pension_employer: float = 0
+    insurance_relief_base: float = 0
+    owner_occupier_interest: float = 0
+    other_deductions: float = 0
+    nssf_pensionable_pay: Optional[float] = None
+    disability_exemption_amount: float = 0
+    notes: Optional[str] = None
+    updated_at: datetime
+    user: UserOut
+
+    class Config:
+        from_attributes = True
+
+
+class PayrollProfileUpdateIn(BaseModel):
+    payroll_number: Optional[str] = None
+    kra_pin: Optional[str] = None
+    payment_method: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_account_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    active: Optional[bool] = None
+    basic_salary: Optional[float] = None
+    house_allowance: Optional[float] = None
+    transport_allowance: Optional[float] = None
+    other_taxable_allowance: Optional[float] = None
+    non_cash_benefit: Optional[float] = None
+    tax_exempt_allowance: Optional[float] = None
+    pension_employee: Optional[float] = None
+    pension_employer: Optional[float] = None
+    insurance_relief_base: Optional[float] = None
+    owner_occupier_interest: Optional[float] = None
+    other_deductions: Optional[float] = None
+    nssf_pensionable_pay: Optional[float] = None
+    disability_exemption_amount: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class PayrollRunInputIn(BaseModel):
+    payroll_month: date
+    pay_date: Optional[date] = None
+    basic_salary: Optional[float] = None
+    house_allowance: Optional[float] = None
+    transport_allowance: Optional[float] = None
+    other_taxable_allowance: Optional[float] = None
+    non_cash_benefit: Optional[float] = None
+    tax_exempt_allowance: Optional[float] = None
+    bonus: Optional[float] = None
+    overtime: Optional[float] = None
+    commission: Optional[float] = None
+    pension_employee: Optional[float] = None
+    pension_employer: Optional[float] = None
+    insurance_relief_base: Optional[float] = None
+    owner_occupier_interest: Optional[float] = None
+    other_deductions: Optional[float] = None
+    nssf_pensionable_pay: Optional[float] = None
+    disability_exemption_amount: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class PayrollRunPreviewIn(PayrollRunInputIn):
+    employee_id: int
+
+
+class PayrollStatutoryOut(BaseModel):
+    paye_effective_from: date
+    ahl_effective_from: date
+    shif_effective_from: date
+    nssf_effective_from: date
+    paye_bands_monthly: list[dict[str, Any]]
+    personal_relief_monthly: float
+    insurance_relief_rate: float
+    insurance_relief_cap_monthly: float
+    owner_occupier_interest_cap_monthly: float
+    shif_rate: float
+    shif_minimum_monthly: float
+    ahl_rate_employee: float
+    ahl_rate_employer: float
+    nssf_lower_earnings_limit: float
+    nssf_upper_earnings_limit: float
+    nssf_employee_rate: float
+    nssf_employer_rate: float
+    nita_levy_monthly: float
+    source_notes: list[str]
+
+
+class PayrollRunOut(BaseModel):
+    id: int
+    employee_id: int
+    payroll_month: date
+    pay_date: Optional[date] = None
+    status: str
+    gross_cash_pay: float
+    taxable_non_cash_benefits: float
+    gross_taxable_pay: float
+    tax_exempt_allowance: float
+    taxable_income: float
+    nssf_employee: float
+    nssf_employer: float
+    shif_employee: float
+    ahl_employee: float
+    ahl_employer: float
+    pension_employee: float
+    pension_employer: float
+    other_deductions: float
+    personal_relief: float
+    insurance_relief: float
+    owner_occupier_interest_relief: float
+    paye_before_reliefs: float
+    paye_after_reliefs: float
+    net_pay: float
+    employer_total_cost: float
+    breakdown: dict[str, Any] = {}
+    notes: Optional[str] = None
+    updated_at: datetime
+    employee: UserOut
+
+
+class PayrollSaveIn(PayrollRunPreviewIn):
+    status: Optional[str] = "draft"
+
+
 class PerformanceCompanyGoalIn(BaseModel):
     perspective: str = "financial"
     title: str

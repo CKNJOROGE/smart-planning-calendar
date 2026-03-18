@@ -373,6 +373,84 @@ class SalaryAdvanceRequest(Base):
     disbursed_by = relationship("User", foreign_keys=[disbursed_by_id])
 
 
+class PayrollProfile(Base):
+    __tablename__ = "payroll_profiles"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    payroll_number = Column(String(120), nullable=True)
+    kra_pin = Column(String(120), nullable=True)
+    payment_method = Column(String(40), nullable=False, default="bank_transfer")
+    bank_name = Column(String(160), nullable=True)
+    bank_account_name = Column(String(160), nullable=True)
+    bank_account_number = Column(String(120), nullable=True)
+    active = Column(Boolean, nullable=False, default=True)
+
+    basic_salary = Column(Numeric(12, 2), nullable=False, default=0)
+    house_allowance = Column(Numeric(12, 2), nullable=False, default=0)
+    transport_allowance = Column(Numeric(12, 2), nullable=False, default=0)
+    other_taxable_allowance = Column(Numeric(12, 2), nullable=False, default=0)
+    non_cash_benefit = Column(Numeric(12, 2), nullable=False, default=0)
+    tax_exempt_allowance = Column(Numeric(12, 2), nullable=False, default=0)
+    pension_employee = Column(Numeric(12, 2), nullable=False, default=0)
+    pension_employer = Column(Numeric(12, 2), nullable=False, default=0)
+    insurance_relief_base = Column(Numeric(12, 2), nullable=False, default=0)
+    owner_occupier_interest = Column(Numeric(12, 2), nullable=False, default=0)
+    other_deductions = Column(Numeric(12, 2), nullable=False, default=0)
+    nssf_pensionable_pay = Column(Numeric(12, 2), nullable=True)
+    disability_exemption_amount = Column(Numeric(12, 2), nullable=False, default=0)
+
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class PayrollRun(Base):
+    __tablename__ = "payroll_runs"
+    __table_args__ = (
+        UniqueConstraint("employee_id", "payroll_month", name="uq_payroll_runs_employee_month"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    employee_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    payroll_month = Column(Date, nullable=False, index=True)
+    pay_date = Column(Date, nullable=True, index=True)
+    status = Column(String(30), nullable=False, default="draft")
+
+    gross_cash_pay = Column(Numeric(12, 2), nullable=False, default=0)
+    taxable_non_cash_benefits = Column(Numeric(12, 2), nullable=False, default=0)
+    gross_taxable_pay = Column(Numeric(12, 2), nullable=False, default=0)
+    tax_exempt_allowance = Column(Numeric(12, 2), nullable=False, default=0)
+    taxable_income = Column(Numeric(12, 2), nullable=False, default=0)
+    nssf_employee = Column(Numeric(12, 2), nullable=False, default=0)
+    nssf_employer = Column(Numeric(12, 2), nullable=False, default=0)
+    shif_employee = Column(Numeric(12, 2), nullable=False, default=0)
+    ahl_employee = Column(Numeric(12, 2), nullable=False, default=0)
+    ahl_employer = Column(Numeric(12, 2), nullable=False, default=0)
+    pension_employee = Column(Numeric(12, 2), nullable=False, default=0)
+    pension_employer = Column(Numeric(12, 2), nullable=False, default=0)
+    other_deductions = Column(Numeric(12, 2), nullable=False, default=0)
+    personal_relief = Column(Numeric(12, 2), nullable=False, default=0)
+    insurance_relief = Column(Numeric(12, 2), nullable=False, default=0)
+    owner_occupier_interest_relief = Column(Numeric(12, 2), nullable=False, default=0)
+    paye_before_reliefs = Column(Numeric(12, 2), nullable=False, default=0)
+    paye_after_reliefs = Column(Numeric(12, 2), nullable=False, default=0)
+    net_pay = Column(Numeric(12, 2), nullable=False, default=0)
+    employer_total_cost = Column(Numeric(12, 2), nullable=False, default=0)
+    breakdown_json = Column(Text, nullable=False, default="{}")
+    notes = Column(Text, nullable=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    employee = relationship("User", foreign_keys=[employee_id])
+    created_by = relationship("User", foreign_keys=[created_by_id])
+    updated_by = relationship("User", foreign_keys=[updated_by_id])
+
+
 class PasswordResetToken(Base):
     __tablename__ = "password_reset_tokens"
 

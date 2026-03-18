@@ -1,0 +1,67 @@
+CREATE TABLE IF NOT EXISTS payroll_profiles (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+  payroll_number VARCHAR(120),
+  kra_pin VARCHAR(120),
+  payment_method VARCHAR(40) NOT NULL DEFAULT 'bank_transfer',
+  bank_name VARCHAR(160),
+  bank_account_name VARCHAR(160),
+  bank_account_number VARCHAR(120),
+  active BOOLEAN NOT NULL DEFAULT 1,
+  basic_salary NUMERIC(12,2) NOT NULL DEFAULT 0,
+  house_allowance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  transport_allowance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  other_taxable_allowance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  non_cash_benefit NUMERIC(12,2) NOT NULL DEFAULT 0,
+  tax_exempt_allowance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  pension_employee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  pension_employer NUMERIC(12,2) NOT NULL DEFAULT 0,
+  insurance_relief_base NUMERIC(12,2) NOT NULL DEFAULT 0,
+  owner_occupier_interest NUMERIC(12,2) NOT NULL DEFAULT 0,
+  other_deductions NUMERIC(12,2) NOT NULL DEFAULT 0,
+  nssf_pensionable_pay NUMERIC(12,2),
+  disability_exemption_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS ix_payroll_profiles_user_id ON payroll_profiles(user_id);
+
+CREATE TABLE IF NOT EXISTS payroll_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  employee_id INTEGER NOT NULL REFERENCES users(id),
+  payroll_month DATE NOT NULL,
+  pay_date DATE,
+  status VARCHAR(30) NOT NULL DEFAULT 'draft',
+  gross_cash_pay NUMERIC(12,2) NOT NULL DEFAULT 0,
+  taxable_non_cash_benefits NUMERIC(12,2) NOT NULL DEFAULT 0,
+  gross_taxable_pay NUMERIC(12,2) NOT NULL DEFAULT 0,
+  tax_exempt_allowance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  taxable_income NUMERIC(12,2) NOT NULL DEFAULT 0,
+  nssf_employee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  nssf_employer NUMERIC(12,2) NOT NULL DEFAULT 0,
+  shif_employee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ahl_employee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  ahl_employer NUMERIC(12,2) NOT NULL DEFAULT 0,
+  pension_employee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  pension_employer NUMERIC(12,2) NOT NULL DEFAULT 0,
+  other_deductions NUMERIC(12,2) NOT NULL DEFAULT 0,
+  personal_relief NUMERIC(12,2) NOT NULL DEFAULT 0,
+  insurance_relief NUMERIC(12,2) NOT NULL DEFAULT 0,
+  owner_occupier_interest_relief NUMERIC(12,2) NOT NULL DEFAULT 0,
+  paye_before_reliefs NUMERIC(12,2) NOT NULL DEFAULT 0,
+  paye_after_reliefs NUMERIC(12,2) NOT NULL DEFAULT 0,
+  net_pay NUMERIC(12,2) NOT NULL DEFAULT 0,
+  employer_total_cost NUMERIC(12,2) NOT NULL DEFAULT 0,
+  breakdown_json TEXT NOT NULL DEFAULT '{}',
+  notes TEXT,
+  created_by_id INTEGER NOT NULL REFERENCES users(id),
+  updated_by_id INTEGER NOT NULL REFERENCES users(id),
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT uq_payroll_runs_employee_month UNIQUE (employee_id, payroll_month)
+);
+
+CREATE INDEX IF NOT EXISTS ix_payroll_runs_employee_id ON payroll_runs(employee_id);
+CREATE INDEX IF NOT EXISTS ix_payroll_runs_payroll_month ON payroll_runs(payroll_month);

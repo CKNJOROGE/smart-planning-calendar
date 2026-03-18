@@ -748,6 +748,38 @@ export async function setSalaryAdvanceDeductionStart(requestId, deductionStartDa
   return res.json();
 }
 
+export function getPayrollStatutoryInfo() {
+  return request("/payroll/statutory");
+}
+
+export function listPayrollEmployees() {
+  return request("/payroll/employees");
+}
+
+export function getPayrollProfile(userId) {
+  return request(`/payroll/profiles/${userId}`);
+}
+
+export function updatePayrollProfile(userId, payload) {
+  return request(`/payroll/profiles/${userId}`, { method: "PATCH", body: payload });
+}
+
+export function previewPayrollRun(payload) {
+  return request("/payroll/preview", { method: "POST", body: payload });
+}
+
+export function savePayrollRun(payload) {
+  return request("/payroll/runs", { method: "POST", body: payload });
+}
+
+export function listPayrollRuns({ employeeId, payrollMonth } = {}) {
+  const qs = new URLSearchParams();
+  if (employeeId != null) qs.set("employee_id", String(employeeId));
+  if (payrollMonth) qs.set("payroll_month", payrollMonth);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/payroll/runs${suffix}`);
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);

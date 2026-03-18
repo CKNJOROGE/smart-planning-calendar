@@ -10,6 +10,7 @@ import LibraryPage from "./LibraryPage";
 import ClientTaskManagerPage from "./ClientTaskManagerPage";
 import DashboardPage from "./DashboardPage";
 import FinanceRequestsPage from "./FinanceRequestsPage";
+import PayrollPage from "./PayrollPage";
 import PerformanceManagementPage from "./PerformanceManagementPage";
 import IndividualGoalsPage from "./IndividualGoalsPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
@@ -116,6 +117,11 @@ function Shell({ onLogout }) {
                 </span>
               )}
             </NavLink>
+            {["finance", "admin", "ceo"].includes(String(user?.role || "").toLowerCase()) && (
+              <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/payroll">
+                <span className="sidebar-link-text">Payroll</span>
+              </NavLink>
+            )}
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/performance-management">
               <span className="sidebar-link-text">Performance Management</span>
             </NavLink>
@@ -164,6 +170,7 @@ function Shell({ onLogout }) {
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/client-task-manager" element={<ClientTaskManagerPage />} />
             <Route path="/finance-requests" element={<FinanceRequestsPage />} />
+            <Route path="/payroll" element={<PayrollPage />} />
             <Route path="/performance-management" element={<PerformanceManagementPage />} />
             <Route path="/performance-management/individual-goals" element={<IndividualGoalsPage />} />
 

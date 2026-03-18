@@ -35,6 +35,8 @@ from .models import (
     CashRequisitionRequest,
     AuthorityToIncurRequest,
     SalaryAdvanceRequest,
+    PayrollProfile,
+    PayrollRun,
     PerformanceCompanyGoal,
     PerformanceDepartmentGoal,
     PerformanceEmployeeGoal,
@@ -100,6 +102,13 @@ from .schemas import (
     SalaryAdvanceDecisionIn,
     SalaryAdvanceDisburseIn,
     SalaryAdvanceRequestOut,
+    PayrollProfileOut,
+    PayrollProfileUpdateIn,
+    PayrollRunPreviewIn,
+    PayrollRunInputIn,
+    PayrollRunOut,
+    PayrollSaveIn,
+    PayrollStatutoryOut,
     PerformanceCompanyGoalIn,
     PerformanceCompanyGoalOut,
     PerformanceDepartmentGoalIn,
@@ -471,6 +480,391 @@ def _validate_designation_exists_for_department(
         if _normalize_designation_name(row.name).lower() == designation.lower():
             return _normalize_designation_name(row.name)
     raise HTTPException(status_code=400, detail="designation must be selected from configured designations for the department")
+
+
+PAYROLL_ALLOWED_ROLES = {"finance", "admin", "ceo"}
+PAYROLL_PAYOUT_STATUSES = {"draft", "approved", "paid"}
+PAYROLL_PAYMENT_METHODS = {"bank_transfer", "cash", "mobile_money"}
+PAYROLL_PAYER_REVIEW_ROLES = {"finance", "admin", "ceo"}
+PAYE_EFFECTIVE_FROM = date(2023, 7, 1)
+AHL_EFFECTIVE_FROM = date(2023, 7, 1)
+SHIF_EFFECTIVE_FROM = date(2024, 10, 1)
+NSSF_EFFECTIVE_FROM = date(2026, 2, 18)
+PENSION_RELIEF_CAP_MONTHLY = Decimal("30000.00")
+OWNER_OCCUPIER_INTEREST_CAP_MONTHLY = Decimal("30000.00")
+INSURANCE_RELIEF_RATE = Decimal("0.15")
+INSURANCE_RELIEF_CAP_MONTHLY = Decimal("5000.00")
+PERSONAL_RELIEF_MONTHLY = Decimal("2400.00")
+SHIF_RATE = Decimal("0.0275")
+SHIF_MINIMUM_MONTHLY = Decimal("300.00")
+AHL_RATE = Decimal("0.015")
+NSSF_RATE = Decimal("0.06")
+NSSF_LOWER_EARNINGS_LIMIT = Decimal("9000.00")
+NSSF_UPPER_EARNINGS_LIMIT = Decimal("72000.00")
+NITA_LEVY_MONTHLY = Decimal("50.00")
+NON_CASH_BENEFIT_TAXABLE_THRESHOLD = Decimal("5000.00")
+DISABILITY_EXEMPTION_CAP_MONTHLY = Decimal("150000.00")
+PAYE_MONTHLY_BANDS = [
+    (Decimal("24000.00"), Decimal("0.10")),
+    (Decimal("8333.00"), Decimal("0.25")),
+    (Decimal("467667.00"), Decimal("0.30")),
+    (Decimal("300000.00"), Decimal("0.325")),
+]
+PAYE_TOP_RATE = Decimal("0.35")
+
+
+def _require_payroll_access(current: User) -> None:
+    if (current.role or "").strip().lower() not in PAYROLL_ALLOWED_ROLES:
+        raise HTTPException(status_code=403, detail="Only finance/admin/ceo can access payroll")
+
+
+def _dec(value: Optional[object], default: str = "0.00") -> Decimal:
+    if value in (None, ""):
+        return Decimal(default)
+    return Decimal(str(value)).quantize(Decimal("0.01"))
+
+
+def _dec_non_negative(value: Optional[object], field_name: str) -> Decimal:
+    amount = _dec(value)
+    if amount < 0:
+        raise HTTPException(status_code=400, detail=f"{field_name} cannot be negative")
+    return amount
+
+
+def _money_to_float(value: Decimal) -> float:
+    return float(value.quantize(Decimal("0.01")))
+
+
+def _normalize_payroll_month(raw_value: date) -> date:
+    return raw_value.replace(day=1)
+
+
+def _normalize_payroll_status(raw_status: Optional[str]) -> str:
+    value = (raw_status or "draft").strip().lower()
+    if value not in PAYROLL_PAYOUT_STATUSES:
+        raise HTTPException(status_code=400, detail="status must be one of: draft, approved, paid")
+    return value
+
+
+def _normalize_payment_method(raw_value: Optional[str]) -> str:
+    value = (raw_value or "bank_transfer").strip().lower().replace(" ", "_")
+    if value not in PAYROLL_PAYMENT_METHODS:
+        raise HTTPException(status_code=400, detail="payment_method must be one of: bank_transfer, cash, mobile_money")
+    return value
+
+
+def _get_or_create_payroll_profile(db: Session, user_id: int) -> PayrollProfile:
+    profile = db.query(PayrollProfile).filter(PayrollProfile.user_id == user_id).first()
+    if profile:
+        return profile
+    profile = PayrollProfile(user_id=user_id)
+    db.add(profile)
+    db.flush()
+    db.refresh(profile)
+    return profile
+
+
+def _serialize_payroll_profile(db: Session, profile: PayrollProfile) -> PayrollProfileOut:
+    _attach_user_supervisor_metadata(db, profile.user)
+    return PayrollProfileOut(
+        id=profile.id,
+        user_id=profile.user_id,
+        payroll_number=profile.payroll_number,
+        kra_pin=profile.kra_pin,
+        payment_method=profile.payment_method,
+        bank_name=profile.bank_name,
+        bank_account_name=profile.bank_account_name,
+        bank_account_number=profile.bank_account_number,
+        active=bool(profile.active),
+        basic_salary=_money_to_float(_dec(profile.basic_salary)),
+        house_allowance=_money_to_float(_dec(profile.house_allowance)),
+        transport_allowance=_money_to_float(_dec(profile.transport_allowance)),
+        other_taxable_allowance=_money_to_float(_dec(profile.other_taxable_allowance)),
+        non_cash_benefit=_money_to_float(_dec(profile.non_cash_benefit)),
+        tax_exempt_allowance=_money_to_float(_dec(profile.tax_exempt_allowance)),
+        pension_employee=_money_to_float(_dec(profile.pension_employee)),
+        pension_employer=_money_to_float(_dec(profile.pension_employer)),
+        insurance_relief_base=_money_to_float(_dec(profile.insurance_relief_base)),
+        owner_occupier_interest=_money_to_float(_dec(profile.owner_occupier_interest)),
+        other_deductions=_money_to_float(_dec(profile.other_deductions)),
+        nssf_pensionable_pay=None if profile.nssf_pensionable_pay is None else _money_to_float(_dec(profile.nssf_pensionable_pay)),
+        disability_exemption_amount=_money_to_float(_dec(profile.disability_exemption_amount)),
+        notes=profile.notes,
+        updated_at=profile.updated_at,
+        user=profile.user,
+    )
+
+
+def _taxable_non_cash_benefit(value: Decimal) -> Decimal:
+    if value <= NON_CASH_BENEFIT_TAXABLE_THRESHOLD:
+        return Decimal("0.00")
+    return value
+
+
+def _calculate_paye_monthly(taxable_amount: Decimal) -> Decimal:
+    remaining = max(taxable_amount, Decimal("0.00"))
+    tax = Decimal("0.00")
+    for band_size, rate in PAYE_MONTHLY_BANDS:
+        if remaining <= 0:
+            break
+        taxable_band = min(remaining, band_size)
+        tax += taxable_band * rate
+        remaining -= taxable_band
+    if remaining > 0:
+        tax += remaining * PAYE_TOP_RATE
+    return tax.quantize(Decimal("0.01"))
+
+
+def _build_payroll_statutory_info() -> PayrollStatutoryOut:
+    return PayrollStatutoryOut(
+        paye_effective_from=PAYE_EFFECTIVE_FROM,
+        ahl_effective_from=AHL_EFFECTIVE_FROM,
+        shif_effective_from=SHIF_EFFECTIVE_FROM,
+        nssf_effective_from=NSSF_EFFECTIVE_FROM,
+        paye_bands_monthly=[
+            {"up_to": 24000, "rate": 0.10},
+            {"next": 8333, "rate": 0.25},
+            {"next": 467667, "rate": 0.30},
+            {"next": 300000, "rate": 0.325},
+            {"above": 800000, "rate": 0.35},
+        ],
+        personal_relief_monthly=_money_to_float(PERSONAL_RELIEF_MONTHLY),
+        insurance_relief_rate=float(INSURANCE_RELIEF_RATE),
+        insurance_relief_cap_monthly=_money_to_float(INSURANCE_RELIEF_CAP_MONTHLY),
+        owner_occupier_interest_cap_monthly=_money_to_float(OWNER_OCCUPIER_INTEREST_CAP_MONTHLY),
+        shif_rate=float(SHIF_RATE),
+        shif_minimum_monthly=_money_to_float(SHIF_MINIMUM_MONTHLY),
+        ahl_rate_employee=float(AHL_RATE),
+        ahl_rate_employer=float(AHL_RATE),
+        nssf_lower_earnings_limit=_money_to_float(NSSF_LOWER_EARNINGS_LIMIT),
+        nssf_upper_earnings_limit=_money_to_float(NSSF_UPPER_EARNINGS_LIMIT),
+        nssf_employee_rate=float(NSSF_RATE),
+        nssf_employer_rate=float(NSSF_RATE),
+        nita_levy_monthly=_money_to_float(NITA_LEVY_MONTHLY),
+        source_notes=[
+            "KRA PAYE monthly resident individual bands effective July 1, 2023.",
+            "KRA Affordable Housing Levy clarification: 1.5% employee and 1.5% employer on gross monthly salary, effective July 1, 2023.",
+            "Social Health Insurance contributions for formal sector are 2.75% of gross salary with a KES 300 monthly minimum.",
+            "NSSF Year 4 contribution notice published February 18, 2026 sets LEL at KES 9,000 and UEL at KES 72,000.",
+        ],
+    )
+
+
+def _prepare_payroll_profile_updates(profile: PayrollProfile, payload: PayrollProfileUpdateIn) -> dict:
+    incoming = payload.dict(exclude_unset=True)
+    for field_name in (
+        "basic_salary",
+        "house_allowance",
+        "transport_allowance",
+        "other_taxable_allowance",
+        "non_cash_benefit",
+        "tax_exempt_allowance",
+        "pension_employee",
+        "pension_employer",
+        "insurance_relief_base",
+        "owner_occupier_interest",
+        "other_deductions",
+        "disability_exemption_amount",
+    ):
+        if field_name in incoming:
+            incoming[field_name] = _dec_non_negative(incoming[field_name], field_name)
+    if "nssf_pensionable_pay" in incoming:
+        raw = incoming.get("nssf_pensionable_pay")
+        incoming["nssf_pensionable_pay"] = None if raw in (None, "") else _dec_non_negative(raw, "nssf_pensionable_pay")
+    if "payment_method" in incoming:
+        incoming["payment_method"] = _normalize_payment_method(incoming.get("payment_method"))
+    if "payroll_number" in incoming and incoming["payroll_number"] is not None:
+        incoming["payroll_number"] = (incoming["payroll_number"] or "").strip() or None
+    if "kra_pin" in incoming and incoming["kra_pin"] is not None:
+        incoming["kra_pin"] = (incoming["kra_pin"] or "").strip().upper() or None
+    for field_name in ("bank_name", "bank_account_name", "bank_account_number", "notes"):
+        if field_name in incoming and incoming[field_name] is not None:
+            incoming[field_name] = (incoming[field_name] or "").strip() or None
+    if "disability_exemption_amount" in incoming:
+        incoming["disability_exemption_amount"] = min(incoming["disability_exemption_amount"], DISABILITY_EXEMPTION_CAP_MONTHLY)
+    return incoming
+
+
+def _payroll_inputs_from_profile(profile: PayrollProfile, payload: PayrollRunInputIn) -> dict[str, Decimal | date | str | None]:
+    return {
+        "payroll_month": _normalize_payroll_month(payload.payroll_month),
+        "pay_date": payload.pay_date,
+        "basic_salary": _dec(profile.basic_salary if payload.basic_salary is None else payload.basic_salary),
+        "house_allowance": _dec(profile.house_allowance if payload.house_allowance is None else payload.house_allowance),
+        "transport_allowance": _dec(profile.transport_allowance if payload.transport_allowance is None else payload.transport_allowance),
+        "other_taxable_allowance": _dec(profile.other_taxable_allowance if payload.other_taxable_allowance is None else payload.other_taxable_allowance),
+        "non_cash_benefit": _dec(profile.non_cash_benefit if payload.non_cash_benefit is None else payload.non_cash_benefit),
+        "tax_exempt_allowance": _dec(profile.tax_exempt_allowance if payload.tax_exempt_allowance is None else payload.tax_exempt_allowance),
+        "bonus": _dec(payload.bonus),
+        "overtime": _dec(payload.overtime),
+        "commission": _dec(payload.commission),
+        "pension_employee": _dec(profile.pension_employee if payload.pension_employee is None else payload.pension_employee),
+        "pension_employer": _dec(profile.pension_employer if payload.pension_employer is None else payload.pension_employer),
+        "insurance_relief_base": _dec(profile.insurance_relief_base if payload.insurance_relief_base is None else payload.insurance_relief_base),
+        "owner_occupier_interest": _dec(profile.owner_occupier_interest if payload.owner_occupier_interest is None else payload.owner_occupier_interest),
+        "other_deductions": _dec(profile.other_deductions if payload.other_deductions is None else payload.other_deductions),
+        "nssf_pensionable_pay": (
+            _dec(profile.nssf_pensionable_pay if profile.nssf_pensionable_pay is not None else profile.basic_salary)
+            if payload.nssf_pensionable_pay is None
+            else _dec(payload.nssf_pensionable_pay)
+        ),
+        "disability_exemption_amount": _dec(
+            profile.disability_exemption_amount if payload.disability_exemption_amount is None else payload.disability_exemption_amount
+        ),
+        "notes": (payload.notes or "").strip() or profile.notes,
+    }
+
+
+def _calculate_payroll_breakdown(employee: User, profile: PayrollProfile, payload: PayrollRunInputIn) -> dict[str, object]:
+    values = _payroll_inputs_from_profile(profile, payload)
+    for field_name, field_value in values.items():
+        if isinstance(field_value, Decimal) and field_value < 0:
+            raise HTTPException(status_code=400, detail=f"{field_name} cannot be negative")
+
+    gross_cash_pay = (
+        values["basic_salary"]
+        + values["house_allowance"]
+        + values["transport_allowance"]
+        + values["other_taxable_allowance"]
+        + values["bonus"]
+        + values["overtime"]
+        + values["commission"]
+    )
+    taxable_non_cash = _taxable_non_cash_benefit(values["non_cash_benefit"])
+    gross_taxable_pay = gross_cash_pay + taxable_non_cash
+    tax_exempt_allowance = values["tax_exempt_allowance"]
+    gross_salary_for_statutory = max(gross_cash_pay - tax_exempt_allowance, Decimal("0.00"))
+
+    nssf_pensionable_pay = max(values["nssf_pensionable_pay"], Decimal("0.00"))
+    tier_one_base = min(nssf_pensionable_pay, NSSF_LOWER_EARNINGS_LIMIT)
+    tier_two_base = max(min(nssf_pensionable_pay, NSSF_UPPER_EARNINGS_LIMIT) - NSSF_LOWER_EARNINGS_LIMIT, Decimal("0.00"))
+    nssf_employee = ((tier_one_base + tier_two_base) * NSSF_RATE).quantize(Decimal("0.01"))
+    nssf_employer = nssf_employee
+
+    pension_employee = min(values["pension_employee"], PENSION_RELIEF_CAP_MONTHLY).quantize(Decimal("0.01"))
+    pension_employer = values["pension_employer"].quantize(Decimal("0.01"))
+    shif_employee = max((gross_salary_for_statutory * SHIF_RATE).quantize(Decimal("0.01")), SHIF_MINIMUM_MONTHLY)
+    ahl_employee = (gross_salary_for_statutory * AHL_RATE).quantize(Decimal("0.01"))
+    ahl_employer = ahl_employee
+    disability_exemption = min(values["disability_exemption_amount"], DISABILITY_EXEMPTION_CAP_MONTHLY).quantize(Decimal("0.01"))
+    owner_occupier_interest_relief = min(values["owner_occupier_interest"], OWNER_OCCUPIER_INTEREST_CAP_MONTHLY).quantize(Decimal("0.01"))
+
+    taxable_income = (
+        gross_taxable_pay
+        - tax_exempt_allowance
+        - nssf_employee
+        - pension_employee
+        - shif_employee
+        - ahl_employee
+        - owner_occupier_interest_relief
+        - disability_exemption
+    )
+    taxable_income = max(taxable_income, Decimal("0.00")).quantize(Decimal("0.01"))
+
+    paye_before_reliefs = _calculate_paye_monthly(taxable_income)
+    personal_relief = PERSONAL_RELIEF_MONTHLY
+    insurance_relief = min((values["insurance_relief_base"] * INSURANCE_RELIEF_RATE).quantize(Decimal("0.01")), INSURANCE_RELIEF_CAP_MONTHLY)
+    paye_after_reliefs = max(paye_before_reliefs - personal_relief - insurance_relief, Decimal("0.00")).quantize(Decimal("0.01"))
+
+    other_deductions = values["other_deductions"].quantize(Decimal("0.01"))
+    net_pay = (gross_cash_pay - nssf_employee - shif_employee - ahl_employee - pension_employee - paye_after_reliefs - other_deductions).quantize(Decimal("0.01"))
+    employer_total_cost = (gross_cash_pay + nssf_employer + ahl_employer + pension_employer + NITA_LEVY_MONTHLY).quantize(Decimal("0.01"))
+
+    breakdown = {
+        "employee": {"id": employee.id, "name": employee.name, "department": employee.department, "designation": employee.designation},
+        "inputs": {
+            "basic_salary": _money_to_float(values["basic_salary"]),
+            "house_allowance": _money_to_float(values["house_allowance"]),
+            "transport_allowance": _money_to_float(values["transport_allowance"]),
+            "other_taxable_allowance": _money_to_float(values["other_taxable_allowance"]),
+            "bonus": _money_to_float(values["bonus"]),
+            "overtime": _money_to_float(values["overtime"]),
+            "commission": _money_to_float(values["commission"]),
+            "non_cash_benefit": _money_to_float(values["non_cash_benefit"]),
+            "tax_exempt_allowance": _money_to_float(values["tax_exempt_allowance"]),
+            "pension_employee": _money_to_float(values["pension_employee"]),
+            "pension_employer": _money_to_float(values["pension_employer"]),
+            "insurance_relief_base": _money_to_float(values["insurance_relief_base"]),
+            "owner_occupier_interest": _money_to_float(values["owner_occupier_interest"]),
+            "other_deductions": _money_to_float(values["other_deductions"]),
+            "nssf_pensionable_pay": _money_to_float(values["nssf_pensionable_pay"]),
+            "disability_exemption_amount": _money_to_float(values["disability_exemption_amount"]),
+        },
+        "statutory": {
+            "paye_effective_from": PAYE_EFFECTIVE_FROM.isoformat(),
+            "ahl_effective_from": AHL_EFFECTIVE_FROM.isoformat(),
+            "shif_effective_from": SHIF_EFFECTIVE_FROM.isoformat(),
+            "nssf_effective_from": NSSF_EFFECTIVE_FROM.isoformat(),
+            "nssf_lower_earnings_limit": _money_to_float(NSSF_LOWER_EARNINGS_LIMIT),
+            "nssf_upper_earnings_limit": _money_to_float(NSSF_UPPER_EARNINGS_LIMIT),
+        },
+        "notes": [
+            "Gross salary for AHL and SHIF uses regular cash earnings less tax-exempt allowances and excludes non-cash benefits.",
+            "Non-cash benefits are included in taxable pay only when the monthly benefit exceeds KES 5,000.",
+        ],
+    }
+    return {
+        "payroll_month": values["payroll_month"],
+        "pay_date": values["pay_date"],
+        "gross_cash_pay": gross_cash_pay.quantize(Decimal("0.01")),
+        "taxable_non_cash_benefits": taxable_non_cash.quantize(Decimal("0.01")),
+        "gross_taxable_pay": gross_taxable_pay.quantize(Decimal("0.01")),
+        "tax_exempt_allowance": tax_exempt_allowance.quantize(Decimal("0.01")),
+        "taxable_income": taxable_income,
+        "nssf_employee": nssf_employee,
+        "nssf_employer": nssf_employer,
+        "shif_employee": shif_employee,
+        "ahl_employee": ahl_employee,
+        "ahl_employer": ahl_employer,
+        "pension_employee": pension_employee,
+        "pension_employer": pension_employer,
+        "other_deductions": other_deductions,
+        "personal_relief": personal_relief.quantize(Decimal("0.01")),
+        "insurance_relief": insurance_relief,
+        "owner_occupier_interest_relief": owner_occupier_interest_relief,
+        "paye_before_reliefs": paye_before_reliefs,
+        "paye_after_reliefs": paye_after_reliefs,
+        "net_pay": net_pay,
+        "employer_total_cost": employer_total_cost,
+        "notes": values["notes"],
+        "breakdown": breakdown,
+    }
+
+
+def _serialize_payroll_run(db: Session, row: PayrollRun) -> PayrollRunOut:
+    _attach_user_supervisor_metadata(db, row.employee)
+    breakdown = _loads_json_object(row.breakdown_json)
+    return PayrollRunOut(
+        id=row.id,
+        employee_id=row.employee_id,
+        payroll_month=row.payroll_month,
+        pay_date=row.pay_date,
+        status=row.status,
+        gross_cash_pay=_money_to_float(_dec(row.gross_cash_pay)),
+        taxable_non_cash_benefits=_money_to_float(_dec(row.taxable_non_cash_benefits)),
+        gross_taxable_pay=_money_to_float(_dec(row.gross_taxable_pay)),
+        tax_exempt_allowance=_money_to_float(_dec(row.tax_exempt_allowance)),
+        taxable_income=_money_to_float(_dec(row.taxable_income)),
+        nssf_employee=_money_to_float(_dec(row.nssf_employee)),
+        nssf_employer=_money_to_float(_dec(row.nssf_employer)),
+        shif_employee=_money_to_float(_dec(row.shif_employee)),
+        ahl_employee=_money_to_float(_dec(row.ahl_employee)),
+        ahl_employer=_money_to_float(_dec(row.ahl_employer)),
+        pension_employee=_money_to_float(_dec(row.pension_employee)),
+        pension_employer=_money_to_float(_dec(row.pension_employer)),
+        other_deductions=_money_to_float(_dec(row.other_deductions)),
+        personal_relief=_money_to_float(_dec(row.personal_relief)),
+        insurance_relief=_money_to_float(_dec(row.insurance_relief)),
+        owner_occupier_interest_relief=_money_to_float(_dec(row.owner_occupier_interest_relief)),
+        paye_before_reliefs=_money_to_float(_dec(row.paye_before_reliefs)),
+        paye_after_reliefs=_money_to_float(_dec(row.paye_after_reliefs)),
+        net_pay=_money_to_float(_dec(row.net_pay)),
+        employer_total_cost=_money_to_float(_dec(row.employer_total_cost)),
+        breakdown=breakdown,
+        notes=row.notes,
+        updated_at=row.updated_at,
+        employee=row.employee,
+    )
 
 
 def _is_leave_like_event(e: Event) -> bool:
@@ -3027,6 +3421,189 @@ def set_salary_advance_deduction_start(
     db.refresh(req)
     _ = req.user
     return req
+
+
+@app.get("/payroll/statutory", response_model=PayrollStatutoryOut)
+def get_payroll_statutory_info(
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    return _build_payroll_statutory_info()
+
+
+@app.get("/payroll/employees", response_model=List[UserOut])
+def list_payroll_employees(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    rows = db.query(User).order_by(User.name.asc()).all()
+    for row in rows:
+        _attach_user_supervisor_metadata(db, row)
+    return rows
+
+
+@app.get("/payroll/profiles/{user_id}", response_model=PayrollProfileOut)
+def get_payroll_profile(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    profile = _get_or_create_payroll_profile(db, user_id)
+    _ = profile.user
+    db.commit()
+    db.refresh(profile)
+    return _serialize_payroll_profile(db, profile)
+
+
+@app.patch("/payroll/profiles/{user_id}", response_model=PayrollProfileOut)
+def update_payroll_profile(
+    user_id: int,
+    payload: PayrollProfileUpdateIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in PAYROLL_PAYER_REVIEW_ROLES:
+        raise HTTPException(status_code=403, detail="Only finance/admin/ceo can edit payroll setup profiles")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    profile = _get_or_create_payroll_profile(db, user_id)
+    incoming = _prepare_payroll_profile_updates(profile, payload)
+    for key, value in incoming.items():
+        setattr(profile, key, value)
+    profile.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(profile)
+    _ = profile.user
+    return _serialize_payroll_profile(db, profile)
+
+
+@app.post("/payroll/preview", response_model=PayrollRunOut)
+def preview_payroll_run(
+    payload: PayrollRunPreviewIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    employee = db.query(User).filter(User.id == payload.employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    profile = _get_or_create_payroll_profile(db, employee.id)
+    _ = profile.user
+    db.commit()
+    db.refresh(profile)
+    computed = _calculate_payroll_breakdown(employee, profile, payload)
+    return PayrollRunOut(
+        id=0,
+        employee_id=employee.id,
+        payroll_month=computed["payroll_month"],
+        pay_date=computed["pay_date"],
+        status="draft",
+        gross_cash_pay=_money_to_float(computed["gross_cash_pay"]),
+        taxable_non_cash_benefits=_money_to_float(computed["taxable_non_cash_benefits"]),
+        gross_taxable_pay=_money_to_float(computed["gross_taxable_pay"]),
+        tax_exempt_allowance=_money_to_float(computed["tax_exempt_allowance"]),
+        taxable_income=_money_to_float(computed["taxable_income"]),
+        nssf_employee=_money_to_float(computed["nssf_employee"]),
+        nssf_employer=_money_to_float(computed["nssf_employer"]),
+        shif_employee=_money_to_float(computed["shif_employee"]),
+        ahl_employee=_money_to_float(computed["ahl_employee"]),
+        ahl_employer=_money_to_float(computed["ahl_employer"]),
+        pension_employee=_money_to_float(computed["pension_employee"]),
+        pension_employer=_money_to_float(computed["pension_employer"]),
+        other_deductions=_money_to_float(computed["other_deductions"]),
+        personal_relief=_money_to_float(computed["personal_relief"]),
+        insurance_relief=_money_to_float(computed["insurance_relief"]),
+        owner_occupier_interest_relief=_money_to_float(computed["owner_occupier_interest_relief"]),
+        paye_before_reliefs=_money_to_float(computed["paye_before_reliefs"]),
+        paye_after_reliefs=_money_to_float(computed["paye_after_reliefs"]),
+        net_pay=_money_to_float(computed["net_pay"]),
+        employer_total_cost=_money_to_float(computed["employer_total_cost"]),
+        breakdown=computed["breakdown"],
+        notes=computed["notes"],
+        updated_at=datetime.utcnow(),
+        employee=employee,
+    )
+
+
+@app.post("/payroll/runs", response_model=PayrollRunOut)
+def save_payroll_run(
+    payload: PayrollSaveIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    employee = db.query(User).filter(User.id == payload.employee_id).first()
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    profile = _get_or_create_payroll_profile(db, employee.id)
+    _ = profile.user
+    computed = _calculate_payroll_breakdown(employee, profile, payload)
+    payroll_month = computed["payroll_month"]
+    row = (
+        db.query(PayrollRun)
+        .filter(PayrollRun.employee_id == employee.id, PayrollRun.payroll_month == payroll_month)
+        .first()
+    )
+    if not row:
+        row = PayrollRun(employee_id=employee.id, payroll_month=payroll_month, created_by_id=current.id, updated_by_id=current.id)
+        db.add(row)
+
+    row.pay_date = computed["pay_date"]
+    row.status = _normalize_payroll_status(payload.status)
+    row.gross_cash_pay = computed["gross_cash_pay"]
+    row.taxable_non_cash_benefits = computed["taxable_non_cash_benefits"]
+    row.gross_taxable_pay = computed["gross_taxable_pay"]
+    row.tax_exempt_allowance = computed["tax_exempt_allowance"]
+    row.taxable_income = computed["taxable_income"]
+    row.nssf_employee = computed["nssf_employee"]
+    row.nssf_employer = computed["nssf_employer"]
+    row.shif_employee = computed["shif_employee"]
+    row.ahl_employee = computed["ahl_employee"]
+    row.ahl_employer = computed["ahl_employer"]
+    row.pension_employee = computed["pension_employee"]
+    row.pension_employer = computed["pension_employer"]
+    row.other_deductions = computed["other_deductions"]
+    row.personal_relief = computed["personal_relief"]
+    row.insurance_relief = computed["insurance_relief"]
+    row.owner_occupier_interest_relief = computed["owner_occupier_interest_relief"]
+    row.paye_before_reliefs = computed["paye_before_reliefs"]
+    row.paye_after_reliefs = computed["paye_after_reliefs"]
+    row.net_pay = computed["net_pay"]
+    row.employer_total_cost = computed["employer_total_cost"]
+    row.breakdown_json = json.dumps(computed["breakdown"])
+    row.notes = computed["notes"]
+    row.updated_by_id = current.id
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    _ = row.employee
+    return _serialize_payroll_run(db, row)
+
+
+@app.get("/payroll/runs", response_model=List[PayrollRunOut])
+def list_payroll_runs(
+    employee_id: Optional[int] = Query(default=None),
+    payroll_month: Optional[date] = Query(default=None),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    q = db.query(PayrollRun)
+    if employee_id is not None:
+        q = q.filter(PayrollRun.employee_id == employee_id)
+    if payroll_month is not None:
+        q = q.filter(PayrollRun.payroll_month == _normalize_payroll_month(payroll_month))
+    rows = q.order_by(PayrollRun.payroll_month.desc(), PayrollRun.id.desc()).all()
+    for row in rows:
+        _ = row.employee
+    return [_serialize_payroll_run(db, row) for row in rows]
 
 
 PERFORMANCE_GOAL_STATUSES = {"active", "on_track", "at_risk", "completed", "paused", "cancelled"}
