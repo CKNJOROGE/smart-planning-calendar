@@ -31,16 +31,34 @@ function Shell({ onLogout }) {
   }, []);
 
   useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
     const role = (user?.role || "").toLowerCase();
     if (!["finance", "admin", "ceo"].includes(role)) {
       setFinanceAttentionTotal(0);
       return;
     }
     let cancelled = false;
+    let lastTotal = 0;
     async function loadAttention() {
       try {
         const data = await getFinanceAttention();
-        if (!cancelled) setFinanceAttentionTotal(Number(data?.total || 0));
+        const newTotal = Number(data?.total || 0);
+        if (!cancelled) {
+          if (newTotal > lastTotal && lastTotal > 0 && Notification.permission === "granted") {
+            const diff = newTotal - lastTotal;
+            new Notification("Finance Request Attention", {
+              body: `${diff} new finance request(s) need your attention`,
+              icon: "/favicon.ico",
+            });
+          }
+          lastTotal = newTotal;
+          setFinanceAttentionTotal(newTotal);
+        }
       } catch {
         if (!cancelled) setFinanceAttentionTotal(0);
       }

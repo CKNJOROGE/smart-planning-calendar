@@ -2832,7 +2832,7 @@ def get_finance_attention(
             AuthorityToIncurRequest.status == "pending_finance_review",
         ).count()
         salary_advance = db.query(SalaryAdvanceRequest.id).filter(
-            SalaryAdvanceRequest.status == "pending_finance_review",
+            SalaryAdvanceRequest.status.in_(["pending_finance_review", "pending_parallel_approval"]),
         ).count()
     else:
         cash_reimbursement = db.query(CashReimbursementRequest.id).filter(
@@ -2846,7 +2846,7 @@ def get_finance_attention(
             AuthorityToIncurRequest.status == "pending_ceo_approval",
         ).count()
         salary_advance = db.query(SalaryAdvanceRequest.id).filter(
-            SalaryAdvanceRequest.status == "pending_ceo_approval",
+            SalaryAdvanceRequest.status.in_(["pending_ceo_approval", "pending_parallel_approval"]),
         ).count()
 
     total = cash_reimbursement + cash_requisition + authority_to_incur + salary_advance

@@ -89,7 +89,8 @@ export async function login(email, password) {
     throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
 
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 export function requestPasswordReset(email) {
