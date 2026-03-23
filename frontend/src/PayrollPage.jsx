@@ -198,6 +198,31 @@ function statChip(label, value) {
   );
 }
 
+function SectionHelp({ text }) {
+  return (
+    <button
+      type="button"
+      className="btn"
+      title={text}
+      aria-label={text}
+      style={{
+        minWidth: 26,
+        width: 26,
+        height: 26,
+        padding: 0,
+        borderRadius: "50%",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 900,
+        lineHeight: 1,
+      }}
+    >
+      ?
+    </button>
+  );
+}
+
 function Field({ label, value, onChange, type = "text", disabled = false }) {
   return (
     <div className="field">
@@ -513,7 +538,10 @@ export default function PayrollPage() {
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
           <div>
-            <div style={{ fontWeight: 900 }}>Statutory Settings</div>
+            <div style={{ fontWeight: 900, display: "flex", alignItems: "center", gap: 8 }}>
+              <span>Statutory Settings</span>
+              <SectionHelp text="Use this section to manage Kenya statutory payroll rules such as PAYE bands, SHIF, AHL, NSSF, relief caps, and thresholds. Create a new effective-dated version when the law changes so past payroll runs keep their original legal basis." />
+            </div>
             <div className="muted">Create a new effective-dated rule version when Kenya payroll law changes. Old payroll runs keep their stored snapshot.</div>
           </div>
           <div className="pill">Current config ID: {statutory?.id || "-"}</div>
@@ -563,9 +591,12 @@ export default function PayrollPage() {
             </label>
 
             <div className="field" style={{ marginTop: 12 }}>
-              <label>PAYE Bands</label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>PAYE Bands</span>
+                <SectionHelp text="PAYE bands are progressive. Each row taxes only that slice of monthly taxable income at the stated rate. Example: the second row taxes only the next KES 8,333 at 25%, moving the cumulative threshold from KES 24,000 to KES 32,333." />
+              </label>
               <div className="helper" style={{ marginBottom: 8 }}>
-                Each row means “tax this slice of monthly taxable pay at this rate.” The second row of `KES 8,333 at 25%` is correct because it takes the monthly threshold from `KES 24,000` up to `KES 32,333`.
+                Each row means "tax this slice of monthly taxable pay at this rate." The second row of `KES 8,333 at 25%` is correct because it takes the monthly threshold from `KES 24,000` up to `KES 32,333`.
               </div>
               <div style={{ overflowX: "auto" }}>
                 <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -729,7 +760,10 @@ export default function PayrollPage() {
               <div className="card">
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
                   <div>
-                    <div style={{ fontWeight: 900 }}>Payroll Setup</div>
+                    <div style={{ fontWeight: 900, display: "flex", alignItems: "center", gap: 8 }}>
+                      <span>Payroll Setup</span>
+                      <SectionHelp text="Payroll Setup is the employee's default payroll profile. Save the recurring salary structure here, such as basic salary, normal allowances, pension defaults, payment method, and recurring deduction-related inputs. These values become the monthly starting point." />
+                    </div>
                     <div className="muted">Default monthly pay items and recurring relief inputs used as the starting point for payroll runs.</div>
                   </div>
                 </div>
@@ -775,7 +809,10 @@ export default function PayrollPage() {
               </div>
 
               <div className="card">
-                <div style={{ fontWeight: 900, marginBottom: 8 }}>Monthly Payroll Run</div>
+                <div style={{ fontWeight: 900, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>Monthly Payroll Run</span>
+                  <SectionHelp text="Monthly Payroll Run calculates the actual pay for one employee for one specific month. It uses Payroll Setup as the default base, then lets you add or override month-specific values like bonus, overtime, commission, or one-off deductions before previewing and saving that month's payroll record." />
+                </div>
                 <div className="muted" style={{ marginBottom: 10 }}>
                   Leave a run field blank to use the saved setup amount. Use this area for monthly overrides like bonus, overtime, or a one-off deduction.
                 </div>
