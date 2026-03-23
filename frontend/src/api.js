@@ -69,7 +69,8 @@ async function request(path, { method = "GET", body } = {}) {
     throw new Error(extractErrorMessage(res.status, res.statusText, text));
   }
 
-  return res.json();
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
 }
 
 export async function login(email, password) {
