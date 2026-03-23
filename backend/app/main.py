@@ -3607,7 +3607,7 @@ def decide_salary_advance_request(
         raise HTTPException(status_code=400, detail="comment is required when rejecting")
 
     if role == "finance":
-        if req.status not in {"pending_parallel_approval", "pending_ceo_approval"}:
+        if req.status not in {"pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"}:
             raise HTTPException(status_code=400, detail="Finance can only decide pending approval requests")
         if req.finance_decision:
             raise HTTPException(status_code=400, detail="Finance has already made a decision on this request")
@@ -3622,7 +3622,7 @@ def decide_salary_advance_request(
         else:
             req.status = "pending_ceo_approval"
     elif role in {"admin", "ceo"}:
-        if req.status not in {"pending_parallel_approval", "pending_ceo_approval"}:
+        if req.status not in {"pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"}:
             raise HTTPException(status_code=400, detail="CEO/Admin can only decide pending approval requests")
         if req.ceo_decision:
             raise HTTPException(status_code=400, detail="CEO has already made a decision on this request")
