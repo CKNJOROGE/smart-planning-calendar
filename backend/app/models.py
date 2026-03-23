@@ -348,7 +348,7 @@ class SalaryAdvanceRequest(Base):
     details = Column(Text, nullable=True)
     repayment_months = Column(Integer, nullable=False, default=1)
     deduction_start_date = Column(Date, nullable=True, index=True)
-    status = Column(String(40), nullable=False, default="pending_finance_review")
+    status = Column(String(40), nullable=False, default="pending_parallel_approval")
     submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     finance_decision = Column(String(20), nullable=True)

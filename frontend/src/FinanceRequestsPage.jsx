@@ -55,7 +55,7 @@ function statusPillClass(status) {
   if (s === "disbursed" || s === "incurred") return "dashboard-status-ok";
   if (s === "pending_reimbursement") return "dashboard-status-warn";
   if (s === "pending_approval") return "dashboard-status-warn";
-  if (s === "pending_finance_review" || s === "pending_ceo_approval" || s === "pending_disbursement" || s === "pending_incurrence") return "dashboard-status-warn";
+  if (s === "pending_finance_review" || s === "pending_ceo_approval" || s === "pending_disbursement" || s === "pending_incurrence" || s === "pending_parallel_approval") return "dashboard-status-warn";
   if (s === "rejected") return "dashboard-status-danger";
   return "dashboard-status-warn";
 }
@@ -227,6 +227,7 @@ function requisitionStatusLabel(status) {
 
 function salaryAdvanceStatusLabel(status) {
   const s = (status || "").toLowerCase();
+  if (s === "pending_parallel_approval") return "pending parallel approval";
   if (s === "pending_finance_review") return "pending finance review";
   if (s === "pending_ceo_approval") return "pending CEO approval";
   if (s === "pending_disbursement") return "approved, awaiting disbursement";
@@ -696,8 +697,18 @@ export default function FinanceRequestsPage() {
 
   function canCurrentRoleDecideSalaryAdvance(r) {
     const role = (current?.role || "").toLowerCase();
-    if (role === "finance") return (r.status || "").toLowerCase() === "pending_finance_review";
-    if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
+    const status = (r.status || "").toLowerCase();
+    if (status === "rejected" || status === "pending_disbursement" || status === "disbursed") return false;
+    if (role === "finance") {
+      if (status === "pending_parallel_approval" && !r.finance_decision) return true;
+      if (status === "pending_ceo_approval" && !r.finance_decision) return true;
+      return false;
+    }
+    if (role === "admin" || role === "ceo") {
+      if (status === "pending_parallel_approval" && !r.ceo_decision) return true;
+      if (status === "pending_ceo_approval" && !r.ceo_decision) return true;
+      return false;
+    }
     return false;
   }
 

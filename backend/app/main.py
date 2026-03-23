@@ -3521,7 +3521,7 @@ def submit_salary_advance_request(
         details=details or None,
         repayment_months=repayment_months,
         deduction_start_date=None,
-        status="pending_finance_review",
+        status="pending_parallel_approval",
         submitted_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -3558,10 +3558,7 @@ def list_pending_salary_advance_requests(
         raise HTTPException(status_code=403, detail="Not allowed")
 
     q = db.query(SalaryAdvanceRequest)
-    if role == "finance":
-        q = q.filter(SalaryAdvanceRequest.status == "pending_finance_review")
-    else:
-        q = q.filter(SalaryAdvanceRequest.status == "pending_ceo_approval")
+    q = q.filter(SalaryAdvanceRequest.status.in_(["pending_parallel_approval", "pending_ceo_approval"]))
 
     rows = q.order_by(SalaryAdvanceRequest.submitted_at.asc(), SalaryAdvanceRequest.id.asc()).all()
     for r in rows:
@@ -3610,21 +3607,33 @@ def decide_salary_advance_request(
         raise HTTPException(status_code=400, detail="comment is required when rejecting")
 
     if role == "finance":
-        if req.status != "pending_finance_review":
-            raise HTTPException(status_code=400, detail="Finance can only decide pending finance review requests")
+        if req.status not in {"pending_parallel_approval", "pending_ceo_approval"}:
+            raise HTTPException(status_code=400, detail="Finance can only decide pending approval requests")
+        if req.finance_decision:
+            raise HTTPException(status_code=400, detail="Finance has already made a decision on this request")
         req.finance_decision = decision
         req.finance_comment = comment or None
         req.finance_decided_at = now
         req.finance_decided_by_id = current.id
-        req.status = "pending_ceo_approval" if decision == "approved" else "rejected"
+        if decision == "rejected":
+            req.status = "rejected"
+        elif req.ceo_decision == "approved":
+            req.status = "pending_disbursement"
+        else:
+            req.status = "pending_ceo_approval"
     elif role in {"admin", "ceo"}:
-        if req.status != "pending_ceo_approval":
-            raise HTTPException(status_code=400, detail="CEO/Admin can only decide pending CEO approval requests")
+        if req.status not in {"pending_parallel_approval", "pending_ceo_approval"}:
+            raise HTTPException(status_code=400, detail="CEO/Admin can only decide pending approval requests")
+        if req.ceo_decision:
+            raise HTTPException(status_code=400, detail="CEO has already made a decision on this request")
         req.ceo_decision = decision
         req.ceo_comment = comment or None
         req.ceo_decided_at = now
         req.ceo_decided_by_id = current.id
-        req.status = "pending_disbursement" if decision == "approved" else "rejected"
+        if decision == "rejected":
+            req.status = "rejected"
+        else:
+            req.status = "pending_disbursement"
     else:
         raise HTTPException(status_code=403, detail="Not allowed")
 
