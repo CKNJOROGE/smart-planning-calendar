@@ -702,11 +702,13 @@ export default function FinanceRequestsPage() {
     if (role === "finance") {
       if (status === "pending_parallel_approval" && !r.finance_decision) return true;
       if (status === "pending_ceo_approval" && !r.finance_decision) return true;
+      if (status === "pending_finance_review") return true;
       return false;
     }
     if (role === "admin" || role === "ceo") {
       if (status === "pending_parallel_approval" && !r.ceo_decision) return true;
       if (status === "pending_ceo_approval" && !r.ceo_decision) return true;
+      if (status === "pending_finance_review") return true;
       return false;
     }
     return false;
