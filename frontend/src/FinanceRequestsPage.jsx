@@ -30,6 +30,7 @@ import {
   decideSalaryAdvanceRequest,
   markSalaryAdvanceDisbursed,
   setSalaryAdvanceDeductionStart,
+  withdrawSalaryAdvanceRequest,
   listTaskClients,
   updateTaskClient,
 } from "./api";
@@ -1907,35 +1908,58 @@ export default function FinanceRequestsPage() {
                     <th style={{ textAlign: "left", padding: 10 }}>Repayment</th>
                     <th style={{ textAlign: "left", padding: 10 }}>Status</th>
                     <th style={{ textAlign: "left", padding: 10 }}>Comments</th>
+                    <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredMySalaryAdvances.map((r) => (
-                    <tr key={`my_sa_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
-                      <td style={{ padding: 10 }}>{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "-"}</td>
-                      <td style={{ padding: 10 }}>
-                        <div style={{ fontWeight: 700 }}>{r.reason}</div>
-                        {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
-                      </td>
-                      <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
-                      <td style={{ padding: 10 }}>
-                        {r.repayment_months} month(s)
-                        {r.deduction_start_date ? `, start ${r.deduction_start_date}` : ""}
-                      </td>
-                      <td style={{ padding: 10 }}>
-                        <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{salaryAdvanceStatusLabel(r.status)}</span>
-                      </td>
-                      <td style={{ padding: 10 }}>
-                        <div>Finance: {decisionLabel(r.finance_decision)}</div>
-                        <div>CEO: {decisionLabel(r.ceo_decision)}</div>
-                        {r.finance_comment && <div className="muted">Finance comment: {r.finance_comment}</div>}
-                        {r.ceo_comment && <div className="muted">CEO comment: {r.ceo_comment}</div>}
-                        {r.disbursed_note && <div className="muted">Disbursement note: {r.disbursed_note}</div>}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredMySalaryAdvances.map((r) => {
+                    const canWithdraw = ["pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"].includes((r.status || "").toLowerCase());
+                    return (
+                      <tr key={`my_sa_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <td style={{ padding: 10 }}>{r.submitted_at ? new Date(r.submitted_at).toLocaleString() : "-"}</td>
+                        <td style={{ padding: 10 }}>
+                          <div style={{ fontWeight: 700 }}>{r.reason}</div>
+                          {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
+                        </td>
+                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>
+                          {r.repayment_months} month(s)
+                          {r.deduction_start_date ? `, start ${r.deduction_start_date}` : ""}
+                        </td>
+                        <td style={{ padding: 10 }}>
+                          <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{salaryAdvanceStatusLabel(r.status)}</span>
+                        </td>
+                        <td style={{ padding: 10 }}>
+                          <div>Finance: {decisionLabel(r.finance_decision)}</div>
+                          <div>CEO: {decisionLabel(r.ceo_decision)}</div>
+                          {r.finance_comment && <div className="muted">Finance comment: {r.finance_comment}</div>}
+                          {r.ceo_comment && <div className="muted">CEO comment: {r.ceo_comment}</div>}
+                          {r.disbursed_note && <div className="muted">Disbursement note: {r.disbursed_note}</div>}
+                        </td>
+                        <td style={{ padding: 10 }}>
+                          {canWithdraw && (
+                            <button
+                              className="btn btn-danger"
+                              type="button"
+                              onClick={async () => {
+                                if (!window.confirm("Are you sure you want to withdraw this salary advance request? This action cannot be undone.")) return;
+                                try {
+                                  await withdrawSalaryAdvanceRequest(r.id);
+                                  loadAll();
+                                } catch (e) {
+                                  alert("Failed to withdraw: " + (e.message || e));
+                                }
+                              }}
+                            >
+                              Withdraw
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {!filteredMySalaryAdvances.length && (
-                    <tr><td colSpan={6} style={{ padding: 14 }} className="muted">No salary advance requests submitted yet.</td></tr>
+                    <tr><td colSpan={7} style={{ padding: 14 }} className="muted">No salary advance requests submitted yet.</td></tr>
                   )}
                 </tbody>
               </table>

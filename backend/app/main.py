@@ -3680,6 +3680,24 @@ def mark_salary_advance_disbursed(
     return req
 
 
+@app.delete("/finance/salary-advances/{request_id}", status_code=204)
+def withdraw_salary_advance_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    req = _load_salary_advance_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Salary advance request not found")
+    if req.user_id != current.id:
+        raise HTTPException(status_code=403, detail="You can only withdraw your own requests")
+    if req.status not in {"pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"}:
+        raise HTTPException(status_code=400, detail="Cannot withdraw a request that has already been processed")
+    db.delete(req)
+    db.commit()
+    return None
+
+
 @app.post("/finance/salary-advances/{request_id}/deduction-start", response_model=SalaryAdvanceRequestOut)
 def set_salary_advance_deduction_start(
     request_id: int,

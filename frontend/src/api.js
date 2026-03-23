@@ -732,6 +732,12 @@ export function markSalaryAdvanceDisbursed(requestId, note) {
   });
 }
 
+export function withdrawSalaryAdvanceRequest(requestId) {
+  return request(`/finance/salary-advances/${requestId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function setSalaryAdvanceDeductionStart(requestId, deductionStartDate) {
   const token = getToken();
   const form = new FormData();
