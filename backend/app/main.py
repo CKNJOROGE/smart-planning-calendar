@@ -3558,7 +3558,7 @@ def list_pending_salary_advance_requests(
         raise HTTPException(status_code=403, detail="Not allowed")
 
     q = db.query(SalaryAdvanceRequest)
-    q = q.filter(SalaryAdvanceRequest.status.in_(["pending_parallel_approval", "pending_ceo_approval"]))
+    q = q.filter(SalaryAdvanceRequest.status.in_(["pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"]))
 
     rows = q.order_by(SalaryAdvanceRequest.submitted_at.asc(), SalaryAdvanceRequest.id.asc()).all()
     for r in rows:
