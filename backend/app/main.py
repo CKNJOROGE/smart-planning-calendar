@@ -3976,7 +3976,10 @@ def save_payroll_run(
         db.add(row)
 
     row.pay_date = computed["pay_date"]
-    row.status = _normalize_payroll_status(payload.status)
+    new_status = _normalize_payroll_status(payload.status)
+    if new_status == "paid" and not row.employee_confirmed:
+        raise HTTPException(status_code=400, detail="Cannot mark payroll as paid until employee confirms accuracy")
+    row.status = new_status
     row.gross_cash_pay = computed["gross_cash_pay"]
     row.taxable_non_cash_benefits = computed["taxable_non_cash_benefits"]
     row.gross_taxable_pay = computed["gross_taxable_pay"]
@@ -4024,6 +4027,66 @@ def list_payroll_runs(
     for row in rows:
         _ = row.employee
     return [_serialize_payroll_run(db, row) for row in rows]
+
+
+@app.get("/payroll/my-runs", response_model=List[PayrollRunOut])
+def list_my_payroll_runs(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    rows = (
+        db.query(PayrollRun)
+        .filter(PayrollRun.employee_id == current.id)
+        .order_by(PayrollRun.payroll_month.desc(), PayrollRun.id.desc())
+        .all()
+    )
+    for row in rows:
+        _ = row.employee
+    return [_serialize_payroll_run(db, row) for row in rows]
+
+
+@app.post("/payroll/runs/{run_id}/confirm", response_model=PayrollRunOut)
+def confirm_payroll_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    row = db.query(PayrollRun).filter(PayrollRun.id == run_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    if row.employee_id != current.id:
+        raise HTTPException(status_code=403, detail="You can only confirm your own payroll")
+    if row.status == "paid":
+        raise HTTPException(status_code=400, detail="Cannot confirm a payroll that has already been paid")
+    row.employee_confirmed = True
+    row.employee_confirmed_at = datetime.utcnow()
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    _ = row.employee
+    return _serialize_payroll_run(db, row)
+
+
+@app.post("/payroll/runs/{run_id}/unconfirm", response_model=PayrollRunOut)
+def unconfirm_payroll_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    row = db.query(PayrollRun).filter(PayrollRun.id == run_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    if row.employee_id != current.id:
+        raise HTTPException(status_code=403, detail="You can only unconfirm your own payroll")
+    if row.status == "paid":
+        raise HTTPException(status_code=400, detail="Cannot unconfirm a payroll that has already been paid")
+    row.employee_confirmed = False
+    row.employee_confirmed_at = None
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    _ = row.employee
+    return _serialize_payroll_run(db, row)
 
 
 PERFORMANCE_GOAL_STATUSES = {"active", "on_track", "at_risk", "completed", "paused", "cancelled"}

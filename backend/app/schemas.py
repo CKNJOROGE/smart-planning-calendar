@@ -858,6 +858,8 @@ class PayrollRunOut(BaseModel):
     payroll_month: date
     pay_date: Optional[date] = None
     status: str
+    employee_confirmed: bool = False
+    employee_confirmed_at: Optional[datetime] = None
     gross_cash_pay: float
     taxable_non_cash_benefits: float
     gross_taxable_pay: float

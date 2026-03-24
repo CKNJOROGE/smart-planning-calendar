@@ -451,6 +451,8 @@ class PayrollRun(Base):
     payroll_month = Column(Date, nullable=False, index=True)
     pay_date = Column(Date, nullable=True, index=True)
     status = Column(String(30), nullable=False, default="draft")
+    employee_confirmed = Column(Boolean, nullable=False, default=False)
+    employee_confirmed_at = Column(DateTime, nullable=True)
 
     gross_cash_pay = Column(Numeric(12, 2), nullable=False, default=0)
     taxable_non_cash_benefits = Column(Numeric(12, 2), nullable=False, default=0)

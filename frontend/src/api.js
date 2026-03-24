@@ -800,6 +800,18 @@ export function listPayrollRuns({ employeeId, payrollMonth } = {}) {
   return request(`/payroll/runs${suffix}`);
 }
 
+export function listMyPayrollRuns() {
+  return request("/payroll/my-runs");
+}
+
+export function confirmPayrollRun(runId) {
+  return request(`/payroll/runs/${runId}/confirm`, { method: "POST" });
+}
+
+export function unconfirmPayrollRun(runId) {
+  return request(`/payroll/runs/${runId}/unconfirm`, { method: "POST" });
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);
