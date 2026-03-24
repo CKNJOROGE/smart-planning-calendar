@@ -1113,6 +1113,8 @@ def _serialize_payroll_run(db: Session, row: PayrollRun) -> PayrollRunOut:
         payroll_month=row.payroll_month,
         pay_date=row.pay_date,
         status=row.status,
+        employee_confirmed=row.employee_confirmed or False,
+        employee_confirmed_at=row.employee_confirmed_at,
         gross_cash_pay=_money_to_float(_dec(row.gross_cash_pay)),
         taxable_non_cash_benefits=_money_to_float(_dec(row.taxable_non_cash_benefits)),
         gross_taxable_pay=_money_to_float(_dec(row.gross_taxable_pay)),
