@@ -3975,11 +3975,14 @@ def save_payroll_run(
         row = PayrollRun(employee_id=employee.id, payroll_month=payroll_month, created_by_id=current.id, updated_by_id=current.id)
         db.add(row)
 
-    row.pay_date = computed["pay_date"]
     new_status = _normalize_payroll_status(payload.status)
     if new_status == "paid" and not row.employee_confirmed:
         raise HTTPException(status_code=400, detail="Cannot mark payroll as paid until employee confirms accuracy")
     row.status = new_status
+    if new_status == "paid":
+        row.pay_date = date.today()
+    else:
+        row.pay_date = computed["pay_date"]
     row.gross_cash_pay = computed["gross_cash_pay"]
     row.taxable_non_cash_benefits = computed["taxable_non_cash_benefits"]
     row.gross_taxable_pay = computed["gross_taxable_pay"]
