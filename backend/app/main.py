@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from starlette.middleware.base import BaseHTTPMiddleware
 from jose import jwt
-from sqlalchemy import or_, text
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
@@ -4087,23 +4087,6 @@ def unconfirm_payroll_run(
     db.refresh(row)
     _ = row.employee
     return _serialize_payroll_run(db, row)
-
-
-@app.post("/admin/run-migration", tags=["admin"])
-def run_payroll_migration(
-    db: Session = Depends(get_db),
-    current: User = Depends(get_current_user),
-):
-    role = (current.role or "").strip().lower()
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="Admin only")
-    try:
-        db.execute(text("ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS employee_confirmed BOOLEAN NOT NULL DEFAULT false"))
-        db.execute(text("ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS employee_confirmed_at TIMESTAMP"))
-        db.commit()
-        return {"status": "ok", "message": "Migration applied"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 
 PERFORMANCE_GOAL_STATUSES = {"active", "on_track", "at_risk", "completed", "paused", "cancelled"}
