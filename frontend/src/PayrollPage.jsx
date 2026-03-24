@@ -191,7 +191,7 @@ function runPayloadFromState(state, employeeId) {
 
 function statChip(label, value) {
   return (
-    <div className="pill" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+    <div className="pill payroll-chip" style={{ display: "flex", gap: 6, alignItems: "center" }}>
       <span>{label}:</span>
       <b>{value}</b>
     </div>
@@ -202,7 +202,7 @@ function SectionHelp({ text }) {
   return (
     <button
       type="button"
-      className="btn"
+      className="btn payroll-help-btn"
       title={text}
       aria-label={text}
       style={{
@@ -509,8 +509,8 @@ export default function PayrollPage() {
 
   if (busy) {
     return (
-      <div className="page-wrap">
-        <div className="card">
+      <div className="page-wrap payroll-page">
+        <div className="card payroll-card">
           <LoadingState label="Loading payroll..." />
         </div>
       </div>
@@ -520,13 +520,13 @@ export default function PayrollPage() {
   if (current && !canOpen) return <Navigate to="/" replace />;
 
   return (
-    <div className="page-wrap">
-      <div className="card" style={{ marginBottom: 12 }}>
+    <div className="page-wrap payroll-page">
+      <div className="card payroll-card payroll-hero-card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>Payroll</div>
         <div className="muted" style={{ marginTop: 6 }}>
           Kenya payroll workspace for monthly salary setup, statutory deductions, and payroll runs. Access is limited to finance, admin, and CEO.
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+        <div className="payroll-pill-row" style={{ marginTop: 10 }}>
           {statChip("PAYE", `Bands from ${statutory?.paye_effective_from || "-"}`)}
           {statChip("AHL", `${((statutory?.ahl_rate_employee || 0) * 100).toFixed(1)}% employee + employer`)}
           {statChip("SHIF", `${((statutory?.shif_rate || 0) * 100).toFixed(2)}% min ${fmtCurrency(statutory?.shif_minimum_monthly || 0)}`)}
@@ -535,8 +535,8 @@ export default function PayrollPage() {
         {err && <div className="error" style={{ marginTop: 10 }}>{err}</div>}
       </div>
 
-      <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+      <div className="card payroll-card payroll-section-card" style={{ marginBottom: 12 }}>
+        <div className="payroll-section-head" style={{ marginBottom: 8 }}>
           <div>
             <div style={{ fontWeight: 900, display: "flex", alignItems: "center", gap: 8 }}>
               <span>Statutory Settings</span>
@@ -544,11 +544,11 @@ export default function PayrollPage() {
             </div>
             <div className="muted">Create a new effective-dated rule version when Kenya payroll law changes. Old payroll runs keep their stored snapshot.</div>
           </div>
-          <div className="pill">Current config ID: {statutory?.id || "-"}</div>
+          <div className="pill payroll-chip">Current config ID: {statutory?.id || "-"}</div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "260px minmax(0, 1fr)", gap: 12, alignItems: "start" }}>
-          <div>
+        <div className="payroll-statutory-grid">
+          <div className="payroll-version-panel">
             <div className="field" style={{ marginBottom: 10 }}>
               <label>Available versions</label>
               <select value={selectedStatutoryConfigId} onChange={(e) => setSelectedStatutoryConfigId(e.target.value)}>
@@ -565,7 +565,7 @@ export default function PayrollPage() {
           </div>
 
           <div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+            <div className="payroll-form-grid">
               <Field label="Effective From" type="date" value={statutoryForm.effective_from} onChange={(v) => setStatutoryForm((p) => ({ ...p, effective_from: v }))} />
               <Field label="Effective To" type="date" value={statutoryForm.effective_to} onChange={(v) => setStatutoryForm((p) => ({ ...p, effective_to: v }))} />
               <NumberField label="Personal Relief Monthly" value={statutoryForm.personal_relief_monthly} onChange={(v) => setStatutoryForm((p) => ({ ...p, personal_relief_monthly: v }))} />
@@ -585,7 +585,7 @@ export default function PayrollPage() {
               <NumberField label="Disability Exemption Cap" value={statutoryForm.disability_exemption_cap_monthly} onChange={(v) => setStatutoryForm((p) => ({ ...p, disability_exemption_cap_monthly: v }))} />
             </div>
 
-            <label style={{ display: "inline-flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+            <label className="payroll-inline-check" style={{ marginTop: 10 }}>
               <input type="checkbox" checked={!!statutoryForm.active} onChange={(e) => setStatutoryForm((p) => ({ ...p, active: e.target.checked }))} />
               Active configuration
             </label>
@@ -598,10 +598,10 @@ export default function PayrollPage() {
               <div className="helper" style={{ marginBottom: 8 }}>
                 Each row means "tax this slice of monthly taxable pay at this rate." The second row of `KES 8,333 at 25%` is correct because it takes the monthly threshold from `KES 24,000` up to `KES 32,333`.
               </div>
-              <div style={{ overflowX: "auto" }}>
-                <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+              <div className="payroll-table-wrap">
+                <table className="table payroll-table">
                   <thead>
-                    <tr style={{ background: "#f8fafc" }}>
+                    <tr>
                       <th style={{ textAlign: "left", padding: 10 }}>Band Label</th>
                       <th style={{ textAlign: "left", padding: 10 }}>Band Amount</th>
                       <th style={{ textAlign: "left", padding: 10 }}>Rate</th>
@@ -620,7 +620,7 @@ export default function PayrollPage() {
                           ? `Anything above prior bands at ${rateLabel}`
                           : `Next ${amountLabel} at ${rateLabel}`;
                       return (
-                        <tr key={`paye_band_${idx}`} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <tr key={`paye_band_${idx}`}>
                           <td style={{ padding: 10 }}>
                             <select
                               value={band.label}
@@ -671,7 +671,7 @@ export default function PayrollPage() {
                   </tbody>
                 </table>
               </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+              <div className="payroll-actions" style={{ marginTop: 8 }}>
                 <button
                   className="btn"
                   type="button"
@@ -691,7 +691,7 @@ export default function PayrollPage() {
               />
             </div>
 
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            <div className="payroll-actions" style={{ marginTop: 12 }}>
               <button className="btn" type="button" disabled={savingStatutory} onClick={() => handleSaveStatutoryConfig(false)}>
                 {savingStatutory ? "Saving..." : "Update Selected Version"}
               </button>
@@ -703,28 +703,22 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "320px minmax(0, 1fr)", gap: 12, alignItems: "start" }}>
-        <div className="card">
+      <div className="payroll-shell">
+        <div className="card payroll-card payroll-rail-card">
           <div style={{ fontWeight: 800, marginBottom: 8 }}>Employees</div>
           <div className="field" style={{ marginBottom: 10 }}>
             <label>Search employees</label>
             <input value={employeeSearch} onChange={(e) => setEmployeeSearch(e.target.value)} placeholder="Name, department, role..." />
           </div>
-          <div style={{ display: "grid", gap: 8, maxHeight: 720, overflowY: "auto" }}>
+          <div className="payroll-employee-list">
             {filteredEmployees.map((row) => {
               const active = Number(selectedEmployeeId) === Number(row.id);
               return (
                 <button
                   key={row.id}
                   type="button"
-                  className="btn"
+                  className={`btn payroll-employee-btn${active ? " active" : ""}`}
                   onClick={() => setSelectedEmployeeId(String(row.id))}
-                  style={{
-                    textAlign: "left",
-                    padding: 12,
-                    border: active ? "2px solid #7c3aed" : "1px solid #e2e8f0",
-                    background: active ? "rgba(124,58,237,0.08)" : "#fff",
-                  }}
                 >
                   <div style={{ fontWeight: 800 }}>{row.name}</div>
                   <div className="muted" style={{ fontSize: 12 }}>{row.department || "Unassigned"} | {row.designation || row.role}</div>
@@ -736,9 +730,9 @@ export default function PayrollPage() {
           </div>
         </div>
 
-        <div style={{ display: "grid", gap: 12 }}>
-          <div className="card">
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div className="payroll-panel-stack">
+          <div className="card payroll-card payroll-summary-card">
+            <div className="payroll-section-head">
               <div>
                 <div style={{ fontWeight: 900, fontSize: 18 }}>{selectedEmployee?.name || "Select an employee"}</div>
                 <div className="muted">
@@ -746,7 +740,7 @@ export default function PayrollPage() {
                 </div>
               </div>
               {profile && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <div className="payroll-pill-row">
                   {statChip("Default Gross", fmtCurrency(profileGross))}
                   {statChip("Payment", profile.payment_method || "-")}
                   {statChip("Status", profile.active ? "Active" : "Inactive")}
@@ -757,8 +751,8 @@ export default function PayrollPage() {
 
           {selectedEmployee && profile && (
             <>
-              <div className="card">
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+              <div className="card payroll-card payroll-section-card">
+                <div className="payroll-section-head" style={{ marginBottom: 10 }}>
                   <div>
                     <div style={{ fontWeight: 900, display: "flex", alignItems: "center", gap: 8 }}>
                       <span>Payroll Setup</span>
@@ -768,7 +762,7 @@ export default function PayrollPage() {
                   </div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                <div className="payroll-form-grid">
                   <Field label="Payroll Number" value={profileForm.payroll_number} onChange={(v) => setProfileForm((p) => ({ ...p, payroll_number: v }))} disabled={!canEditSetup} />
                   <Field label="KRA PIN" value={profileForm.kra_pin} onChange={(v) => setProfileForm((p) => ({ ...p, kra_pin: v.toUpperCase() }))} disabled={!canEditSetup} />
                   <SelectField label="Payment Method" value={profileForm.payment_method} onChange={(v) => setProfileForm((p) => ({ ...p, payment_method: v }))} disabled={!canEditSetup} options={[["bank_transfer", "bank_transfer"], ["cash", "cash"], ["mobile_money", "mobile_money"]]} />
@@ -794,7 +788,7 @@ export default function PayrollPage() {
                   <label>Payroll Notes</label>
                   <textarea value={profileForm.notes} onChange={(e) => setProfileForm((p) => ({ ...p, notes: e.target.value }))} disabled={!canEditSetup} />
                 </div>
-                <label style={{ display: "inline-flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+                <label className="payroll-inline-check" style={{ marginTop: 10 }}>
                   <input type="checkbox" checked={!!profileForm.active} onChange={(e) => setProfileForm((p) => ({ ...p, active: e.target.checked }))} disabled={!canEditSetup} />
                   Payroll active for this employee
                 </label>
@@ -808,7 +802,7 @@ export default function PayrollPage() {
                 )}
               </div>
 
-              <div className="card">
+              <div className="card payroll-card payroll-section-card">
                 <div style={{ fontWeight: 900, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
                   <span>Monthly Payroll Run</span>
                   <SectionHelp text="Monthly Payroll Run calculates the actual pay for one employee for one specific month. It uses Payroll Setup as the default base, then lets you add or override month-specific values like bonus, overtime, commission, or one-off deductions before previewing and saving that month's payroll record." />
@@ -816,7 +810,7 @@ export default function PayrollPage() {
                 <div className="muted" style={{ marginBottom: 10 }}>
                   Leave a run field blank to use the saved setup amount. Use this area for monthly overrides like bonus, overtime, or a one-off deduction.
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                <div className="payroll-form-grid">
                   <Field label="Payroll Month" type="date" value={runForm.payroll_month} onChange={(v) => setRunForm((p) => ({ ...p, payroll_month: v }))} />
                   <Field label="Pay Date" type="date" value={runForm.pay_date} onChange={(v) => setRunForm((p) => ({ ...p, pay_date: v }))} />
                   <SelectField label="Save Status" value={runForm.status} onChange={(v) => setRunForm((p) => ({ ...p, status: v }))} options={[["draft", "draft"], ["approved", "approved"], ["paid", "paid"]]} />
@@ -843,7 +837,7 @@ export default function PayrollPage() {
                   <textarea value={runForm.notes} onChange={(e) => setRunForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Optional month-specific notes" />
                 </div>
 
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                <div className="payroll-actions" style={{ marginTop: 12 }}>
                   <button className="btn" type="button" onClick={() => setRunForm(emptyRunState())}>Reset Run Form</button>
                   <button className="btn" type="button" disabled={savingRun} onClick={handlePreview}>{savingRun ? "Working..." : "Preview Payroll"}</button>
                   <button className="btn btn-primary" type="button" disabled={savingRun} onClick={handleSaveRun}>{savingRun ? "Saving..." : "Save Payroll Run"}</button>
@@ -851,9 +845,9 @@ export default function PayrollPage() {
               </div>
 
               {preview && (
-                <div className="card">
+                <div className="card payroll-card payroll-preview-card">
                   <div style={{ fontWeight: 900, marginBottom: 10 }}>Payroll Preview</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+                  <div className="payroll-preview-grid">
                     {statChip("Gross Cash", fmtCurrency(preview.gross_cash_pay))}
                     {statChip("Taxable Income", fmtCurrency(preview.taxable_income))}
                     {statChip("PAYE", fmtCurrency(preview.paye_after_reliefs))}
@@ -864,10 +858,10 @@ export default function PayrollPage() {
                     {statChip("Employer Cost", fmtCurrency(preview.employer_total_cost))}
                   </div>
 
-                  <div style={{ marginTop: 14, overflowX: "auto" }}>
-                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <div className="payroll-table-wrap" style={{ marginTop: 14 }}>
+                    <table className="table payroll-table">
                       <thead>
-                        <tr style={{ background: "#f8fafc" }}>
+                        <tr>
                           <th style={{ textAlign: "left", padding: 10 }}>Component</th>
                           <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
                         </tr>
@@ -888,7 +882,7 @@ export default function PayrollPage() {
                           ["Other deductions", preview.other_deductions],
                           ["Net pay", preview.net_pay],
                         ].map(([label, amount]) => (
-                          <tr key={label} style={{ borderTop: "1px solid #eef2f7" }}>
+                          <tr key={label}>
                             <td style={{ padding: 10 }}>{label}</td>
                             <td style={{ padding: 10 }}>{fmtCurrency(amount)}</td>
                           </tr>
@@ -898,7 +892,7 @@ export default function PayrollPage() {
                   </div>
 
                   {!!preview.breakdown?.notes?.length && (
-                    <div style={{ marginTop: 12 }}>
+                    <div className="payroll-notes-block" style={{ marginTop: 12 }}>
                       <div style={{ fontWeight: 700, marginBottom: 6 }}>Calculation Notes</div>
                       {preview.breakdown.notes.map((note, idx) => (
                         <div key={`payroll_note_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{note}</div>
@@ -908,8 +902,8 @@ export default function PayrollPage() {
                 </div>
               )}
 
-              <div className="card">
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+              <div className="card payroll-card payroll-section-card">
+                <div className="payroll-section-head" style={{ marginBottom: 8 }}>
                   <div>
                     <div style={{ fontWeight: 900 }}>Saved Payroll Runs</div>
                     <div className="muted">Search and review previously computed runs for this employee.</div>
@@ -919,10 +913,10 @@ export default function PayrollPage() {
                     <input value={runsFilter} onChange={(e) => setRunsFilter(e.target.value)} placeholder="Month, status, notes..." />
                   </div>
                 </div>
-                <div style={{ overflowX: "auto" }}>
-                  <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                <div className="payroll-table-wrap">
+                  <table className="table payroll-table">
                     <thead>
-                      <tr style={{ background: "#f8fafc" }}>
+                      <tr>
                         <th style={{ textAlign: "left", padding: 10 }}>Month</th>
                         <th style={{ textAlign: "left", padding: 10 }}>Status</th>
                         <th style={{ textAlign: "left", padding: 10 }}>Net Pay</th>
@@ -932,7 +926,7 @@ export default function PayrollPage() {
                     </thead>
                     <tbody>
                       {filteredRuns.map((row) => (
-                        <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                        <tr key={row.id}>
                           <td style={{ padding: 10 }}>{row.payroll_month}</td>
                           <td style={{ padding: 10 }}>
                             <span className={`dashboard-status-badge ${row.status === "paid" ? "dashboard-status-ok" : row.status === "approved" ? "dashboard-status-info" : "dashboard-status-pending"}`}>
@@ -951,7 +945,7 @@ export default function PayrollPage() {
               </div>
 
               {!!statutory?.source_notes?.length && (
-                <div className="card">
+                <div className="card payroll-card payroll-section-card payroll-compliance-card">
                   <div style={{ fontWeight: 900, marginBottom: 8 }}>Compliance Notes</div>
                   {statutory.source_notes.map((note, idx) => (
                     <div key={`source_note_${idx}`} className="muted" style={{ marginTop: idx ? 6 : 0 }}>{note}</div>

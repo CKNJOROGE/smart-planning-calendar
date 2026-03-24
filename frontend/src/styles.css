@@ -1019,6 +1019,266 @@ textarea{ resize: vertical; min-height: 90px; }
     inset 1px 1px 0 rgba(255, 255, 255, 0.4);
 }
 
+/* Payroll neumorphism (scoped) */
+.payroll-page {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 12% 14%, rgba(248, 218, 253, 0.58), rgba(248, 218, 253, 0) 34%),
+    radial-gradient(circle at 92% 18%, rgba(187, 212, 14, 0.18), rgba(187, 212, 14, 0) 28%),
+    radial-gradient(circle at 88% 86%, rgba(125, 211, 252, 0.18), rgba(125, 211, 252, 0) 26%),
+    linear-gradient(145deg, #fdf2ff 0%, #f8dafd 46%, #eef4ff 100%);
+}
+
+.payroll-page .card {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(244, 247, 253, 0.62));
+  backdrop-filter: blur(10px);
+  box-shadow:
+    10px 10px 24px rgba(148, 163, 184, 0.18),
+    -8px -8px 18px rgba(255, 255, 255, 0.88),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.payroll-page input,
+.payroll-page select,
+.payroll-page textarea {
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  box-shadow:
+    inset 3px 3px 6px rgba(148, 163, 184, 0.12),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.82);
+}
+
+.payroll-page .btn:not(.btn-primary):not(.btn-danger) {
+  background: linear-gradient(145deg, #f8fbff, #eef3fb);
+  box-shadow:
+    5px 5px 11px rgba(148, 163, 184, 0.2),
+    -4px -4px 8px rgba(255, 255, 255, 0.9);
+}
+
+.payroll-page .btn:not(.btn-primary):not(.btn-danger):active {
+  box-shadow:
+    inset 4px 4px 8px rgba(148, 163, 184, 0.18),
+    inset -3px -3px 7px rgba(255, 255, 255, 0.9);
+}
+
+.payroll-page .btn-primary {
+  background: linear-gradient(135deg, #640277, #4c025b);
+  box-shadow:
+    7px 10px 18px rgba(100, 2, 119, 0.34),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.46);
+}
+
+.payroll-page .btn-danger {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  box-shadow:
+    6px 10px 18px rgba(185, 28, 28, 0.32),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.payroll-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.payroll-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
+}
+
+.payroll-hero-card {
+  background:
+    radial-gradient(circle at 12% 16%, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0) 32%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(244, 247, 253, 0.66));
+}
+
+.payroll-pill-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.payroll-chip {
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(239, 244, 250, 0.88));
+  box-shadow:
+    4px 4px 10px rgba(148, 163, 184, 0.18),
+    -3px -3px 8px rgba(255, 255, 255, 0.92);
+}
+
+.payroll-help-btn {
+  border-color: rgba(203, 213, 225, 0.9);
+  background: linear-gradient(145deg, #f7fbff, #edf2f9);
+}
+
+.payroll-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.payroll-shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.payroll-panel-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.payroll-statutory-grid {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.payroll-version-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  background: linear-gradient(145deg, rgba(252, 254, 255, 0.9), rgba(240, 245, 251, 0.74));
+  box-shadow:
+    inset 2px 2px 4px rgba(255, 255, 255, 0.75),
+    inset -3px -3px 6px rgba(226, 232, 240, 0.6);
+}
+
+.payroll-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.payroll-inline-check {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(239, 244, 250, 0.78));
+  box-shadow:
+    4px 4px 10px rgba(148, 163, 184, 0.16),
+    -3px -3px 7px rgba(255, 255, 255, 0.9);
+}
+
+.payroll-rail-card {
+  position: sticky;
+  top: 16px;
+}
+
+.payroll-employee-list {
+  display: grid;
+  gap: 8px;
+  max-height: 720px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.payroll-employee-btn {
+  text-align: left;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(240, 245, 251, 0.82));
+  box-shadow:
+    5px 5px 12px rgba(148, 163, 184, 0.16),
+    -4px -4px 9px rgba(255, 255, 255, 0.84);
+  transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.payroll-employee-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(100, 2, 119, 0.24);
+}
+
+.payroll-employee-btn.active {
+  border: 1px solid rgba(100, 2, 119, 0.4);
+  background: linear-gradient(145deg, rgba(245, 216, 252, 0.94), rgba(255, 255, 255, 0.88));
+  box-shadow:
+    7px 7px 16px rgba(100, 2, 119, 0.18),
+    -4px -4px 10px rgba(255, 255, 255, 0.88);
+}
+
+.payroll-summary-card {
+  background:
+    radial-gradient(circle at 88% 20%, rgba(187, 212, 14, 0.16), rgba(187, 212, 14, 0) 28%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(242, 246, 252, 0.7));
+}
+
+.payroll-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.payroll-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.payroll-table-wrap {
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.76), rgba(240, 245, 251, 0.72));
+  box-shadow:
+    inset 2px 2px 6px rgba(255, 255, 255, 0.7),
+    inset -3px -3px 8px rgba(226, 232, 240, 0.55);
+}
+
+.payroll-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.payroll-table thead tr {
+  background: rgba(248, 250, 252, 0.8);
+}
+
+.payroll-table tbody tr {
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.payroll-notes-block {
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(241, 245, 251, 0.72));
+  box-shadow:
+    inset 2px 2px 5px rgba(255, 255, 255, 0.7),
+    inset -2px -2px 6px rgba(226, 232, 240, 0.55);
+}
+
+.payroll-compliance-card {
+  background:
+    radial-gradient(circle at 94% 16%, rgba(187, 212, 14, 0.18), rgba(187, 212, 14, 0) 28%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(244, 247, 253, 0.68));
+}
+
+@media (max-width: 1024px) {
+  .payroll-shell,
+  .payroll-statutory-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .payroll-rail-card {
+    position: static;
+  }
+}
+
 .library-page .library-item,
 .users-page .table tr,
 .approvals-page .table tr,
@@ -1783,6 +2043,122 @@ textarea{ resize: vertical; min-height: 90px; }
 [data-theme="dark"] .profile-page textarea::placeholder {
   color: #111111;
   opacity: 1;
+}
+
+[data-theme="dark"] .payroll-page {
+  background:
+    radial-gradient(circle at 12% 14%, rgba(2, 132, 199, 0.2), rgba(2, 132, 199, 0) 34%),
+    radial-gradient(circle at 92% 18%, rgba(187, 212, 14, 0.14), rgba(187, 212, 14, 0) 28%),
+    radial-gradient(circle at 88% 86%, rgba(56, 189, 248, 0.14), rgba(56, 189, 248, 0) 26%),
+    linear-gradient(145deg, #0f172a 0%, #111827 46%, #0b1220 100%);
+}
+
+[data-theme="dark"] .payroll-page .card {
+  border-color: rgba(71, 85, 105, 0.84);
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(17, 24, 39, 0.84));
+  box-shadow:
+    10px 10px 24px rgba(2, 6, 23, 0.5),
+    -6px -6px 14px rgba(30, 41, 59, 0.58),
+    inset 1px 1px 0 rgba(148, 163, 184, 0.12);
+}
+
+[data-theme="dark"] .payroll-page input,
+[data-theme="dark"] .payroll-page select,
+[data-theme="dark"] .payroll-page textarea {
+  color: #e2e8f0;
+  border-color: rgba(71, 85, 105, 0.9);
+  background: rgba(15, 23, 42, 0.88);
+  box-shadow:
+    inset 4px 4px 8px rgba(2, 6, 23, 0.52),
+    inset -3px -3px 7px rgba(51, 65, 85, 0.44);
+}
+
+[data-theme="dark"] .payroll-page input::placeholder,
+[data-theme="dark"] .payroll-page textarea::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+[data-theme="dark"] .payroll-page .btn:not(.btn-primary):not(.btn-danger) {
+  background: linear-gradient(145deg, #172032, #0f172a);
+  border-color: rgba(71, 85, 105, 0.88);
+  box-shadow:
+    6px 6px 13px rgba(2, 6, 23, 0.55),
+    -4px -4px 9px rgba(30, 41, 59, 0.6);
+}
+
+[data-theme="dark"] .payroll-page .btn:not(.btn-primary):not(.btn-danger):active {
+  box-shadow:
+    inset 4px 4px 8px rgba(2, 6, 23, 0.6),
+    inset -3px -3px 7px rgba(51, 65, 85, 0.48);
+}
+
+[data-theme="dark"] .payroll-page .btn-primary {
+  box-shadow:
+    8px 10px 18px rgba(2, 132, 199, 0.3),
+    inset 1px 1px 0 rgba(224, 242, 254, 0.2);
+}
+
+[data-theme="dark"] .payroll-chip,
+[data-theme="dark"] .payroll-inline-check,
+[data-theme="dark"] .payroll-version-panel,
+[data-theme="dark"] .payroll-table-wrap,
+[data-theme="dark"] .payroll-notes-block,
+[data-theme="dark"] .payroll-employee-btn {
+  color: #e2e8f0;
+  border-color: rgba(71, 85, 105, 0.84);
+}
+
+[data-theme="dark"] .payroll-chip,
+[data-theme="dark"] .payroll-inline-check {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(22, 31, 48, 0.84));
+  box-shadow:
+    6px 6px 13px rgba(2, 6, 23, 0.5),
+    -3px -3px 8px rgba(30, 41, 59, 0.52);
+}
+
+[data-theme="dark"] .payroll-version-panel,
+[data-theme="dark"] .payroll-table-wrap,
+[data-theme="dark"] .payroll-notes-block {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.88), rgba(17, 24, 39, 0.82));
+  box-shadow:
+    inset 2px 2px 6px rgba(51, 65, 85, 0.22),
+    inset -3px -3px 8px rgba(2, 6, 23, 0.38);
+}
+
+[data-theme="dark"] .payroll-summary-card,
+[data-theme="dark"] .payroll-compliance-card,
+[data-theme="dark"] .payroll-hero-card {
+  background:
+    radial-gradient(circle at 88% 20%, rgba(56, 189, 248, 0.14), rgba(56, 189, 248, 0) 26%),
+    linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(17, 24, 39, 0.84));
+}
+
+[data-theme="dark"] .payroll-employee-btn {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(17, 24, 39, 0.84));
+  box-shadow:
+    6px 6px 12px rgba(2, 6, 23, 0.48),
+    -4px -4px 8px rgba(30, 41, 59, 0.48);
+}
+
+[data-theme="dark"] .payroll-employee-btn:hover {
+  border-color: rgba(56, 189, 248, 0.42);
+}
+
+[data-theme="dark"] .payroll-employee-btn.active {
+  border-color: rgba(56, 189, 248, 0.56);
+  background: linear-gradient(145deg, rgba(3, 105, 161, 0.34), rgba(15, 23, 42, 0.92));
+  box-shadow:
+    8px 8px 16px rgba(2, 6, 23, 0.54),
+    inset 1px 1px 0 rgba(186, 230, 253, 0.14);
+}
+
+[data-theme="dark"] .payroll-table thead tr {
+  background: rgba(15, 23, 42, 0.78);
+}
+
+[data-theme="dark"] .payroll-table tbody tr {
+  border-top-color: rgba(51, 65, 85, 0.82);
 }
 
 [data-theme="dark"] .users-head { background: #0f172a; }
