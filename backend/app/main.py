@@ -2829,7 +2829,7 @@ def get_finance_attention(
             CashRequisitionRequest.status == "pending_finance_review",
         ).count()
         authority_to_incur = db.query(AuthorityToIncurRequest.id).filter(
-            AuthorityToIncurRequest.status == "pending_finance_review",
+            AuthorityToIncurRequest.status.in_(["pending_finance_review", "pending_parallel_approval"]),
         ).count()
         salary_advance = db.query(SalaryAdvanceRequest.id).filter(
             SalaryAdvanceRequest.status.in_(["pending_finance_review", "pending_parallel_approval"]),
@@ -2843,7 +2843,7 @@ def get_finance_attention(
             CashRequisitionRequest.status.in_(["pending_finance_review", "pending_ceo_approval"]),
         ).count()
         authority_to_incur = db.query(AuthorityToIncurRequest.id).filter(
-            AuthorityToIncurRequest.status == "pending_ceo_approval",
+            AuthorityToIncurRequest.status.in_(["pending_ceo_approval", "pending_parallel_approval"]),
         ).count()
         salary_advance = db.query(SalaryAdvanceRequest.id).filter(
             SalaryAdvanceRequest.status.in_(["pending_ceo_approval", "pending_parallel_approval"]),
@@ -3337,7 +3337,7 @@ def submit_authority_to_incur_request(
         payee=payee or None,
         details=details or None,
         needed_by=payload.needed_by,
-        status="pending_finance_review",
+        status="pending_parallel_approval",
         submitted_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -3374,10 +3374,7 @@ def list_pending_authority_to_incur_requests(
         raise HTTPException(status_code=403, detail="Not allowed")
 
     q = db.query(AuthorityToIncurRequest)
-    if role == "finance":
-        q = q.filter(AuthorityToIncurRequest.status == "pending_finance_review")
-    else:
-        q = q.filter(AuthorityToIncurRequest.status == "pending_ceo_approval")
+    q = q.filter(AuthorityToIncurRequest.status.in_(["pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"]))
 
     rows = q.order_by(AuthorityToIncurRequest.submitted_at.asc(), AuthorityToIncurRequest.id.asc()).all()
     for r in rows:
@@ -3426,21 +3423,33 @@ def decide_authority_to_incur_request(
         raise HTTPException(status_code=400, detail="comment is required when rejecting")
 
     if role == "finance":
-        if req.status != "pending_finance_review":
-            raise HTTPException(status_code=400, detail="Finance can only decide pending finance review requests")
+        if req.status not in {"pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"}:
+            raise HTTPException(status_code=400, detail="Finance can only decide pending approval requests")
+        if req.finance_decision:
+            raise HTTPException(status_code=400, detail="Finance has already made a decision on this request")
         req.finance_decision = decision
         req.finance_comment = comment or None
         req.finance_decided_at = now
         req.finance_decided_by_id = current.id
-        req.status = "pending_ceo_approval" if decision == "approved" else "rejected"
+        if decision == "rejected":
+            req.status = "rejected"
+        elif req.ceo_decision == "approved":
+            req.status = "pending_incurrence"
+        else:
+            req.status = "pending_ceo_approval"
     elif role in {"admin", "ceo"}:
-        if req.status != "pending_ceo_approval":
-            raise HTTPException(status_code=400, detail="CEO/Admin can only decide pending CEO approval requests")
+        if req.status not in {"pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"}:
+            raise HTTPException(status_code=400, detail="CEO/Admin can only decide pending approval requests")
+        if req.ceo_decision:
+            raise HTTPException(status_code=400, detail="CEO has already made a decision on this request")
         req.ceo_decision = decision
         req.ceo_comment = comment or None
         req.ceo_decided_at = now
         req.ceo_decided_by_id = current.id
-        req.status = "pending_incurrence" if decision == "approved" else "rejected"
+        if decision == "rejected":
+            req.status = "rejected"
+        else:
+            req.status = "pending_incurrence"
     else:
         raise HTTPException(status_code=403, detail="Not allowed")
 

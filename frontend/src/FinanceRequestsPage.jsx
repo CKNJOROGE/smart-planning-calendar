@@ -239,6 +239,7 @@ function salaryAdvanceStatusLabel(status) {
 
 function authorityStatusLabel(status) {
   const s = (status || "").toLowerCase();
+  if (s === "pending_parallel_approval") return "pending parallel approval";
   if (s === "pending_finance_review") return "pending finance review";
   if (s === "pending_ceo_approval") return "pending CEO approval";
   if (s === "pending_incurrence") return "approved, awaiting incurrence";
@@ -691,8 +692,20 @@ export default function FinanceRequestsPage() {
 
   function canCurrentRoleDecideAuthority(r) {
     const role = (current?.role || "").toLowerCase();
-    if (role === "finance") return (r.status || "").toLowerCase() === "pending_finance_review";
-    if (role === "admin" || role === "ceo") return (r.status || "").toLowerCase() === "pending_ceo_approval";
+    const status = (r.status || "").toLowerCase();
+    if (status === "rejected" || status === "pending_incurrence" || status === "incurred") return false;
+    if (role === "finance") {
+      if (status === "pending_parallel_approval" && !r.finance_decision) return true;
+      if (status === "pending_ceo_approval" && !r.finance_decision) return true;
+      if (status === "pending_finance_review") return true;
+      return false;
+    }
+    if (role === "admin" || role === "ceo") {
+      if (status === "pending_parallel_approval" && !r.ceo_decision) return true;
+      if (status === "pending_ceo_approval" && !r.ceo_decision) return true;
+      if (status === "pending_finance_review") return true;
+      return false;
+    }
     return false;
   }
 

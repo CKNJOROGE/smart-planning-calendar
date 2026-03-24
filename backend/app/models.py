@@ -313,7 +313,7 @@ class AuthorityToIncurRequest(Base):
     payee = Column(String(255), nullable=True)
     details = Column(Text, nullable=True)
     needed_by = Column(Date, nullable=True, index=True)
-    status = Column(String(40), nullable=False, default="pending_finance_review")
+    status = Column(String(40), nullable=False, default="pending_parallel_approval")
     submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     finance_decision = Column(String(20), nullable=True)
