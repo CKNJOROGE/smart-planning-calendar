@@ -137,7 +137,7 @@ function Shell({ onLogout }) {
             </NavLink>
             {["finance", "admin", "ceo"].includes(String(user?.role || "").toLowerCase()) && (
               <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/payroll">
-                <span className="sidebar-link-text">Payroll</span>
+                <span className="sidebar-link-text">Payroll Admin Portal</span>
               </NavLink>
             )}
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/performance-management">
