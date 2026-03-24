@@ -964,8 +964,26 @@ def _calculate_payroll_breakdown(
     profile: PayrollProfile,
     payload: PayrollRunInputIn,
     statutory_row: PayrollStatutoryConfig,
+    db: Session = None,
+    payroll_month: date = None,
 ) -> dict[str, object]:
     values = _payroll_inputs_from_profile(profile, payload)
+
+    salary_advance_deduction = Decimal("0.00")
+    salary_advance_note = ""
+    if db and payroll_month:
+        advances = db.query(SalaryAdvanceRequest).filter(
+            SalaryAdvanceRequest.user_id == employee.id,
+            SalaryAdvanceRequest.status == "disbursed",
+        ).all()
+        for adv in advances:
+            if adv.deduction_start_date and adv.repayment_months and adv.repayment_months > 0:
+                monthly_deduction = adv.amount / adv.repayment_months
+                months_passed = (payroll_month.year - adv.deduction_start_date.year) * 12 + (payroll_month.month - adv.deduction_start_date.month)
+                if months_passed > 0 and months_passed <= adv.repayment_months:
+                    salary_advance_deduction += monthly_deduction
+                    salary_advance_note += f"Salary Advance #{adv.id}: KES {monthly_deduction.quantize(Decimal('0.01'))}/month; "
+    salary_advance_deduction = salary_advance_deduction.quantize(Decimal("0.01"))
     statutory = _payroll_statutory_payload_from_row(statutory_row)
     nssf_lower_earnings_limit = _dec(statutory["nssf_lower_earnings_limit"])
     nssf_upper_earnings_limit = _dec(statutory["nssf_upper_earnings_limit"])
@@ -1031,7 +1049,7 @@ def _calculate_payroll_breakdown(
     insurance_relief = min((values["insurance_relief_base"] * insurance_relief_rate).quantize(Decimal("0.01")), insurance_relief_cap_monthly)
     paye_after_reliefs = max(paye_before_reliefs - personal_relief - insurance_relief, Decimal("0.00")).quantize(Decimal("0.01"))
 
-    other_deductions = values["other_deductions"].quantize(Decimal("0.01"))
+    other_deductions = (values["other_deductions"] + salary_advance_deduction).quantize(Decimal("0.01"))
     net_pay = (gross_cash_pay - nssf_employee - shif_employee - ahl_employee - pension_employee - paye_after_reliefs - other_deductions).quantize(Decimal("0.01"))
     employer_total_cost = (gross_cash_pay + nssf_employer + ahl_employer + pension_employer + nita_levy_monthly).quantize(Decimal("0.01"))
 
@@ -1074,6 +1092,7 @@ def _calculate_payroll_breakdown(
             "Gross salary for AHL and SHIF uses regular cash earnings less tax-exempt allowances and excludes non-cash benefits.",
             "Non-cash benefits are included in taxable pay only when the monthly benefit exceeds KES 5,000.",
             *[str(note) for note in statutory["source_notes"]],
+            *(salary_advance_note.split("; ") if salary_advance_note else []),
         ],
     }
     return {
@@ -3919,7 +3938,7 @@ def preview_payroll_run(
     db.commit()
     db.refresh(profile)
     statutory_row = _get_effective_payroll_statutory_config(db, payload.payroll_month)
-    computed = _calculate_payroll_breakdown(employee, profile, payload, statutory_row)
+    computed = _calculate_payroll_breakdown(employee, profile, payload, statutory_row, db, payload.payroll_month)
     return PayrollRunOut(
         id=0,
         employee_id=employee.id,
@@ -3966,16 +3985,20 @@ def save_payroll_run(
     profile = _get_or_create_payroll_profile(db, employee.id)
     _ = profile.user
     statutory_row = _get_effective_payroll_statutory_config(db, payload.payroll_month)
-    computed = _calculate_payroll_breakdown(employee, profile, payload, statutory_row)
+    computed = _calculate_payroll_breakdown(employee, profile, payload, statutory_row, db, payload.payroll_month)
     payroll_month = computed["payroll_month"]
-    row = (
+    existing_row = (
         db.query(PayrollRun)
         .filter(PayrollRun.employee_id == employee.id, PayrollRun.payroll_month == payroll_month)
         .first()
     )
-    if not row:
+    if existing_row and existing_row.status in {"approved", "paid"}:
+        raise HTTPException(status_code=400, detail=f"Payroll for {payroll_month} already exists with status '{existing_row.status}'. Only draft runs can be overwritten.")
+    if not existing_row:
         row = PayrollRun(employee_id=employee.id, payroll_month=payroll_month, created_by_id=current.id, updated_by_id=current.id)
         db.add(row)
+    else:
+        row = existing_row
 
     new_status = _normalize_payroll_status(payload.status)
     if new_status == "paid" and not row.employee_confirmed:
