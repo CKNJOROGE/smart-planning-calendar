@@ -163,7 +163,7 @@ function statutoryPayloadFromState(state) {
   };
 }
 
-function runPayloadFromState(state, employeeId) {
+function runPayloadFromState(state, employeeId, statusOverride = null) {
   return {
     employee_id: Number(employeeId),
     payroll_month: state.payroll_month,
@@ -185,7 +185,7 @@ function runPayloadFromState(state, employeeId) {
     nssf_pensionable_pay: toNullableNumber(state.nssf_pensionable_pay),
     disability_exemption_amount: toNullableNumber(state.disability_exemption_amount),
     notes: state.notes || null,
-    status: state.status || "draft",
+    status: statusOverride || state.status || "draft",
   };
 }
 
@@ -452,16 +452,54 @@ export default function PayrollPage() {
     }
   }
 
-  async function handleSaveRun() {
+  async function handleSaveDraft() {
     if (!selectedEmployeeId) return;
     setSavingRun(true);
     setErr("");
     try {
-      const result = await savePayrollRun(runPayloadFromState(runForm, selectedEmployeeId));
+      const result = await savePayrollRun(runPayloadFromState(runForm, selectedEmployeeId, "draft"));
       setPreview(result);
       const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId), payrollMonth: runForm.payroll_month });
       setRuns(updatedRuns || []);
-      showToast("Payroll run saved", "success");
+      showToast("Payroll saved as draft", "success");
+    } catch (e) {
+      const text = String(e.message || e);
+      setErr(text);
+      showToast(text, "error");
+    } finally {
+      setSavingRun(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!selectedEmployeeId) return;
+    setSavingRun(true);
+    setErr("");
+    try {
+      const result = await savePayrollRun(runPayloadFromState(runForm, selectedEmployeeId, "approved"));
+      setPreview(result);
+      const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId), payrollMonth: runForm.payroll_month });
+      setRuns(updatedRuns || []);
+      showToast("Payroll submitted - employee can now confirm", "success");
+    } catch (e) {
+      const text = String(e.message || e);
+      setErr(text);
+      showToast(text, "error");
+    } finally {
+      setSavingRun(false);
+    }
+  }
+
+  async function handleMarkPaid() {
+    if (!selectedEmployeeId) return;
+    setSavingRun(true);
+    setErr("");
+    try {
+      const result = await savePayrollRun(runPayloadFromState(runForm, selectedEmployeeId, "paid"));
+      setPreview(result);
+      const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId), payrollMonth: runForm.payroll_month });
+      setRuns(updatedRuns || []);
+      showToast("Payroll marked as paid", "success");
     } catch (e) {
       const text = String(e.message || e);
       setErr(text);
@@ -812,8 +850,6 @@ export default function PayrollPage() {
                 </div>
                 <div className="payroll-form-grid">
                   <Field label="Payroll Month" type="date" value={runForm.payroll_month} onChange={(v) => setRunForm((p) => ({ ...p, payroll_month: v }))} />
-                  <Field label="Pay Date" type="date" value={runForm.pay_date} onChange={(v) => setRunForm((p) => ({ ...p, pay_date: v }))} />
-                  <SelectField label="Save Status" value={runForm.status} onChange={(v) => setRunForm((p) => ({ ...p, status: v }))} options={[["draft", "draft"], ["approved", "approved"], ["paid", "paid"]]} />
                   <NumberField label="Basic Salary Override" value={runForm.basic_salary} onChange={(v) => setRunForm((p) => ({ ...p, basic_salary: v }))} />
                   <NumberField label="House Allowance Override" value={runForm.house_allowance} onChange={(v) => setRunForm((p) => ({ ...p, house_allowance: v }))} />
                   <NumberField label="Transport Allowance Override" value={runForm.transport_allowance} onChange={(v) => setRunForm((p) => ({ ...p, transport_allowance: v }))} />
@@ -837,10 +873,11 @@ export default function PayrollPage() {
                   <textarea value={runForm.notes} onChange={(e) => setRunForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Optional month-specific notes" />
                 </div>
 
-                <div className="payroll-actions" style={{ marginTop: 12 }}>
-                  <button className="btn" type="button" onClick={() => setRunForm(emptyRunState())}>Reset Run Form</button>
+                <div className="payroll-actions" style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button className="btn" type="button" disabled={savingRun} onClick={handlePreview}>{savingRun ? "Working..." : "Preview Payroll"}</button>
-                  <button className="btn btn-primary" type="button" disabled={savingRun} onClick={handleSaveRun}>{savingRun ? "Saving..." : "Save Payroll Run"}</button>
+                  <button className="btn" type="button" disabled={savingRun} onClick={() => setRunForm(emptyRunState())}>Reset</button>
+                  <button className="btn" type="button" disabled={savingRun} onClick={handleSaveDraft}>{savingRun ? "Saving..." : "Save Draft"}</button>
+                  <button className="btn btn-primary" type="button" disabled={savingRun} onClick={handleSubmit}>{savingRun ? "Saving..." : "Submit"}</button>
                 </div>
               </div>
 
@@ -919,9 +956,9 @@ export default function PayrollPage() {
                       <tr>
                         <th style={{ textAlign: "left", padding: 10 }}>Month</th>
                         <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                        <th style={{ textAlign: "left", padding: 10 }}>Employee Confirmed</th>
                         <th style={{ textAlign: "left", padding: 10 }}>Net Pay</th>
-                        <th style={{ textAlign: "left", padding: 10 }}>Employer Cost</th>
-                        <th style={{ textAlign: "left", padding: 10 }}>Updated</th>
+                        <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -933,9 +970,36 @@ export default function PayrollPage() {
                               {row.status}
                             </span>
                           </td>
+                          <td style={{ padding: 10 }}>
+                            {row.employee_confirmed ? (
+                              <span className="dashboard-status-badge dashboard-status-ok">Confirmed</span>
+                            ) : (
+                              <span className="dashboard-status-badge dashboard-status-pending">Pending</span>
+                            )}
+                          </td>
                           <td style={{ padding: 10 }}>{fmtCurrency(row.net_pay)}</td>
-                          <td style={{ padding: 10 }}>{fmtCurrency(row.employer_total_cost)}</td>
-                          <td style={{ padding: 10 }}>{row.updated_at ? new Date(row.updated_at).toLocaleString() : "-"}</td>
+                          <td style={{ padding: 10 }}>
+                            {row.status !== "paid" && (
+                              <button
+                                className="btn btn-primary"
+                                type="button"
+                                disabled={!row.employee_confirmed}
+                                onClick={async () => {
+                                  try {
+                                    await savePayrollRun({ ...row, status: "paid" });
+                                    const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId) });
+                                    setRuns(updatedRuns || []);
+                                    showToast("Payroll marked as paid", "success");
+                                  } catch (e) {
+                                    showToast(String(e.message || e), "error");
+                                  }
+                                }}
+                                title={!row.employee_confirmed ? "Employee must confirm before marking paid" : ""}
+                              >
+                                Mark Paid
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                       {!filteredRuns.length && <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No payroll runs found for this filter.</td></tr>}
