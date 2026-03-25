@@ -4850,7 +4850,7 @@ def get_dashboard_overview(
             prev_period_start = today.replace(day=15)
             prev_period_end = today.replace(day=28) if today.month == 2 else today.replace(day=30)
         
-        if prev_period_start and prev_period_end:
+        if prev_period_start and prev_period_end and prev_period_end < today:
             already_submitted_prev = db.query(CashReimbursementRequest.id).filter(
                 CashReimbursementRequest.user_id == current.id,
                 CashReimbursementRequest.period_start == prev_period_start,
