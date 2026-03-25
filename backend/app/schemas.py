@@ -47,6 +47,10 @@ class UserOut(BaseModel):
     supervisor_name: Optional[str] = None
     avatar_url: Optional[str] = None
     employee_no: Optional[str] = None
+    id_number: Optional[str] = None
+    nssf_number: Optional[str] = None
+    nhif_number: Optional[str] = None
+    kra_pin: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
 

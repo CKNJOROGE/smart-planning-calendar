@@ -85,17 +85,29 @@ async function generatePayslipPDF(run, user, doc) {
   doc.text("Employee No.:", 20, 68);
   doc.text(user?.employee_no || "-", 70, 68);
   
-  doc.text("Pay Date:", 20, 76);
-  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 76);
+  doc.text("KRA PIN No.:", 20, 76);
+  doc.text(user?.kra_pin || "-", 70, 76);
   
-  doc.text("Payroll Status:", 20, 84);
-  doc.text(payrollStatusLabel(run.status, run.employee_confirmed), 70, 84);
+  doc.text("ID No.:", 20, 84);
+  doc.text(user?.id_number || "-", 70, 84);
   
-  doc.line(20, 98, 190, 98);
+  doc.text("NSSF No.:", 20, 92);
+  doc.text(user?.nssf_number || "-", 70, 92);
+  
+  doc.text("NHIF No.:", 20, 100);
+  doc.text(user?.nhif_number || "-", 70, 100);
+  
+  doc.text("Pay Date:", 20, 116);
+  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 116);
+  
+  doc.text("Payroll Status:", 20, 124);
+  doc.text(payrollStatusLabel(run.status, run.employee_confirmed), 70, 124);
+  
+  doc.line(20, 138, 190, 138);
   
   doc.setFontSize(12);
-  doc.text("EARNINGS", 20, 108);
-  doc.line(20, 103, 190, 103);
+  doc.text("EARNINGS", 20, 155);
+  doc.line(20, 158, 190, 158);
   
   const earningsData = [
     ["Basic Salary", fmtCurrency(run.basic_salary)],
@@ -106,7 +118,7 @@ async function generatePayslipPDF(run, user, doc) {
   ];
   
   doc.autoTable({
-    startY: 115,
+    startY: 162,
     head: [["Description", "Amount"]],
     body: earningsData,
     theme: "plain",
@@ -262,17 +274,7 @@ export default function EmployeePayrollPage() {
               <tr>
                 <th style={{ width: 40 }}></th>
                 <th>Month</th>
-                <th style={{ textAlign: "right" }}>Basic Salary</th>
-                <th style={{ textAlign: "right" }}>Housing</th>
-                <th style={{ textAlign: "right" }}>Transport</th>
-                <th style={{ textAlign: "right" }}>Other Allow.</th>
                 <th style={{ textAlign: "right" }}>Gross Cash</th>
-                <th style={{ textAlign: "right" }}>NSSF</th>
-                <th style={{ textAlign: "right" }}>SHIF</th>
-                <th style={{ textAlign: "right" }}>PAYE</th>
-                <th style={{ textAlign: "right" }}>AHL</th>
-                <th style={{ textAlign: "right" }}>Pension</th>
-                <th style={{ textAlign: "right" }}>Adv. Ded.</th>
                 <th style={{ textAlign: "right" }}>Total Ded.</th>
                 <th style={{ textAlign: "right" }}>Net Pay</th>
                 <th>Status</th>
@@ -296,17 +298,7 @@ export default function EmployeePayrollPage() {
                         ? new Date(run.payroll_month + "T00:00:00").toLocaleDateString("en-KE", { year: "numeric", month: "short" })
                         : "-"}
                     </td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.basic_salary)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.housing_allowance)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.transport_allowance)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.other_allowance)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtCurrency(run.gross_cash_pay)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.nssf_employee)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.shif_employee)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.paye_after_reliefs)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.ahl_employee)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.pension_employee)}</td>
-                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.salary_advance_deduction || 0)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtCurrency(run.total_deductions)}</td>
                     <td style={{ textAlign: "right", fontWeight: 700, fontSize: 16, color: "#16a34a" }}>{fmtCurrency(run.net_pay)}</td>
                     <td>
@@ -317,7 +309,7 @@ export default function EmployeePayrollPage() {
                   </tr>
                   {expandedRows[run.id] && (
                     <tr>
-                      <td colSpan={16} style={{ background: "#f9fafb", padding: 16 }}>
+                      <td colSpan={6} style={{ background: "#f9fafb", padding: 16 }}>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
                           <div>
                             <div style={{ fontWeight: 900, marginBottom: 8 }}>EARNINGS</div>
