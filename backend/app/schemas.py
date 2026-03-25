@@ -649,6 +649,7 @@ class SalaryAdvanceCreateIn(BaseModel):
 class SalaryAdvanceDecisionIn(BaseModel):
     approve: bool
     comment: Optional[str] = None
+    approved_amount: Optional[float] = None
 
 
 class SalaryAdvanceDisburseIn(BaseModel):
@@ -659,6 +660,7 @@ class SalaryAdvanceRequestOut(BaseModel):
     id: int
     user_id: int
     amount: float
+    approved_amount: Optional[float] = None
     reason: str
     details: Optional[str] = None
     repayment_months: int

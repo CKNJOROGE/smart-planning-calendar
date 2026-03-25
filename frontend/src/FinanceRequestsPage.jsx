@@ -944,14 +944,28 @@ export default function FinanceRequestsPage() {
     }
   }
 
-  async function takeSalaryAdvanceDecision(requestId, approve) {
+  async function takeSalaryAdvanceDecision(requestId, approve, requestedAmount) {
+    let approvedAmount = null;
     const comment = approve ? "" : (prompt("Reason for rejection (required):") || "").trim();
     if (!approve && !comment) {
       setErr("Rejection comment is required.");
       return;
     }
+    if (approve) {
+      const input = prompt(`Enter approved amount (requested: ${requestedAmount}):`, requestedAmount);
+      if (input === null) return;
+      approvedAmount = parseFloat(input);
+      if (isNaN(approvedAmount) || approvedAmount < 0) {
+        setErr("Please enter a valid amount.");
+        return;
+      }
+      if (approvedAmount > requestedAmount) {
+        setErr("Approved amount cannot exceed requested amount.");
+        return;
+      }
+    }
     try {
-      await decideSalaryAdvanceRequest(requestId, approve, comment);
+      await decideSalaryAdvanceRequest(requestId, approve, comment, approvedAmount);
       await loadData();
       showToast(approve ? "Salary advance approved" : "Salary advance rejected", "success");
     } catch (e) {
@@ -2009,8 +2023,8 @@ export default function FinanceRequestsPage() {
                         <td style={{ padding: 10 }}>
                           {canCurrentRoleDecideSalaryAdvance(r) ? (
                             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <button className="btn btn-primary" onClick={() => takeSalaryAdvanceDecision(r.id, true)}>Approve</button>
-                              <button className="btn btn-danger" onClick={() => takeSalaryAdvanceDecision(r.id, false)}>Reject</button>
+                              <button className="btn btn-primary" onClick={() => takeSalaryAdvanceDecision(r.id, true, r.amount)}>Approve</button>
+                              <button className="btn btn-danger" onClick={() => takeSalaryAdvanceDecision(r.id, false, r.amount)}>Reject</button>
                               {canDownloadRecords && (
                                 <button className="btn" type="button" onClick={() => downloadRecord("salary_advance", r)}>Download Record</button>
                               )}

@@ -720,10 +720,10 @@ export function listApprovedSalaryAdvanceRequests() {
   return request("/finance/salary-advances/approved");
 }
 
-export function decideSalaryAdvanceRequest(requestId, approve, comment) {
+export function decideSalaryAdvanceRequest(requestId, approve, comment, approvedAmount = null) {
   return request(`/finance/salary-advances/${requestId}/decision`, {
     method: "POST",
-    body: { approve: !!approve, comment: comment || null },
+    body: { approve: !!approve, comment: comment || null, approved_amount: approvedAmount },
   });
 }
 

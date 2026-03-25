@@ -344,6 +344,7 @@ class SalaryAdvanceRequest(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     amount = Column(Numeric(12, 2), nullable=False, default=0)
+    approved_amount = Column(Numeric(12, 2), nullable=True)
     reason = Column(String(255), nullable=False)
     details = Column(Text, nullable=True)
     repayment_months = Column(Integer, nullable=False, default=1)

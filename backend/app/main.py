@@ -3633,8 +3633,13 @@ def decide_salary_advance_request(
     now = datetime.utcnow()
     decision = "approved" if payload.approve else "rejected"
     comment = (payload.comment or "").strip()
+    approved_amount = payload.approved_amount
+    if approved_amount is not None and approved_amount < 0:
+        raise HTTPException(status_code=400, detail="approved_amount cannot be negative")
     if decision == "rejected" and not comment:
         raise HTTPException(status_code=400, detail="comment is required when rejecting")
+    if decision == "approved" and approved_amount is not None and approved_amount > float(req.amount):
+        raise HTTPException(status_code=400, detail="approved_amount cannot exceed requested amount")
 
     if role == "finance":
         if req.status not in {"pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"}:
@@ -3645,6 +3650,8 @@ def decide_salary_advance_request(
         req.finance_comment = comment or None
         req.finance_decided_at = now
         req.finance_decided_by_id = current.id
+        if approved_amount is not None:
+            req.approved_amount = Decimal(str(approved_amount))
         if decision == "rejected":
             req.status = "rejected"
         elif req.ceo_decision == "approved":
@@ -3660,6 +3667,8 @@ def decide_salary_advance_request(
         req.ceo_comment = comment or None
         req.ceo_decided_at = now
         req.ceo_decided_by_id = current.id
+        if approved_amount is not None:
+            req.approved_amount = Decimal(str(approved_amount))
         if decision == "rejected":
             req.status = "rejected"
         else:
