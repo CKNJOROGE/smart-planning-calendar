@@ -3742,7 +3742,7 @@ def set_salary_advance_deduction_start(
     req = _load_salary_advance_request(db, request_id)
     if not req:
         raise HTTPException(status_code=404, detail="Salary advance request not found")
-    if req.status not in {"pending_ceo_approval", "pending_disbursement"}:
+    if req.status not in {"pending_ceo_approval", "pending_disbursement", "disbursed"}:
         raise HTTPException(status_code=400, detail="Deduction start date can only be set after finance approval")
 
     req.deduction_start_date = deduction_start_date

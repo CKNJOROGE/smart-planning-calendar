@@ -331,7 +331,7 @@ export default function FinanceRequestsPage() {
   }, [current?.role]);
   const canDownloadRecords = useMemo(() => {
     const role = (current?.role || "").toLowerCase();
-    return role === "admin" || role === "ceo";
+    return role === "admin" || role === "ceo" || role === "finance";
   }, [current?.role]);
   const selectedReimbursementMeta = useMemo(
     () => (reimbursementPeriods || []).find((p) => reimbursementPeriodKey(p.period_start, p.period_end) === selectedReimbursementPeriod) || null,
@@ -2068,7 +2068,12 @@ export default function FinanceRequestsPage() {
                                 </button>
                               </>
                             ) : (r.status || "").toLowerCase() === "disbursed" ? (
-                              <span className="muted">Disbursed on {r.disbursed_at ? new Date(r.disbursed_at).toLocaleString() : "-"}</span>
+                              <>
+                                <button className="btn" type="button" onClick={() => setDeductionStartDate(r.id)}>
+                                  {r.deduction_start_date ? "Update Deduction Start" : "Set Deduction Start"}
+                                </button>
+                                <span className="muted">Disbursed on {r.disbursed_at ? new Date(r.disbursed_at).toLocaleString() : "-"}</span>
+                              </>
                             ) : (
                               <span className="muted">No disbursement action</span>
                             )}
