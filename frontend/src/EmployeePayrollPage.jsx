@@ -31,28 +31,37 @@ function statusPillClass(status, confirmed) {
 
 const COMPANY_NAME = "SUSTENIR HUMAN RESOURCE CONSULTANCY LTD";
 
+async function loadLogoAsBase64() {
+  try {
+    const response = await fetch("/logo.png");
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
 async function generatePayslipPDF(run, user, doc) {
   const monthYear = run.payroll_month 
     ? new Date(run.payroll_month + "T00:00:00").toLocaleDateString("en-KE", { year: "numeric", month: "long" })
     : "-";
   const employeeName = user?.name || "Employee";
   
-  try {
-    const logoImg = new Image();
-    logoImg.src = "/logo.png";
-    await new Promise((resolve, reject) => {
-      logoImg.onload = resolve;
-      logoImg.onerror = reject;
-      setTimeout(reject, 1000);
-    });
-    const imgProps = doc.getImageProperties("/logo.png");
+  const logoBase64 = await loadLogoAsBase64();
+  if (logoBase64) {
+    const imgProps = doc.getImageProperties(logoBase64);
     const imgWidth = 30;
     const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-    doc.addImage("/logo.png", "PNG", 20, 10, imgWidth, imgHeight);
+    doc.addImage(logoBase64, "PNG", 20, 10, imgWidth, imgHeight);
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text(COMPANY_NAME, 55, 18);
-  } catch (e) {
+  } else {
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
     doc.text(COMPANY_NAME, 105, 18, { align: "center" });
