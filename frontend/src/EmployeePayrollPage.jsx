@@ -82,16 +82,19 @@ async function generatePayslipPDF(run, user, doc) {
   doc.text("Employee Name:", 20, 60);
   doc.text(employeeName, 70, 60);
   
-  doc.text("Pay Date:", 20, 68);
-  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 68);
+  doc.text("Employee No.:", 20, 68);
+  doc.text(user?.employee_no || "-", 70, 68);
   
-  doc.text("Payroll Status:", 20, 76);
-  doc.text(payrollStatusLabel(run.status, run.employee_confirmed), 70, 76);
+  doc.text("Pay Date:", 20, 76);
+  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 76);
   
-  doc.line(20, 90, 190, 90);
+  doc.text("Payroll Status:", 20, 84);
+  doc.text(payrollStatusLabel(run.status, run.employee_confirmed), 70, 84);
+  
+  doc.line(20, 98, 190, 98);
   
   doc.setFontSize(12);
-  doc.text("EARNINGS", 20, 100);
+  doc.text("EARNINGS", 20, 108);
   doc.line(20, 103, 190, 103);
   
   const earningsData = [
@@ -103,7 +106,7 @@ async function generatePayslipPDF(run, user, doc) {
   ];
   
   doc.autoTable({
-    startY: 107,
+    startY: 115,
     head: [["Description", "Amount"]],
     body: earningsData,
     theme: "plain",

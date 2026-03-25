@@ -46,6 +46,7 @@ class UserOut(BaseModel):
     supervisor_id: Optional[int] = None
     supervisor_name: Optional[str] = None
     avatar_url: Optional[str] = None
+    employee_no: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
 
@@ -93,6 +94,7 @@ class UserProfileUpdate(BaseModel):
     name: Optional[str] = None
     avatar_url: Optional[str] = None
     phone: Optional[str] = None
+    employee_no: Optional[str] = None
     department: Optional[str] = None
     designation: Optional[str] = None
     gender: Optional[str] = None

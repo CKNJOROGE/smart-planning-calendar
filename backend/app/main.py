@@ -243,6 +243,10 @@ def _run_startup_migrations():
             conn.execute(text("ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS employee_confirmed_at TIMESTAMP"))
         except Exception:
             pass
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_no VARCHAR(50)"))
+        except Exception:
+            pass
 
 
 @app.get("/healthz")

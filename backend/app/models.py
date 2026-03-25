@@ -18,6 +18,7 @@ class User(Base):
 
     # profile fields
     phone = Column(String(50), nullable=True)
+    employee_no = Column(String(50), nullable=True)
     department = Column(String(120), nullable=True)
     designation = Column(String(120), nullable=True)
     gender = Column(String(30), nullable=True)

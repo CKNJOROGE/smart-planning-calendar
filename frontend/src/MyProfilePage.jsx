@@ -171,6 +171,11 @@ export default function MyProfilePage() {
           <div className="section-title">Work Info</div>
           <div className="profile-grid">
             <Field
+              label="Employee No."
+              value={profile.employee_no || ""}
+              onChange={(v) => setProfile((p) => ({ ...p, employee_no: v }))}
+            />
+            <Field
               label="Phone"
               value={profile.phone || ""}
               onChange={(v) => setProfile((p) => ({ ...p, phone: v }))}
