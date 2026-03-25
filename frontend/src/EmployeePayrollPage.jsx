@@ -73,14 +73,11 @@ async function generatePayslipPDF(run, user, doc) {
   doc.text("Employee Name:", 20, 60);
   doc.text(employeeName, 70, 60);
   
-  doc.text("Employee ID:", 20, 68);
-  doc.text(String(user?.id || "-"), 70, 68);
+  doc.text("Pay Date:", 20, 68);
+  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 68);
   
-  doc.text("Pay Date:", 20, 76);
-  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 76);
-  
-  doc.text("Payroll Status:", 20, 84);
-  doc.text(payrollStatusLabel(run.status, run.employee_confirmed), 70, 84);
+  doc.text("Payroll Status:", 20, 76);
+  doc.text(payrollStatusLabel(run.status, run.employee_confirmed), 70, 76);
   
   doc.line(20, 90, 190, 90);
   
