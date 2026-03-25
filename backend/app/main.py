@@ -225,6 +225,24 @@ def startup():
     _assert_startup_settings()
     if settings.ENABLE_AUTO_SCHEMA_CREATE:
         Base.metadata.create_all(bind=engine)
+    _run_startup_migrations()
+
+
+def _run_startup_migrations():
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        try:
+            conn.execute(text("ALTER TABLE salary_advance_requests ADD COLUMN IF NOT EXISTS approved_amount NUMERIC(12, 2)"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS employee_confirmed BOOLEAN DEFAULT FALSE"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS employee_confirmed_at TIMESTAMP"))
+        except Exception:
+            pass
 
 
 @app.get("/healthz")
