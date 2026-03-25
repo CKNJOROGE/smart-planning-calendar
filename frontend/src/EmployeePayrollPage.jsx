@@ -128,6 +128,7 @@ export default function EmployeePayrollPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [filter, setFilter] = useState("");
+  const [expandedRows, setExpandedRows] = useState({});
 
   useEffect(() => {
     me().then(setCurrent).catch(() => setCurrent(null));
@@ -177,6 +178,10 @@ export default function EmployeePayrollPage() {
     doc.save(fileName);
   }
 
+  function toggleRow(runId) {
+    setExpandedRows(prev => ({ ...prev, [runId]: !prev[runId] }));
+  }
+
   if (busy) {
     return (
       <div className="page-wrap">
@@ -221,68 +226,109 @@ export default function EmployeePayrollPage() {
           <table className="data-table" style={{ width: "100%" }}>
             <thead>
               <tr>
+                <th style={{ width: 40 }}></th>
                 <th>Month</th>
-                <th>Pay Date</th>
-                <th style={{ textAlign: "right" }}>Gross Pay</th>
-                <th style={{ textAlign: "right" }}>Deductions</th>
+                <th style={{ textAlign: "right" }}>Basic Salary</th>
+                <th style={{ textAlign: "right" }}>Housing</th>
+                <th style={{ textAlign: "right" }}>Transport</th>
+                <th style={{ textAlign: "right" }}>Other Allow.</th>
+                <th style={{ textAlign: "right" }}>Gross Cash</th>
+                <th style={{ textAlign: "right" }}>NSSF</th>
+                <th style={{ textAlign: "right" }}>SHIF</th>
+                <th style={{ textAlign: "right" }}>PAYE</th>
+                <th style={{ textAlign: "right" }}>AHL</th>
+                <th style={{ textAlign: "right" }}>Pension</th>
+                <th style={{ textAlign: "right" }}>Adv. Ded.</th>
+                <th style={{ textAlign: "right" }}>Total Ded.</th>
                 <th style={{ textAlign: "right" }}>Net Pay</th>
                 <th>Status</th>
-                <th style={{ width: 180 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredRuns.map((run) => (
-                <tr key={run.id}>
-                  <td>
-                    {run.payroll_month 
-                      ? new Date(run.payroll_month + "T00:00:00").toLocaleDateString("en-KE", { year: "numeric", month: "long" })
-                      : "-"}
-                  </td>
-                  <td>
-                    {run.pay_date 
-                      ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE")
-                      : "Not set"}
-                  </td>
-                  <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtCurrency(run.gross_cash_pay)}</td>
-                  <td style={{ textAlign: "right" }}>{fmtCurrency(run.total_deductions)}</td>
-                  <td style={{ textAlign: "right", fontWeight: 700, fontSize: 15 }}>{fmtCurrency(run.net_pay)}</td>
-                  <td>
-                    <span className={`dashboard-status-badge ${statusPillClass(run.status, run.employee_confirmed)}`}>
-                      {payrollStatusLabel(run.status, run.employee_confirmed)}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <React.Fragment key={run.id}>
+                  <tr>
+                    <td>
                       <button
-                        className="btn"
                         type="button"
-                        onClick={() => handleDownloadPDF(run)}
-                        title="Download Payslip PDF"
+                        onClick={() => toggleRow(run.id)}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18 }}
                       >
-                        Download PDF
+                        {expandedRows[run.id] ? "▼" : "▶"}
                       </button>
-                      {run.status !== "paid" && (
-                        run.employee_confirmed ? (
-                          <button
-                            className="btn"
-                            type="button"
-                            onClick={() => handleConfirm(run.id, true)}
-                          >
-                            Undo
-                          </button>
-                        ) : (
-                          <button
-                            className="btn btn-primary"
-                            type="button"
-                            onClick={() => handleConfirm(run.id, false)}
-                          >
-                            Confirm
-                          </button>
-                        )
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td>
+                      {run.payroll_month 
+                        ? new Date(run.payroll_month + "T00:00:00").toLocaleDateString("en-KE", { year: "numeric", month: "short" })
+                        : "-"}
+                    </td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.basic_salary)}</td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.housing_allowance)}</td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.transport_allowance)}</td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.other_allowance)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtCurrency(run.gross_cash_pay)}</td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.nssf_employee)}</td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.shif_employee)}</td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.paye_after_reliefs)}</td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.ahl_employee)}</td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.pension_employee)}</td>
+                    <td style={{ textAlign: "right" }}>{fmtCurrency(run.salary_advance_deduction || 0)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtCurrency(run.total_deductions)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 700, fontSize: 16, color: "#16a34a" }}>{fmtCurrency(run.net_pay)}</td>
+                    <td>
+                      <span className={`dashboard-status-badge ${statusPillClass(run.status, run.employee_confirmed)}`}>
+                        {payrollStatusLabel(run.status, run.employee_confirmed)}
+                      </span>
+                    </td>
+                  </tr>
+                  {expandedRows[run.id] && (
+                    <tr>
+                      <td colSpan={16} style={{ background: "#f9fafb", padding: 16 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+                          <div>
+                            <div style={{ fontWeight: 900, marginBottom: 8 }}>EARNINGS</div>
+                            <table style={{ width: "100%", fontSize: 13 }}>
+                              <tbody>
+                                <tr><td>Basic Salary</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.basic_salary)}</td></tr>
+                                <tr><td>Housing Allowance</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.housing_allowance)}</td></tr>
+                                <tr><td>Transport Allowance</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.transport_allowance)}</td></tr>
+                                <tr><td>Other Allowance</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.other_allowance)}</td></tr>
+                                <tr style={{ fontWeight: 700, borderTop: "1px solid #ccc" }}><td>Gross Cash Pay</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.gross_cash_pay)}</td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 900, marginBottom: 8 }}>DEDUCTIONS</div>
+                            <table style={{ width: "100%", fontSize: 13 }}>
+                              <tbody>
+                                <tr><td>NSSF (Employee)</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.nssf_employee)}</td></tr>
+                                <tr><td>SHIF</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.shif_employee)}</td></tr>
+                                <tr><td>PAYE</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.paye_after_reliefs)}</td></tr>
+                                <tr><td>AHL</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.ahl_employee)}</td></tr>
+                                <tr><td>Pension</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.pension_employee)}</td></tr>
+                                <tr><td>Salary Advance Deduction</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.salary_advance_deduction || 0)}</td></tr>
+                                <tr style={{ fontWeight: 700, borderTop: "1px solid #ccc" }}><td>Total Deductions</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.total_deductions)}</td></tr>
+                              </tbody>
+                            </table>
+                            <div style={{ marginTop: 12, padding: 12, background: "#dcfce7", borderRadius: 8, fontWeight: 700, fontSize: 16 }}>
+                              NET PAY: {fmtCurrency(run.net_pay)}
+                            </div>
+                            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                              <button className="btn" type="button" onClick={() => handleDownloadPDF(run)}>Download PDF</button>
+                              {run.status !== "paid" && (
+                                run.employee_confirmed ? (
+                                  <button className="btn" type="button" onClick={() => handleConfirm(run.id, true)}>Undo Confirmation</button>
+                                ) : (
+                                  <button className="btn btn-primary" type="button" onClick={() => handleConfirm(run.id, false)}>Confirm Payroll</button>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
