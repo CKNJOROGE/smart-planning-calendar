@@ -1144,6 +1144,26 @@ def _calculate_payroll_breakdown(
 def _serialize_payroll_run(db: Session, row: PayrollRun) -> PayrollRunOut:
     _attach_user_supervisor_metadata(db, row.employee)
     breakdown = _loads_json_object(row.breakdown_json)
+    inputs = breakdown.get("inputs", {})
+    total_deductions = (
+        _money_to_float(_dec(row.nssf_employee)) +
+        _money_to_float(_dec(row.shif_employee)) +
+        _money_to_float(_dec(row.ahl_employee)) +
+        _money_to_float(_dec(row.pension_employee)) +
+        _money_to_float(_dec(row.paye_after_reliefs)) +
+        _money_to_float(_dec(row.other_deductions))
+    )
+    salary_advance_deduction = 0
+    notes = breakdown.get("notes", [])
+    for note in notes:
+        if "Salary Advance" in note and "/month" in note:
+            try:
+                salary_advance_deduction = _money_to_float(_dec(row.other_deductions))
+                other_base = inputs.get("other_deductions", 0) or 0
+                salary_advance_deduction = max(0, salary_advance_deduction - float(other_base))
+            except Exception:
+                pass
+            break
     return PayrollRunOut(
         id=row.id,
         employee_id=row.employee_id,
@@ -1176,6 +1196,12 @@ def _serialize_payroll_run(db: Session, row: PayrollRun) -> PayrollRunOut:
         notes=row.notes,
         updated_at=row.updated_at,
         employee=row.employee,
+        basic_salary=inputs.get("basic_salary", 0) or 0,
+        housing_allowance=inputs.get("house_allowance", 0) or 0,
+        transport_allowance=inputs.get("transport_allowance", 0) or 0,
+        other_allowance=inputs.get("other_taxable_allowance", 0) or 0,
+        total_deductions=total_deductions,
+        salary_advance_deduction=salary_advance_deduction,
     )
 
 

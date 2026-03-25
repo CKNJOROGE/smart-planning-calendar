@@ -886,6 +886,12 @@ class PayrollRunOut(BaseModel):
     notes: Optional[str] = None
     updated_at: datetime
     employee: UserOut
+    basic_salary: float = 0
+    housing_allowance: float = 0
+    transport_allowance: float = 0
+    other_allowance: float = 0
+    total_deductions: float = 0
+    salary_advance_deduction: float = 0
 
 
 class PayrollSaveIn(PayrollRunPreviewIn):
