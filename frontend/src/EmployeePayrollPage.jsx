@@ -97,17 +97,14 @@ async function generatePayslipPDF(run, user, doc) {
   doc.text("NHIF No.:", 20, 100);
   doc.text(user?.nhif_number || "-", 70, 100);
   
-  doc.text("Pay Date:", 20, 116);
-  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 116);
+  doc.text("Pay Date:", 20, 108);
+  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 108);
   
-  doc.text("Payroll Status:", 20, 124);
-  doc.text(payrollStatusLabel(run.status, run.employee_confirmed), 70, 124);
+  doc.line(20, 115, 190, 115);
   
-  doc.line(20, 138, 190, 138);
-  
-  doc.setFontSize(12);
-  doc.text("EARNINGS", 20, 155);
-  doc.line(20, 158, 190, 158);
+  doc.setFontSize(11);
+  doc.text("EARNINGS", 20, 122);
+  doc.line(20, 125, 190, 125);
   
   const earningsData = [
     ["Basic Salary", fmtCurrency(run.basic_salary)],
@@ -118,18 +115,18 @@ async function generatePayslipPDF(run, user, doc) {
   ];
   
   doc.autoTable({
-    startY: 162,
+    startY: 128,
     head: [["Description", "Amount"]],
     body: earningsData,
     theme: "plain",
-    styles: { fontSize: 10 },
+    styles: { fontSize: 9, cellPadding: 1.5 },
     columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 40, halign: "right" } },
     margin: { left: 20, right: 20 },
   });
   
-  const afterEarningsY = doc.lastAutoTable.finalY + 10;
+  const afterEarningsY = doc.lastAutoTable.finalY + 4;
   
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.text("DEDUCTIONS", 20, afterEarningsY);
   doc.line(20, afterEarningsY + 3, 190, afterEarningsY + 3);
   
@@ -144,28 +141,28 @@ async function generatePayslipPDF(run, user, doc) {
   ];
   
   doc.autoTable({
-    startY: afterEarningsY + 7,
+    startY: afterEarningsY + 5,
     head: [["Description", "Amount"]],
     body: deductionsData,
     theme: "plain",
-    styles: { fontSize: 10 },
+    styles: { fontSize: 9, cellPadding: 1.5 },
     columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 40, halign: "right" } },
     margin: { left: 20, right: 20 },
   });
   
-  const afterDeductionsY = doc.lastAutoTable.finalY + 15;
+  const afterDeductionsY = doc.lastAutoTable.finalY + 6;
   
   doc.setFillColor(240, 240, 240);
-  doc.rect(20, afterDeductionsY, 170, 20, "F");
+  doc.rect(20, afterDeductionsY, 170, 12, "F");
   
-  doc.setFontSize(14);
-  doc.text("NET PAY", 25, afterDeductionsY + 14);
-  doc.setFontSize(14);
-  doc.text(fmtCurrency(run.net_pay), 170, afterDeductionsY + 14, { align: "right" });
+  doc.setFontSize(12);
+  doc.text("NET PAY", 25, afterDeductionsY + 8);
+  doc.setFontSize(12);
+  doc.text(fmtCurrency(run.net_pay), 170, afterDeductionsY + 8, { align: "right" });
   
-  doc.setFontSize(9);
+  doc.setFontSize(8);
   doc.setTextColor(100, 100, 100);
-  doc.text("This is a computer-generated document. No signature required.", 105, afterDeductionsY + 35, { align: "center" });
+  doc.text("This is a computer-generated document. No signature required.", 105, afterDeductionsY + 18, { align: "center" });
 }
 
 export default function EmployeePayrollPage() {
