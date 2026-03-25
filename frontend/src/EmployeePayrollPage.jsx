@@ -29,39 +29,64 @@ function statusPillClass(status, confirmed) {
   return "dashboard-status-warn";
 }
 
-function generatePayslipPDF(run, user, doc) {
+const COMPANY_NAME = "SUSTENIR HUMAN RESOURCE CONSULTANCY LTD";
+
+async function generatePayslipPDF(run, user, doc) {
   const monthYear = run.payroll_month 
     ? new Date(run.payroll_month + "T00:00:00").toLocaleDateString("en-KE", { year: "numeric", month: "long" })
     : "-";
   const employeeName = user?.name || "Employee";
   
+  try {
+    const logoImg = new Image();
+    logoImg.src = "/logo.png";
+    await new Promise((resolve, reject) => {
+      logoImg.onload = resolve;
+      logoImg.onerror = reject;
+      setTimeout(reject, 1000);
+    });
+    const imgProps = doc.getImageProperties("/logo.png");
+    const imgWidth = 30;
+    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+    doc.addImage("/logo.png", "PNG", 20, 10, imgWidth, imgHeight);
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(COMPANY_NAME, 55, 18);
+  } catch (e) {
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text(COMPANY_NAME, 105, 18, { align: "center" });
+  }
+  
   doc.setFontSize(18);
-  doc.text("PAYSLIP", 105, 20, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.text("PAYSLIP", 105, 35, { align: "center" });
   
   doc.setFontSize(12);
-  doc.text(monthYear, 105, 28, { align: "center" });
+  doc.setFont("helvetica", "normal");
+  doc.text(monthYear, 105, 43, { align: "center" });
   
   doc.setLineWidth(0.5);
-  doc.line(20, 35, 190, 35);
+  doc.line(20, 50, 190, 50);
   
   doc.setFontSize(11);
-  doc.text("Employee Name:", 20, 45);
-  doc.text(employeeName, 70, 45);
+  doc.text("Employee Name:", 20, 60);
+  doc.text(employeeName, 70, 60);
   
-  doc.text("Employee ID:", 20, 53);
-  doc.text(String(user?.id || "-"), 70, 53);
+  doc.text("Employee ID:", 20, 68);
+  doc.text(String(user?.id || "-"), 70, 68);
   
-  doc.text("Pay Date:", 20, 61);
-  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 61);
+  doc.text("Pay Date:", 20, 76);
+  doc.text(run.pay_date ? new Date(run.pay_date + "T00:00:00").toLocaleDateString("en-KE") : "Not set", 70, 76);
   
-  doc.text("Payroll Status:", 20, 69);
-  doc.text(payrollStatusLabel(run.status, run.employee_confirmed), 70, 69);
+  doc.text("Payroll Status:", 20, 84);
+  doc.text(payrollStatusLabel(run.status, run.employee_confirmed), 70, 84);
   
-  doc.line(20, 75, 190, 75);
+  doc.line(20, 90, 190, 90);
   
   doc.setFontSize(12);
-  doc.text("EARNINGS", 20, 85);
-  doc.line(20, 88, 190, 88);
+  doc.text("EARNINGS", 20, 100);
+  doc.line(20, 103, 190, 103);
   
   const earningsData = [
     ["Basic Salary", fmtCurrency(run.basic_salary)],
@@ -72,7 +97,7 @@ function generatePayslipPDF(run, user, doc) {
   ];
   
   doc.autoTable({
-    startY: 92,
+    startY: 107,
     head: [["Description", "Amount"]],
     body: earningsData,
     theme: "plain",
@@ -168,13 +193,13 @@ export default function EmployeePayrollPage() {
     }
   }
 
-  function handleDownloadPDF(run) {
+  async function handleDownloadPDF(run) {
     const doc = new jsPDF();
     const monthYear = run.payroll_month 
       ? new Date(run.payroll_month + "T00:00:00").toLocaleDateString("en-KE", { year: "numeric", month: "long" })
       : "Payslip";
     const fileName = `${current?.name || "Employee"} - ${monthYear}.pdf`;
-    generatePayslipPDF(run, current, doc);
+    await generatePayslipPDF(run, current, doc);
     doc.save(fileName);
   }
 
