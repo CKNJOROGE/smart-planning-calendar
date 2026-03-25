@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from starlette.middleware.base import BaseHTTPMiddleware
 from jose import jwt
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
@@ -2160,6 +2160,26 @@ async def admin_upload_user_document(
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing file")
     return await _upload_profile_document(request, db, u, doc_type, file)
+
+
+@app.post("/admin/run-migration", response_model=MessageOut)
+def run_migration(
+    migration_name: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    migrations = {
+        "add_approved_amount": "ALTER TABLE salary_advance_requests ADD COLUMN IF NOT EXISTS approved_amount NUMERIC(12, 2);",
+    }
+    if migration_name not in migrations:
+        raise HTTPException(status_code=400, detail="Unknown migration")
+    try:
+        db.execute(text(migrations[migration_name]))
+        db.commit()
+        return MessageOut(message=f"Migration {migration_name} applied successfully")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # -------------------------
