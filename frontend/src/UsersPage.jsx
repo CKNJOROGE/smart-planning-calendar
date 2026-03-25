@@ -36,7 +36,7 @@ export default function UsersPage() {
     avatar_url: "",
   });
 
-  const canOpen = useMemo(() => current?.role === "admin", [current]);
+  const canOpen = useMemo(() => current?.role === "admin" || current?.role === "ceo", [current]);
 
   async function load() {
     setErr("");
