@@ -274,10 +274,6 @@ export default function EmployeePayrollPage() {
               <tr>
                 <th style={{ width: 40 }}></th>
                 <th>Month</th>
-                <th>KRA PIN</th>
-                <th>ID No.</th>
-                <th>NSSF No.</th>
-                <th>NHIF No.</th>
                 <th style={{ textAlign: "right" }}>Gross Cash</th>
                 <th style={{ textAlign: "right" }}>Total Ded.</th>
                 <th style={{ textAlign: "right" }}>Net Pay</th>
@@ -302,10 +298,6 @@ export default function EmployeePayrollPage() {
                         ? new Date(run.payroll_month + "T00:00:00").toLocaleDateString("en-KE", { year: "numeric", month: "short" })
                         : "-"}
                     </td>
-                    <td>{run.employee?.kra_pin || "-"}</td>
-                    <td>{run.employee?.id_number || "-"}</td>
-                    <td>{run.employee?.nssf_number || "-"}</td>
-                    <td>{run.employee?.nhif_number || "-"}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtCurrency(run.gross_cash_pay)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtCurrency(run.total_deductions)}</td>
                     <td style={{ textAlign: "right", fontWeight: 700, fontSize: 16, color: "#16a34a" }}>{fmtCurrency(run.net_pay)}</td>
@@ -317,7 +309,13 @@ export default function EmployeePayrollPage() {
                   </tr>
                   {expandedRows[run.id] && (
                     <tr>
-                      <td colSpan={10} style={{ background: "#f9fafb", padding: 16 }}>
+                      <td colSpan={6} style={{ background: "#f9fafb", padding: 16 }}>
+                        <div style={{ marginBottom: 16, display: "flex", gap: 24, flexWrap: "wrap" }}>
+                          <div><strong>KRA PIN:</strong> {run.employee?.kra_pin || "-"}</div>
+                          <div><strong>ID No.:</strong> {run.employee?.id_number || "-"}</div>
+                          <div><strong>NSSF No.:</strong> {run.employee?.nssf_number || "-"}</div>
+                          <div><strong>NHIF No.:</strong> {run.employee?.nhif_number || "-"}</div>
+                        </div>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
                           <div>
                             <div style={{ fontWeight: 900, marginBottom: 8 }}>EARNINGS</div>
