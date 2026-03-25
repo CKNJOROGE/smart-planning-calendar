@@ -4792,9 +4792,33 @@ def get_dashboard_overview(
         )
         .first()
     )
-    reimbursement_can_submit = reimbursement_due and not already_submitted_for_period
-    if already_submitted_for_period:
+    
+    has_late = False
+    if not already_submitted_for_period and not reimbursement_due:
+        prev_period_start, prev_period_end = None, None
+        if today.day < 15:
+            prev_period_start = today.replace(day=1)
+            prev_period_end = today.replace(day=14)
+        else:
+            prev_period_start = today.replace(day=15)
+            prev_period_end = today.replace(day=28) if today.month == 2 else today.replace(day=30)
+        
+        if prev_period_start and prev_period_end:
+            already_submitted_prev = db.query(CashReimbursementRequest.id).filter(
+                CashReimbursementRequest.user_id == current.id,
+                CashReimbursementRequest.period_start == prev_period_start,
+                CashReimbursementRequest.period_end == prev_period_end,
+            ).first()
+            if not already_submitted_prev:
+                has_late = True
+                reimbursement_period_start, reimbursement_period_end = prev_period_start, prev_period_end
+    
+    reimbursement_can_submit = (reimbursement_due or has_late) and not already_submitted_for_period
+    
+    if already_submitted_for_period and not has_late:
         reimbursement_submit_message = "You already submitted this period's reimbursement."
+    elif has_late:
+        reimbursement_submit_message = f"LATE: Submit your reimbursement for {reimbursement_period_start} to {reimbursement_period_end} now!"
     else:
         reimbursement_submit_message = _reimbursement_due_message(today, reimbursement_can_submit)
 

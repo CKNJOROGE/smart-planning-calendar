@@ -404,16 +404,18 @@ export default function DashboardPage() {
       </div>
 
       {err && <div className="error">{err}</div>}
-      {overview.reimbursement_can_submit && (
+      {(overview.reimbursement_submit_due_today || overview.reimbursement_can_submit) && (
         <div
           className="card"
           style={{
             marginBottom: 12,
-            border: "1px solid #f59e0b",
-            background: "#fffbeb",
+            border: overview.reimbursement_submit_due_today ? "2px solid #dc2626" : "1px solid #f59e0b",
+            background: overview.reimbursement_submit_due_today ? "#fef2f2" : "#fffbeb",
           }}
         >
-          <div style={{ fontWeight: 900, marginBottom: 4 }}>Cash Reimbursement Due</div>
+          <div style={{ fontWeight: 900, marginBottom: 4, color: overview.reimbursement_submit_due_today ? "#dc2626" : "#000" }}>
+            {overview.reimbursement_submit_due_today ? "⚠️ Cash Reimbursement Due TODAY" : "⏰ Cash Reimbursement - Late Submission"}
+          </div>
           <div style={{ fontSize: 14 }}>
             Submit your reimbursement for {formatDate(overview.reimbursement_submit_period_start)} to {formatDate(overview.reimbursement_submit_period_end)}.
           </div>
