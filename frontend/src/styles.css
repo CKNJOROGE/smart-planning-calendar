@@ -339,6 +339,13 @@ textarea{ resize: vertical; min-height: 90px; }
   gap: 8px;
 }
 
+.theme-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .theme-picker-label {
   font-size: 11px;
   font-weight: 800;
@@ -347,9 +354,29 @@ textarea{ resize: vertical; min-height: 90px; }
   letter-spacing: 0.06em;
 }
 
+.theme-picker-toggle-btn {
+  width: auto;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .theme-swatch-list {
   display: grid;
   gap: 6px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: max-height 180ms ease, opacity 150ms ease, transform 180ms ease;
+}
+
+.theme-swatch-list.open {
+  max-height: 460px;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .theme-swatch-btn {

@@ -47,6 +47,7 @@ function Shell({ onLogout, theme, setTheme }) {
   const [user, setUser] = useState(null);
   const [financeAttentionTotal, setFinanceAttentionTotal] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [themePaletteOpen, setThemePaletteOpen] = useState(false);
   const { showToast } = useToast();
   const nav = useNavigate();
   const canManageThemePalette = ["admin", "ceo"].includes(String(user?.role || "").toLowerCase());
@@ -231,8 +232,23 @@ function Shell({ onLogout, theme, setTheme }) {
           </button>
           {canManageThemePalette && (
             <div className="theme-picker" aria-label="Theme picker">
-              <div className="theme-picker-label">Theme Palette</div>
-              <div className="theme-swatch-list">
+              <div className="theme-picker-header">
+                <div className="theme-picker-label">Theme Palette</div>
+                <button
+                  type="button"
+                  className="btn theme-picker-toggle-btn"
+                  onClick={() => setThemePaletteOpen((open) => !open)}
+                  aria-expanded={themePaletteOpen}
+                  aria-controls="theme-swatch-list"
+                >
+                  {themePaletteOpen ? "Hide" : "Show"}
+                </button>
+              </div>
+              <div
+                id="theme-swatch-list"
+                className={`theme-swatch-list${themePaletteOpen ? " open" : ""}`}
+                aria-hidden={!themePaletteOpen}
+              >
                 {THEME_OPTIONS.map((option) => (
                   <button
                     key={option.value}
