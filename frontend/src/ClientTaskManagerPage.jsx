@@ -162,14 +162,17 @@ export default function ClientTaskManagerPage() {
     }
   }
 
-  async function handleDeleteClient() {
-    if (!isEditMode || !selectedClient || !canManageClients) return;
-    if (!confirm(`Delete client "${selectedClient.name}"?`)) return;
+  async function handleDeleteClientById(client) {
+    if (!isEditMode || !client || !canManageClients) return;
+    if (!confirm(`Delete client "${client.name}"?`)) return;
     try {
-      await deleteTaskClient(selectedClient.id);
+      await deleteTaskClient(client.id);
       const list = await listTaskClients(selectedYear);
       setClients(list);
-      setSelectedClientId(list.length ? list[0].id : null);
+      setSelectedClientId((prev) => {
+        if (Number(prev) === Number(client.id)) return list.length ? list[0].id : null;
+        return prev;
+      });
       setTasks([]);
       showToast("Client deleted", "success");
     } catch (e) {
@@ -388,30 +391,45 @@ export default function ClientTaskManagerPage() {
 
         <div className="row">
           {clients.map((c) => (
-            <button
-              key={c.id}
-              className={`btn task-choice-btn ${Number(selectedClientId) === c.id ? "task-choice-active" : ""}`}
-              onClick={() => setSelectedClientId(c.id)}
-            >
-              {c.name}
-            </button>
+            <div key={c.id} style={{ position: "relative", display: "inline-flex" }}>
+              <button
+                className={`btn task-choice-btn ${Number(selectedClientId) === c.id ? "task-choice-active" : ""}`}
+                onClick={() => setSelectedClientId(c.id)}
+                style={isEditMode && canManageClients ? { paddingRight: 28 } : undefined}
+              >
+                {c.name}
+              </button>
+              {isEditMode && canManageClients && (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDeleteClientById(c);
+                  }}
+                  title={`Delete ${c.name}`}
+                  style={{
+                    position: "absolute",
+                    right: 4,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    minWidth: 20,
+                    width: 20,
+                    height: 20,
+                    borderRadius: 999,
+                    padding: 0,
+                    lineHeight: 1,
+                    fontWeight: 800,
+                  }}
+                >
+                  x
+                </button>
+              )}
+            </div>
           ))}
           {!clients.length && <div className="muted">No clients yet.</div>}
         </div>
-
-        {isEditMode && (
-          <div style={{ marginTop: 10 }}>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={handleDeleteClient}
-              disabled={!selectedClient || !canManageClients}
-              title={canManageClients ? "Delete selected client" : "Only admin/ceo can delete clients"}
-            >
-              Delete Client
-            </button>
-          </div>
-        )}
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
