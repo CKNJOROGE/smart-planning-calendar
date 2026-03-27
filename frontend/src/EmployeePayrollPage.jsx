@@ -15,8 +15,7 @@ function payrollStatusLabel(status, confirmed) {
     return "Pending Your Confirmation";
   }
   if (status === "draft") {
-    if (confirmed) return "Confirmed - Awaiting Approval";
-    return "Pending Your Confirmation";
+    return "Awaiting Admin Approval";
   }
   return status || "-";
 }
@@ -24,9 +23,9 @@ function payrollStatusLabel(status, confirmed) {
 function statusPillClass(status, confirmed) {
   const s = (status || "").toLowerCase();
   if (s === "paid") return "dashboard-status-ok";
-  if (confirmed) return "dashboard-status-info";
   if (s === "approved") return "dashboard-status-warn";
-  return "dashboard-status-warn";
+  if (confirmed) return "dashboard-status-info";
+  return "dashboard-status-pending";
 }
 
 const COMPANY_NAME = "SUSTENIR HUMAN RESOURCE CONSULTANCY LTD";
@@ -207,7 +206,7 @@ export default function EmployeePayrollPage() {
       const updated = await listMyPayrollRuns();
       setRuns(updated);
     } catch (e) {
-      alert("Error: " + (e.message || e));
+      setErr(String(e.message || e));
     }
   }
 
@@ -217,7 +216,7 @@ export default function EmployeePayrollPage() {
       ? new Date(run.payroll_month + "T00:00:00").toLocaleDateString("en-KE", { year: "numeric", month: "long" })
       : "Payslip";
     const fileName = `${current?.name || "Employee"} - ${monthYear}.pdf`;
-    await generatePayslipPDF(run, current, doc);
+    await generatePayslipPDF(run, run.employee || current, doc);
     doc.save(fileName);
   }
 
@@ -227,8 +226,8 @@ export default function EmployeePayrollPage() {
 
   if (busy) {
     return (
-      <div className="page-wrap">
-        <div className="card">
+      <div className="page-wrap payroll-page">
+        <div className="card payroll-card">
           <div style={{ padding: 40, textAlign: "center" }}>Loading your payroll...</div>
         </div>
       </div>
@@ -236,8 +235,8 @@ export default function EmployeePayrollPage() {
   }
 
   return (
-    <div className="page-wrap">
-      <div className="card" style={{ marginBottom: 16 }}>
+    <div className="page-wrap payroll-page">
+      <div className="card payroll-card payroll-hero-card" style={{ marginBottom: 16 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>My Payroll</div>
         <div className="muted" style={{ marginTop: 6 }}>
           View your monthly payroll details and confirm accuracy. Your confirmation is required before payroll can be disbursed.
@@ -245,7 +244,7 @@ export default function EmployeePayrollPage() {
         {err && <div className="error" style={{ marginTop: 10 }}>{err}</div>}
       </div>
 
-      <div className="card">
+      <div className="card payroll-card payroll-section-card">
         <div style={{ marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
           <input
             type="text"
@@ -266,7 +265,8 @@ export default function EmployeePayrollPage() {
         )}
 
         {filteredRuns.length > 0 && (
-          <table className="data-table" style={{ width: "100%" }}>
+          <div className="payroll-table-wrap">
+            <table className="table payroll-table" style={{ width: "100%" }}>
             <thead>
               <tr>
                 <th style={{ width: 40 }}></th>
@@ -277,7 +277,7 @@ export default function EmployeePayrollPage() {
                 <th>Status</th>
               </tr>
             </thead>
-            <tbody>
+              <tbody>
               {filteredRuns.map((run) => (
                 <React.Fragment key={run.id}>
                   <tr>
@@ -287,7 +287,7 @@ export default function EmployeePayrollPage() {
                         onClick={() => toggleRow(run.id)}
                         style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18 }}
                       >
-                        {expandedRows[run.id] ? "▼" : "▶"}
+                        {expandedRows[run.id] ? "v" : ">"}
                       </button>
                     </td>
                     <td>
@@ -306,14 +306,14 @@ export default function EmployeePayrollPage() {
                   </tr>
                   {expandedRows[run.id] && (
                     <tr>
-                      <td colSpan={6} style={{ background: "#f9fafb", padding: 16 }}>
+                      <td colSpan={6} className="payroll-run-detail">
                         <div style={{ marginBottom: 16, display: "flex", gap: 24, flexWrap: "wrap" }}>
                           <div><strong>KRA PIN:</strong> {run.employee?.kra_pin || "-"}</div>
                           <div><strong>ID No.:</strong> {run.employee?.id_number || "-"}</div>
                           <div><strong>NSSF No.:</strong> {run.employee?.nssf_number || "-"}</div>
                           <div><strong>NHIF No.:</strong> {run.employee?.nhif_number || "-"}</div>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+                        <div className="payroll-run-grid">
                           <div>
                             <div style={{ fontWeight: 900, marginBottom: 8 }}>EARNINGS</div>
                             <table style={{ width: "100%", fontSize: 13 }}>
@@ -339,12 +339,12 @@ export default function EmployeePayrollPage() {
                                 <tr style={{ fontWeight: 700, borderTop: "1px solid #ccc" }}><td>Total Deductions</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.total_deductions)}</td></tr>
                               </tbody>
                             </table>
-                            <div style={{ marginTop: 12, padding: 12, background: "#dcfce7", borderRadius: 8, fontWeight: 700, fontSize: 16 }}>
+                            <div className="payroll-netpay-banner">
                               NET PAY: {fmtCurrency(run.net_pay)}
                             </div>
-                            <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
                               <button className="btn" type="button" onClick={() => handleDownloadPDF(run)}>Download PDF</button>
-                              {run.status !== "paid" && (
+                              {run.status === "approved" && (
                                 run.employee_confirmed ? (
                                   <button className="btn" type="button" onClick={() => handleConfirm(run.id, true)}>Undo Confirmation</button>
                                 ) : (
@@ -359,8 +359,9 @@ export default function EmployeePayrollPage() {
                   )}
                 </React.Fragment>
               ))}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

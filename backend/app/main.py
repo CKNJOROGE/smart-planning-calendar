@@ -446,6 +446,16 @@ def _attach_user_supervisor_metadata(db: Session, user_obj: Optional[User]) -> N
         setattr(user_obj, "supervisor_name", supervisor.name)
 
 
+def _attach_user_payroll_metadata(db: Session, user_obj: Optional[User]) -> None:
+    if not user_obj:
+        return
+    existing_kra_pin = getattr(user_obj, "kra_pin", None)
+    if existing_kra_pin:
+        return
+    profile = db.query(PayrollProfile).filter(PayrollProfile.user_id == user_obj.id).first()
+    setattr(user_obj, "kra_pin", profile.kra_pin if profile and profile.kra_pin else None)
+
+
 def _normalize_department_name(raw: Optional[str]) -> str:
     return " ".join((raw or "").strip().split())
 
@@ -1000,9 +1010,10 @@ def _calculate_payroll_breakdown(
         ).all()
         for adv in advances:
             if adv.deduction_start_date and adv.repayment_months and adv.repayment_months > 0:
-                monthly_deduction = adv.amount / adv.repayment_months
+                deduction_source_amount = adv.approved_amount if adv.approved_amount is not None else adv.amount
+                monthly_deduction = (_dec(deduction_source_amount) / Decimal(str(adv.repayment_months))).quantize(Decimal("0.01"))
                 months_passed = (payroll_month.year - adv.deduction_start_date.year) * 12 + (payroll_month.month - adv.deduction_start_date.month)
-                if months_passed > 0 and months_passed <= adv.repayment_months:
+                if months_passed >= 0 and months_passed < adv.repayment_months:
                     salary_advance_deduction += monthly_deduction
                     salary_advance_note += f"Salary Advance #{adv.id}: KES {monthly_deduction.quantize(Decimal('0.01'))}/month; "
     salary_advance_deduction = salary_advance_deduction.quantize(Decimal("0.01"))
@@ -1147,6 +1158,7 @@ def _calculate_payroll_breakdown(
 
 def _serialize_payroll_run(db: Session, row: PayrollRun) -> PayrollRunOut:
     _attach_user_supervisor_metadata(db, row.employee)
+    _attach_user_payroll_metadata(db, row.employee)
     breakdown = _loads_json_object(row.breakdown_json)
     inputs = breakdown.get("inputs", {})
     total_deductions = (
@@ -1712,6 +1724,7 @@ def get_me(
     user: User = Depends(get_current_user),
 ):
     _attach_user_supervisor_metadata(db, user)
+    _attach_user_payroll_metadata(db, user)
     return user
 
 
@@ -4078,13 +4091,12 @@ def save_payroll_run(
         row = existing_row
 
     new_status = _normalize_payroll_status(payload.status)
-    if new_status == "paid" and not row.employee_confirmed:
-        raise HTTPException(status_code=400, detail="Cannot mark payroll as paid until employee confirms accuracy")
-    row.status = new_status
     if new_status == "paid":
-        row.pay_date = date.today()
-    else:
-        row.pay_date = computed["pay_date"]
+        raise HTTPException(status_code=400, detail="Use the mark-paid action on an approved payroll run")
+    row.employee_confirmed = False
+    row.employee_confirmed_at = None
+    row.status = new_status
+    row.pay_date = computed["pay_date"]
     row.gross_cash_pay = computed["gross_cash_pay"]
     row.taxable_non_cash_benefits = computed["taxable_non_cash_benefits"]
     row.gross_taxable_pay = computed["gross_taxable_pay"]
@@ -4163,6 +4175,8 @@ def confirm_payroll_run(
         raise HTTPException(status_code=403, detail="You can only confirm your own payroll")
     if row.status == "paid":
         raise HTTPException(status_code=400, detail="Cannot confirm a payroll that has already been paid")
+    if row.status != "approved":
+        raise HTTPException(status_code=400, detail="Only approved payroll runs can be confirmed")
     row.employee_confirmed = True
     row.employee_confirmed_at = datetime.utcnow()
     row.updated_at = datetime.utcnow()
@@ -4185,8 +4199,36 @@ def unconfirm_payroll_run(
         raise HTTPException(status_code=403, detail="You can only unconfirm your own payroll")
     if row.status == "paid":
         raise HTTPException(status_code=400, detail="Cannot unconfirm a payroll that has already been paid")
+    if row.status != "approved":
+        raise HTTPException(status_code=400, detail="Only approved payroll runs can be unconfirmed")
     row.employee_confirmed = False
     row.employee_confirmed_at = None
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    _ = row.employee
+    return _serialize_payroll_run(db, row)
+
+
+@app.post("/payroll/runs/{run_id}/mark-paid", response_model=PayrollRunOut)
+def mark_payroll_run_paid(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    row = db.query(PayrollRun).filter(PayrollRun.id == run_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Payroll run not found")
+    if row.status == "paid":
+        raise HTTPException(status_code=400, detail="Payroll run has already been marked paid")
+    if row.status != "approved":
+        raise HTTPException(status_code=400, detail="Only approved payroll runs can be marked paid")
+    if not row.employee_confirmed:
+        raise HTTPException(status_code=400, detail="Cannot mark payroll as paid until employee confirms accuracy")
+    row.status = "paid"
+    row.pay_date = date.today()
+    row.updated_by_id = current.id
     row.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(row)

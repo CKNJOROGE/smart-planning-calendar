@@ -812,6 +812,10 @@ export function unconfirmPayrollRun(runId) {
   return request(`/payroll/runs/${runId}/unconfirm`, { method: "POST" });
 }
 
+export function markPayrollRunPaid(runId) {
+  return request(`/payroll/runs/${runId}/mark-paid`, { method: "POST" });
+}
+
 export async function openProtectedFile(url) {
   const token = getToken();
   const resolved = resolveFileUrl(url);

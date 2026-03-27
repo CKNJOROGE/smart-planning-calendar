@@ -12,6 +12,7 @@ import {
   previewPayrollRun,
   savePayrollRun,
   listPayrollRuns,
+  markPayrollRunPaid,
 } from "./api";
 import { useToast } from "./ToastProvider";
 import LoadingState from "./LoadingState";
@@ -490,13 +491,11 @@ export default function PayrollPage() {
     }
   }
 
-  async function handleMarkPaid() {
-    if (!selectedEmployeeId) return;
+  async function handleMarkPaid(runId) {
     setSavingRun(true);
     setErr("");
     try {
-      const result = await savePayrollRun(runPayloadFromState(runForm, selectedEmployeeId, "paid"));
-      setPreview(result);
+      await markPayrollRunPaid(Number(runId));
       const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId), payrollMonth: runForm.payroll_month });
       setRuns(updatedRuns || []);
       showToast("Payroll marked as paid", "success");
@@ -979,21 +978,12 @@ export default function PayrollPage() {
                           </td>
                           <td style={{ padding: 10 }}>{fmtCurrency(row.net_pay)}</td>
                           <td style={{ padding: 10 }}>
-                            {row.status !== "paid" && (
+                            {row.status === "approved" && (
                               <button
                                 className="btn btn-primary"
                                 type="button"
                                 disabled={!row.employee_confirmed}
-                                onClick={async () => {
-                                  try {
-                                    await savePayrollRun({ ...row, status: "paid" });
-                                    const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId) });
-                                    setRuns(updatedRuns || []);
-                                    showToast("Payroll marked as paid", "success");
-                                  } catch (e) {
-                                    showToast(String(e.message || e), "error");
-                                  }
-                                }}
+                                onClick={() => handleMarkPaid(row.id)}
                                 title={!row.employee_confirmed ? "Employee must confirm before marking paid" : ""}
                               >
                                 Mark Paid
