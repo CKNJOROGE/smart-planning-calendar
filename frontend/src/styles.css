@@ -1841,10 +1841,10 @@ textarea{ resize: vertical; min-height: 90px; }
 .task-mode-toggle {
   border: 0;
   cursor: pointer;
-  width: 122px;
-  height: 62px;
+  width: 82px;
+  height: 42px;
   border-radius: 999px;
-  padding: 0 6px;
+  padding: 0 5px;
   display: inline-flex;
   align-items: center;
   background: linear-gradient(120deg, #65e6b8 0%, #57a4f5 100%);
@@ -1866,8 +1866,8 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 .task-mode-toggle-knob {
-  width: 54px;
-  height: 54px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   background: #ffffff;
   box-shadow: 0 12px 20px rgba(26, 85, 111, 0.28);
@@ -1876,7 +1876,15 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 .task-mode-toggle.is-edit .task-mode-toggle-knob {
-  transform: translateX(56px);
+  transform: translateX(40px);
+}
+
+.client-task-page .task-choice-btn.task-choice-active {
+  border-color: #0b6bcb !important;
+  background: linear-gradient(145deg, #dbeeff, #c4e2ff) !important;
+  color: #0b2a4a !important;
+  box-shadow: 0 0 0 2px rgba(11, 107, 203, 0.3) !important;
+  font-weight: 800;
 }
 
 .dashboard-page {
@@ -2165,6 +2173,11 @@ textarea{ resize: vertical; min-height: 90px; }
 .dashboard-task-subtitle {
   margin-top: 2px;
   color: var(--muted);
+}
+
+.birthday-widget-item {
+  border-color: #fed7aa;
+  background: linear-gradient(145deg, #fff9ed, #ffefcf);
 }
 
 .dashboard-status-badge {

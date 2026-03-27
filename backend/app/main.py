@@ -82,6 +82,7 @@ from .schemas import (
     DailyActivityUpdate,
     DailyActivityOut,
     TaskReminderOut,
+    BirthdayReminderOut,
     DashboardOverviewOut,
     CashReimbursementDraftOut,
     CashReimbursementPeriodOut,
@@ -4988,6 +4989,23 @@ def _to_task_reminder(task: ClientTask) -> TaskReminderOut:
     )
 
 
+def _next_birthday_for(dob: date, today: date) -> date:
+    month = dob.month
+    day = dob.day
+    try:
+        candidate = date(today.year, month, day)
+    except ValueError:
+        # Normalize leap-day birthdays to Feb 28 on non-leap years.
+        candidate = date(today.year, 2, 28)
+    if candidate < today:
+        year = today.year + 1
+        try:
+            candidate = date(year, month, day)
+        except ValueError:
+            candidate = date(year, 2, 28)
+    return candidate
+
+
 @app.get("/dashboard/overview", response_model=DashboardOverviewOut)
 def get_dashboard_overview(
     db: Session = Depends(get_db),
@@ -5084,6 +5102,33 @@ def get_dashboard_overview(
         _ = item.user
         _ = item.client
 
+    birthday_limit = today + timedelta(days=7)
+    birthday_rows = (
+        db.query(User)
+        .filter(User.date_of_birth.isnot(None))
+        .order_by(User.name.asc())
+        .all()
+    )
+    upcoming_birthdays: list[BirthdayReminderOut] = []
+    for row in birthday_rows:
+        dob = row.date_of_birth
+        if dob is None:
+            continue
+        birthday_date = _next_birthday_for(dob, today)
+        days_until = (birthday_date - today).days
+        if 0 <= days_until <= 7:
+            upcoming_birthdays.append(
+                BirthdayReminderOut(
+                    user_id=row.id,
+                    user_name=row.name,
+                    date_of_birth=dob,
+                    birthday_date=birthday_date,
+                    days_until=days_until,
+                    is_today=days_until == 0,
+                )
+            )
+    upcoming_birthdays.sort(key=lambda x: (x.days_until, x.user_name.lower()))
+
     reimbursement_due = _is_reimbursement_due_day(today)
     reimbursement_period_start, reimbursement_period_end = _biweekly_period_for(today)
     already_submitted_for_period = bool(
@@ -5133,6 +5178,7 @@ def get_dashboard_overview(
         unfinished_count=unfinished_count,
         upcoming_subtasks=[_to_task_reminder(t) for t in upcoming_rows],
         due_subtasks=[_to_task_reminder(t) for t in due_rows],
+        upcoming_birthdays=upcoming_birthdays,
         reimbursement_can_submit=reimbursement_can_submit,
         reimbursement_submit_due_today=reimbursement_due,
         reimbursement_submit_period_start=reimbursement_period_start,

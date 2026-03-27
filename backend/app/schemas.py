@@ -435,6 +435,15 @@ class TaskReminderOut(BaseModel):
     days_until_due: int
 
 
+class BirthdayReminderOut(BaseModel):
+    user_id: int
+    user_name: str
+    date_of_birth: date
+    birthday_date: date
+    days_until: int
+    is_today: bool = False
+
+
 class DashboardOverviewOut(BaseModel):
     today: date
     todays_activities: List[DailyActivityOut]
@@ -443,6 +452,7 @@ class DashboardOverviewOut(BaseModel):
     unfinished_count: int
     upcoming_subtasks: List[TaskReminderOut]
     due_subtasks: List[TaskReminderOut]
+    upcoming_birthdays: List[BirthdayReminderOut] = []
     reimbursement_can_submit: bool = False
     reimbursement_submit_due_today: bool = False
     reimbursement_submit_period_start: Optional[date] = None

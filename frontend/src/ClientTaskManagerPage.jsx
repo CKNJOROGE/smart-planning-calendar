@@ -517,24 +517,30 @@ export default function ClientTaskManagerPage() {
             </thead>
             <tbody>
               {groupedTasks.map((group) =>
-                group.rows.map((row) => {
+                group.rows.map((row, rowIdx) => {
                   const draft = editingRows[row.id];
                   const isEditing = isEditMode && !!draft;
                   const canEditThisRow = canEditRow(current, row);
                   return (
                     <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                      <td style={{ padding: 10 }}>{group.owner}</td>
-                      <td style={{ padding: 10 }}>
-                        {isEditing ? (
-                          <input
-                            value={draft.task}
-                            onChange={(e) => patchEditRow(row.id, { task: e.target.value })}
-                            style={{ width: "100%" }}
-                          />
-                        ) : (
-                          <span style={{ fontWeight: 700 }}>{row.task}</span>
-                        )}
-                      </td>
+                      {rowIdx === 0 && (
+                        <td style={{ padding: 10, verticalAlign: "top" }} rowSpan={group.rows.length}>
+                          {group.owner}
+                        </td>
+                      )}
+                      {rowIdx === 0 && (
+                        <td style={{ padding: 10, verticalAlign: "top" }} rowSpan={group.rows.length}>
+                          {isEditing ? (
+                            <input
+                              value={draft.task}
+                              onChange={(e) => patchEditRow(row.id, { task: e.target.value })}
+                              style={{ width: "100%" }}
+                            />
+                          ) : (
+                            <span style={{ fontWeight: 700 }}>{row.task}</span>
+                          )}
+                        </td>
+                      )}
                       <td style={{ padding: 10 }}>
                         {isEditing ? (
                           <input

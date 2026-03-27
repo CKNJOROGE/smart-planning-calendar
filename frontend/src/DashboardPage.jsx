@@ -101,6 +101,7 @@ export default function DashboardPage() {
     unfinished_count: 0,
     upcoming_subtasks: [],
     due_subtasks: [],
+    upcoming_birthdays: [],
     reimbursement_can_submit: false,
     reimbursement_submit_due_today: false,
     reimbursement_submit_period_start: "",
@@ -367,6 +368,12 @@ export default function DashboardPage() {
         ))}
       </div>
     );
+  }
+
+  function birthdaySubtitle(item) {
+    if (item.is_today) return `Today is ${item.user_name}'s Birthday! 🎉 Let's wish her a happy birthday.`;
+    if (item.days_until === 1) return `Tomorrow is ${item.user_name}'s birthday.`;
+    return `${item.user_name}'s birthday is in ${item.days_until} days.`;
   }
 
   if (busy && !overview.today) {
@@ -665,6 +672,27 @@ export default function DashboardPage() {
         </div>
 
         <div className="dashboard-right-stack">
+          {!!overview.upcoming_birthdays?.length && (
+            <div className="card dashboard-panel">
+              <div className="dashboard-panel-head">
+                <div className="dashboard-panel-title">Upcoming Birthdays</div>
+              </div>
+              <div className="dashboard-mini-list">
+                {overview.upcoming_birthdays.map((b) => (
+                  <div key={`${b.user_id}_${b.birthday_date}`} className="dashboard-mini-item birthday-widget-item">
+                    <div className="dashboard-mini-head">
+                      <div className="dashboard-task-title">{b.user_name}</div>
+                      <span className={`dashboard-status-badge ${b.is_today ? "dashboard-status-warn" : "dashboard-status-info"}`}>
+                        {b.is_today ? "Today" : formatDate(b.birthday_date)}
+                      </span>
+                    </div>
+                    <div className="dashboard-task-subtitle">{birthdaySubtitle(b)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="card dashboard-panel">
             <div className="dashboard-panel-head">
               <div className="dashboard-panel-title">Upcoming Tasks</div>
