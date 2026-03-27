@@ -28,6 +28,11 @@ function statusPillClass(status, confirmed) {
   return "dashboard-status-pending";
 }
 
+function isConsultantRun(run, user) {
+  const employmentType = String(run?.employee?.employment_type || user?.employment_type || "employee").toLowerCase();
+  return employmentType === "consultant";
+}
+
 const COMPANY_NAME = "SUSTENIR HUMAN RESOURCE CONSULTANCY LTD";
 
 async function loadLogoAsBase64() {
@@ -129,15 +134,22 @@ async function generatePayslipPDF(run, user, doc) {
   doc.text("DEDUCTIONS", 20, afterEarningsY);
   doc.line(20, afterEarningsY + 3, 190, afterEarningsY + 3);
   
-  const deductionsData = [
-    ["NSSF (Employee)", fmtCurrency(run.nssf_employee)],
-    ["SHIF", fmtCurrency(run.shif_employee)],
-    ["PAYE", fmtCurrency(run.paye_after_reliefs)],
-    ["AHL", fmtCurrency(run.ahl_employee)],
-    ["Pension", fmtCurrency(run.pension_employee)],
-    ["Salary Advance Deduction", fmtCurrency(run.salary_advance_deduction || 0)],
-    ["Total Deductions", fmtCurrency(run.total_deductions)],
-  ];
+  const consultant = isConsultantRun(run, user);
+  const deductionsData = consultant
+    ? [
+        ["Withholding Tax (5%)", fmtCurrency(run.withholding_tax || run.paye_after_reliefs)],
+        ["Salary Advance Deduction", fmtCurrency(run.salary_advance_deduction || 0)],
+        ["Total Deductions", fmtCurrency(run.total_deductions)],
+      ]
+    : [
+        ["NSSF (Employee)", fmtCurrency(run.nssf_employee)],
+        ["SHIF", fmtCurrency(run.shif_employee)],
+        ["PAYE", fmtCurrency(run.paye_after_reliefs)],
+        ["AHL", fmtCurrency(run.ahl_employee)],
+        ["Pension", fmtCurrency(run.pension_employee)],
+        ["Salary Advance Deduction", fmtCurrency(run.salary_advance_deduction || 0)],
+        ["Total Deductions", fmtCurrency(run.total_deductions)],
+      ];
   
   doc.autoTable({
     startY: afterEarningsY + 5,
@@ -330,11 +342,17 @@ export default function EmployeePayrollPage() {
                             <div style={{ fontWeight: 900, marginBottom: 8 }}>DEDUCTIONS</div>
                             <table style={{ width: "100%", fontSize: 13 }}>
                               <tbody>
-                                <tr><td>NSSF (Employee)</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.nssf_employee)}</td></tr>
-                                <tr><td>SHIF</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.shif_employee)}</td></tr>
-                                <tr><td>PAYE</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.paye_after_reliefs)}</td></tr>
-                                <tr><td>AHL</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.ahl_employee)}</td></tr>
-                                <tr><td>Pension</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.pension_employee)}</td></tr>
+                                {isConsultantRun(run, current) ? (
+                                  <tr><td>Withholding Tax (5%)</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.withholding_tax || run.paye_after_reliefs)}</td></tr>
+                                ) : (
+                                  <>
+                                    <tr><td>NSSF (Employee)</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.nssf_employee)}</td></tr>
+                                    <tr><td>SHIF</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.shif_employee)}</td></tr>
+                                    <tr><td>PAYE</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.paye_after_reliefs)}</td></tr>
+                                    <tr><td>AHL</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.ahl_employee)}</td></tr>
+                                    <tr><td>Pension</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.pension_employee)}</td></tr>
+                                  </>
+                                )}
                                 <tr><td>Salary Advance Deduction</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.salary_advance_deduction || 0)}</td></tr>
                                 <tr style={{ fontWeight: 700, borderTop: "1px solid #ccc" }}><td>Total Deductions</td><td style={{ textAlign: "right" }}>{fmtCurrency(run.total_deductions)}</td></tr>
                               </tbody>

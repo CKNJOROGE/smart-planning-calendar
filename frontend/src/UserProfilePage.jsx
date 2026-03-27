@@ -100,6 +100,7 @@ export default function UserProfilePage() {
         nssf_number: profile.nssf_number || null,
         nhif_number: profile.nhif_number || null,
         role: profile.role,
+        employment_type: profile.employment_type || "employee",
         supervisor_id: profile.supervisor_id ? Number(profile.supervisor_id) : null,
         notes_private: profile.notes_private || null,
         require_two_step_leave_approval: !!profile.require_two_step_leave_approval,
@@ -158,6 +159,17 @@ export default function UserProfilePage() {
                 <option value="finance">finance</option>
                 <option value="admin">admin</option>
                 <option value="ceo">ceo</option>
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Employment Type</label>
+              <select
+                value={profile.employment_type || "employee"}
+                onChange={(e) => setProfile((p) => ({ ...p, employment_type: e.target.value }))}
+              >
+                <option value="employee">employee</option>
+                <option value="consultant">consultant</option>
               </select>
             </div>
 

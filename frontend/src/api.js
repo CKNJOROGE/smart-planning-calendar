@@ -436,6 +436,19 @@ export function updateTaskClient(clientId, reimbursementAmount) {
   });
 }
 
+export async function deleteTaskClient(clientId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/task-manager/clients/${clientId}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
+  }
+  return res.json();
+}
+
 export function listClientTasks({ year, clientId, quarter }) {
   const qs = new URLSearchParams({
     year: String(year),

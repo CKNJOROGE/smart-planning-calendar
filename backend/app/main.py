@@ -181,6 +181,7 @@ VALID_THEMES = {
     "cocoa",
 }
 DEFAULT_THEME = "light"
+VALID_EMPLOYMENT_TYPES = {"employee", "consultant"}
 
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -260,6 +261,11 @@ def _run_startup_migrations():
             pass
         try:
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_no VARCHAR(50)"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS employment_type VARCHAR(20) DEFAULT 'employee'"))
+            conn.execute(text("UPDATE users SET employment_type = 'employee' WHERE employment_type IS NULL"))
         except Exception:
             pass
         try:
@@ -446,6 +452,20 @@ def _is_valid_role(role: Optional[str]) -> bool:
     return (role or "").strip().lower() in {"employee", "admin", "supervisor", "ceo", "finance"}
 
 
+def _normalize_employment_type(raw_value: Optional[str]) -> str:
+    normalized = (raw_value or "").strip().lower()
+    if normalized not in VALID_EMPLOYMENT_TYPES:
+        return "employee"
+    return normalized
+
+
+def _require_valid_employment_type(raw_value: Optional[str]) -> str:
+    normalized = (raw_value or "").strip().lower()
+    if normalized not in VALID_EMPLOYMENT_TYPES:
+        raise HTTPException(status_code=400, detail="employment_type must be one of: employee, consultant")
+    return normalized
+
+
 def _is_admin_like(role: Optional[str]) -> bool:
     return (role or "").strip().lower() in {"admin", "ceo"}
 
@@ -480,6 +500,7 @@ def _attach_user_theme_metadata(user_obj: Optional[User]) -> None:
 def _attach_user_supervisor_metadata(db: Session, user_obj: Optional[User]) -> None:
     if not user_obj:
         return
+    setattr(user_obj, "employment_type", _normalize_employment_type(getattr(user_obj, "employment_type", None)))
     setattr(user_obj, "supervisor_name", None)
     if user_obj.supervisor_id is None:
         return
@@ -1092,44 +1113,71 @@ def _calculate_payroll_breakdown(
     gross_taxable_pay = gross_cash_pay + taxable_non_cash
     tax_exempt_allowance = values["tax_exempt_allowance"]
     gross_salary_for_statutory = max(gross_cash_pay - tax_exempt_allowance, Decimal("0.00"))
+    employment_type = _normalize_employment_type(getattr(employee, "employment_type", None))
+    if employment_type == "consultant":
+        withholding_tax = (gross_cash_pay * Decimal("0.05")).quantize(Decimal("0.01"))
+        nssf_employee = Decimal("0.00")
+        nssf_employer = Decimal("0.00")
+        pension_employee = Decimal("0.00")
+        pension_employer = Decimal("0.00")
+        shif_employee = Decimal("0.00")
+        ahl_employee = Decimal("0.00")
+        ahl_employer = Decimal("0.00")
+        disability_exemption = Decimal("0.00")
+        owner_occupier_interest_relief = Decimal("0.00")
+        taxable_income = max(gross_taxable_pay - tax_exempt_allowance, Decimal("0.00")).quantize(Decimal("0.01"))
+        paye_before_reliefs = withholding_tax
+        personal_relief = Decimal("0.00")
+        insurance_relief = Decimal("0.00")
+        paye_after_reliefs = withholding_tax
+        other_deductions = (values["other_deductions"] + salary_advance_deduction).quantize(Decimal("0.01"))
+        net_pay = (gross_cash_pay - withholding_tax - other_deductions).quantize(Decimal("0.01"))
+        employer_total_cost = gross_cash_pay.quantize(Decimal("0.01"))
+    else:
+        withholding_tax = Decimal("0.00")
+        nssf_pensionable_pay = max(values["nssf_pensionable_pay"], Decimal("0.00"))
+        tier_one_base = min(nssf_pensionable_pay, nssf_lower_earnings_limit)
+        tier_two_base = max(min(nssf_pensionable_pay, nssf_upper_earnings_limit) - nssf_lower_earnings_limit, Decimal("0.00"))
+        nssf_employee = ((tier_one_base * nssf_employee_rate) + (tier_two_base * nssf_employee_rate)).quantize(Decimal("0.01"))
+        nssf_employer = ((tier_one_base * nssf_employer_rate) + (tier_two_base * nssf_employer_rate)).quantize(Decimal("0.01"))
 
-    nssf_pensionable_pay = max(values["nssf_pensionable_pay"], Decimal("0.00"))
-    tier_one_base = min(nssf_pensionable_pay, nssf_lower_earnings_limit)
-    tier_two_base = max(min(nssf_pensionable_pay, nssf_upper_earnings_limit) - nssf_lower_earnings_limit, Decimal("0.00"))
-    nssf_employee = ((tier_one_base * nssf_employee_rate) + (tier_two_base * nssf_employee_rate)).quantize(Decimal("0.01"))
-    nssf_employer = ((tier_one_base * nssf_employer_rate) + (tier_two_base * nssf_employer_rate)).quantize(Decimal("0.01"))
+        pension_employee = min(values["pension_employee"], PENSION_RELIEF_CAP_MONTHLY).quantize(Decimal("0.01"))
+        pension_employer = values["pension_employer"].quantize(Decimal("0.01"))
+        shif_employee = max((gross_salary_for_statutory * shif_rate).quantize(Decimal("0.01")), shif_minimum_monthly)
+        ahl_employee = (gross_salary_for_statutory * ahl_rate_employee).quantize(Decimal("0.01"))
+        ahl_employer = (gross_salary_for_statutory * ahl_rate_employer).quantize(Decimal("0.01"))
+        disability_exemption = min(values["disability_exemption_amount"], disability_exemption_cap_monthly).quantize(Decimal("0.01"))
+        owner_occupier_interest_relief = min(values["owner_occupier_interest"], owner_occupier_interest_cap_monthly).quantize(Decimal("0.01"))
 
-    pension_employee = min(values["pension_employee"], PENSION_RELIEF_CAP_MONTHLY).quantize(Decimal("0.01"))
-    pension_employer = values["pension_employer"].quantize(Decimal("0.01"))
-    shif_employee = max((gross_salary_for_statutory * shif_rate).quantize(Decimal("0.01")), shif_minimum_monthly)
-    ahl_employee = (gross_salary_for_statutory * ahl_rate_employee).quantize(Decimal("0.01"))
-    ahl_employer = (gross_salary_for_statutory * ahl_rate_employer).quantize(Decimal("0.01"))
-    disability_exemption = min(values["disability_exemption_amount"], disability_exemption_cap_monthly).quantize(Decimal("0.01"))
-    owner_occupier_interest_relief = min(values["owner_occupier_interest"], owner_occupier_interest_cap_monthly).quantize(Decimal("0.01"))
+        taxable_income = (
+            gross_taxable_pay
+            - tax_exempt_allowance
+            - nssf_employee
+            - pension_employee
+            - shif_employee
+            - ahl_employee
+            - owner_occupier_interest_relief
+            - disability_exemption
+        )
+        taxable_income = max(taxable_income, Decimal("0.00")).quantize(Decimal("0.01"))
 
-    taxable_income = (
-        gross_taxable_pay
-        - tax_exempt_allowance
-        - nssf_employee
-        - pension_employee
-        - shif_employee
-        - ahl_employee
-        - owner_occupier_interest_relief
-        - disability_exemption
-    )
-    taxable_income = max(taxable_income, Decimal("0.00")).quantize(Decimal("0.01"))
+        paye_before_reliefs = _calculate_paye_monthly(taxable_income, statutory["paye_bands_monthly"])
+        personal_relief = personal_relief_monthly
+        insurance_relief = min((values["insurance_relief_base"] * insurance_relief_rate).quantize(Decimal("0.01")), insurance_relief_cap_monthly)
+        paye_after_reliefs = max(paye_before_reliefs - personal_relief - insurance_relief, Decimal("0.00")).quantize(Decimal("0.01"))
 
-    paye_before_reliefs = _calculate_paye_monthly(taxable_income, statutory["paye_bands_monthly"])
-    personal_relief = personal_relief_monthly
-    insurance_relief = min((values["insurance_relief_base"] * insurance_relief_rate).quantize(Decimal("0.01")), insurance_relief_cap_monthly)
-    paye_after_reliefs = max(paye_before_reliefs - personal_relief - insurance_relief, Decimal("0.00")).quantize(Decimal("0.01"))
-
-    other_deductions = (values["other_deductions"] + salary_advance_deduction).quantize(Decimal("0.01"))
-    net_pay = (gross_cash_pay - nssf_employee - shif_employee - ahl_employee - pension_employee - paye_after_reliefs - other_deductions).quantize(Decimal("0.01"))
-    employer_total_cost = (gross_cash_pay + nssf_employer + ahl_employer + pension_employer + nita_levy_monthly).quantize(Decimal("0.01"))
+        other_deductions = (values["other_deductions"] + salary_advance_deduction).quantize(Decimal("0.01"))
+        net_pay = (gross_cash_pay - nssf_employee - shif_employee - ahl_employee - pension_employee - paye_after_reliefs - other_deductions).quantize(Decimal("0.01"))
+        employer_total_cost = (gross_cash_pay + nssf_employer + ahl_employer + pension_employer + nita_levy_monthly).quantize(Decimal("0.01"))
 
     breakdown = {
-        "employee": {"id": employee.id, "name": employee.name, "department": employee.department, "designation": employee.designation},
+        "employee": {
+            "id": employee.id,
+            "name": employee.name,
+            "department": employee.department,
+            "designation": employee.designation,
+            "employment_type": employment_type,
+        },
         "inputs": {
             "basic_salary": _money_to_float(values["basic_salary"]),
             "house_allowance": _money_to_float(values["house_allowance"]),
@@ -1163,9 +1211,21 @@ def _calculate_payroll_breakdown(
             "shif_rate": float(shif_rate),
             "shif_minimum_monthly": _money_to_float(shif_minimum_monthly),
         },
+        "taxes": {
+            "withholding_tax": _money_to_float(withholding_tax),
+            "paye_after_reliefs": _money_to_float(paye_after_reliefs),
+        },
         "notes": [
-            "Gross salary for AHL and SHIF uses regular cash earnings less tax-exempt allowances and excludes non-cash benefits.",
-            "Non-cash benefits are included in taxable pay only when the monthly benefit exceeds KES 5,000.",
+            *(
+                [
+                    "Consultant mode: only 5% withholding tax is applied. Employee statutory deductions are not applied."
+                ]
+                if employment_type == "consultant"
+                else [
+                    "Gross salary for AHL and SHIF uses regular cash earnings less tax-exempt allowances and excludes non-cash benefits.",
+                    "Non-cash benefits are included in taxable pay only when the monthly benefit exceeds KES 5,000.",
+                ]
+            ),
             *[str(note) for note in statutory["source_notes"]],
             *(salary_advance_note.split("; ") if salary_advance_note else []),
         ],
@@ -1191,6 +1251,7 @@ def _calculate_payroll_breakdown(
         "owner_occupier_interest_relief": owner_occupier_interest_relief,
         "paye_before_reliefs": paye_before_reliefs,
         "paye_after_reliefs": paye_after_reliefs,
+        "withholding_tax": withholding_tax,
         "net_pay": net_pay,
         "employer_total_cost": employer_total_cost,
         "notes": values["notes"],
@@ -1203,6 +1264,11 @@ def _serialize_payroll_run(db: Session, row: PayrollRun) -> PayrollRunOut:
     _attach_user_payroll_metadata(db, row.employee)
     breakdown = _loads_json_object(row.breakdown_json)
     inputs = breakdown.get("inputs", {})
+    taxes = breakdown.get("taxes", {})
+    employment_type = _normalize_employment_type(getattr(row.employee, "employment_type", None))
+    withholding_tax = _money_to_float(_dec(taxes.get("withholding_tax", 0)))
+    if employment_type == "consultant" and withholding_tax <= 0:
+        withholding_tax = _money_to_float(_dec(row.paye_after_reliefs))
     total_deductions = (
         _money_to_float(_dec(row.nssf_employee)) +
         _money_to_float(_dec(row.shif_employee)) +
@@ -1248,6 +1314,7 @@ def _serialize_payroll_run(db: Session, row: PayrollRun) -> PayrollRunOut:
         owner_occupier_interest_relief=_money_to_float(_dec(row.owner_occupier_interest_relief)),
         paye_before_reliefs=_money_to_float(_dec(row.paye_before_reliefs)),
         paye_after_reliefs=_money_to_float(_dec(row.paye_after_reliefs)),
+        withholding_tax=withholding_tax,
         net_pay=_money_to_float(_dec(row.net_pay)),
         employer_total_cost=_money_to_float(_dec(row.employer_total_cost)),
         breakdown=breakdown,
@@ -1939,6 +2006,7 @@ def create_user(
         raise HTTPException(status_code=400, detail="Email already exists")
     if not _is_valid_role(payload.role):
         raise HTTPException(status_code=400, detail="role must be one of: employee, supervisor, finance, admin, ceo")
+    employment_type = _require_valid_employment_type(payload.employment_type)
 
     validated_department = _validate_department_exists(db, payload.department)
     validated_designation = _validate_designation_exists_for_department(db, validated_department, payload.designation)
@@ -1948,6 +2016,7 @@ def create_user(
         email=payload.email,
         password_hash=hash_password(payload.password),
         role=payload.role.lower(),
+        employment_type=employment_type,
         avatar_url=payload.avatar_url,
         phone=payload.phone,
         department=validated_department,
@@ -2004,6 +2073,8 @@ def update_user_profile(
         if not name:
             raise HTTPException(status_code=400, detail="Name cannot be empty")
         incoming["name"] = name
+    if "employment_type" in incoming:
+        incoming["employment_type"] = _require_valid_employment_type(incoming["employment_type"])
     if "department" in incoming:
         incoming["department"] = _validate_department_exists(db, incoming.get("department"))
     if "designation" in incoming or "department" in incoming:
@@ -2196,6 +2267,8 @@ def admin_update_user_profile(
         if not name:
             raise HTTPException(status_code=400, detail="Name cannot be empty")
         incoming["name"] = name
+    if "employment_type" in incoming:
+        incoming["employment_type"] = _require_valid_employment_type(incoming["employment_type"])
 
     if "email" in incoming:
         email = (incoming["email"] or "").strip().lower()
@@ -2299,6 +2372,7 @@ def run_migration(
 ):
     migrations = {
         "add_approved_amount": "ALTER TABLE salary_advance_requests ADD COLUMN IF NOT EXISTS approved_amount NUMERIC(12, 2);",
+        "add_user_employment_type": "ALTER TABLE users ADD COLUMN IF NOT EXISTS employment_type VARCHAR(20) DEFAULT 'employee';",
         "add_user_theme_preference": "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(20);",
     }
     if migration_name not in migrations:
@@ -2531,6 +2605,40 @@ def update_task_client(
     return c
 
 
+@app.delete("/task-manager/clients/{client_id}")
+def delete_task_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    c = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    blockers: list[str] = []
+    task_refs = db.query(ClientTask).filter(ClientTask.client_id == c.id).count()
+    if task_refs:
+        blockers.append(f"{task_refs} task(s)")
+    event_refs = db.query(Event).filter(Event.client_id == c.id).count()
+    if event_refs:
+        blockers.append(f"{event_refs} calendar event(s)")
+    activity_refs = db.query(DailyActivity).filter(DailyActivity.client_id == c.id).count()
+    if activity_refs:
+        blockers.append(f"{activity_refs} activity record(s)")
+    reimbursement_refs = db.query(CashReimbursementItem).filter(CashReimbursementItem.client_id == c.id).count()
+    if reimbursement_refs:
+        blockers.append(f"{reimbursement_refs} reimbursement item(s)")
+    if blockers:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete client because it is referenced by " + ", ".join(blockers),
+        )
+
+    db.delete(c)
+    db.commit()
+    return {"ok": True}
+
+
 @app.get("/task-manager/tasks", response_model=List[ClientTaskOut])
 def list_client_tasks(
     year: int,
@@ -2625,7 +2733,13 @@ def update_client_task(
         task_text = (incoming["task"] or "").strip()
         if not task_text:
             raise HTTPException(status_code=400, detail="task cannot be empty")
-        t.task = task_text
+        if t.task_group_id:
+            siblings = db.query(ClientTask).filter(ClientTask.task_group_id == t.task_group_id).all()
+            for sibling in siblings:
+                sibling.task = task_text
+                sibling.updated_at = datetime.utcnow()
+        else:
+            t.task = task_text
     if "subtask" in incoming:
         subtask_text = (incoming["subtask"] or "").strip()
         if not subtask_text:
@@ -4122,6 +4236,7 @@ def preview_payroll_run(
         owner_occupier_interest_relief=_money_to_float(computed["owner_occupier_interest_relief"]),
         paye_before_reliefs=_money_to_float(computed["paye_before_reliefs"]),
         paye_after_reliefs=_money_to_float(computed["paye_after_reliefs"]),
+        withholding_tax=_money_to_float(computed["withholding_tax"]),
         net_pay=_money_to_float(computed["net_pay"]),
         employer_total_cost=_money_to_float(computed["employer_total_cost"]),
         breakdown=computed["breakdown"],

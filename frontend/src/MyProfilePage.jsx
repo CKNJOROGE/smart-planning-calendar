@@ -147,6 +147,7 @@ export default function MyProfilePage() {
             />
             <Field label="Email" value={profile.email} disabled />
             <Field label="Role" value={profile.role} disabled />
+            <Field label="Employment Type" value={profile.employment_type || "employee"} disabled />
 
             <div className="field" style={{ gridColumn: "1 / -1" }}>
               <label>Profile image</label>

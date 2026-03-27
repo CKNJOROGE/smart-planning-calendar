@@ -377,6 +377,8 @@ export default function PayrollPage() {
     () => (employees || []).find((row) => Number(row.id) === Number(selectedEmployeeId)) || null,
     [employees, selectedEmployeeId]
   );
+  const selectedEmploymentType = String(selectedEmployee?.employment_type || "employee").toLowerCase();
+  const isConsultantSelected = selectedEmploymentType === "consultant";
 
   const selectedStatutoryConfig = useMemo(
     () => (statutoryConfigs || []).find((row) => Number(row.id) === Number(selectedStatutoryConfigId)) || null,
@@ -758,7 +760,9 @@ export default function PayrollPage() {
                   onClick={() => setSelectedEmployeeId(String(row.id))}
                 >
                   <div style={{ fontWeight: 800 }}>{row.name}</div>
-                  <div className="muted" style={{ fontSize: 12 }}>{row.department || "Unassigned"} | {row.designation || row.role}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {row.department || "Unassigned"} | {row.designation || row.role} | {row.employment_type || "employee"}
+                  </div>
                   <div className="muted" style={{ fontSize: 12 }}>{row.email}</div>
                 </button>
               );
@@ -773,8 +777,13 @@ export default function PayrollPage() {
               <div>
                 <div style={{ fontWeight: 900, fontSize: 18 }}>{selectedEmployee?.name || "Select an employee"}</div>
                 <div className="muted">
-                  {selectedEmployee ? `${selectedEmployee.department || "Unassigned"} | ${selectedEmployee.designation || selectedEmployee.role}` : "Choose an employee to manage payroll setup and monthly runs."}
+                  {selectedEmployee ? `${selectedEmployee.department || "Unassigned"} | ${selectedEmployee.designation || selectedEmployee.role} | ${selectedEmployee.employment_type || "employee"}` : "Choose an employee to manage payroll setup and monthly runs."}
                 </div>
+                {isConsultantSelected && (
+                  <div className="muted" style={{ marginTop: 4 }}>
+                    Consultant mode: only withholding tax (5%) is applied in payroll calculations.
+                  </div>
+                )}
               </div>
               {profile && (
                 <div className="payroll-pill-row">
@@ -886,10 +895,13 @@ export default function PayrollPage() {
                   <div className="payroll-preview-grid">
                     {statChip("Gross Cash", fmtCurrency(preview.gross_cash_pay))}
                     {statChip("Taxable Income", fmtCurrency(preview.taxable_income))}
-                    {statChip("PAYE", fmtCurrency(preview.paye_after_reliefs))}
-                    {statChip("SHIF", fmtCurrency(preview.shif_employee))}
-                    {statChip("AHL", fmtCurrency(preview.ahl_employee))}
-                    {statChip("NSSF", fmtCurrency(preview.nssf_employee))}
+                    {statChip(
+                      isConsultantSelected ? "Withholding Tax (5%)" : "PAYE",
+                      fmtCurrency(isConsultantSelected ? preview.withholding_tax : preview.paye_after_reliefs)
+                    )}
+                    {!isConsultantSelected && statChip("SHIF", fmtCurrency(preview.shif_employee))}
+                    {!isConsultantSelected && statChip("AHL", fmtCurrency(preview.ahl_employee))}
+                    {!isConsultantSelected && statChip("NSSF", fmtCurrency(preview.nssf_employee))}
                     {statChip("Net Pay", fmtCurrency(preview.net_pay))}
                     {statChip("Employer Cost", fmtCurrency(preview.employer_total_cost))}
                   </div>
@@ -907,14 +919,18 @@ export default function PayrollPage() {
                           ["Gross cash pay", preview.gross_cash_pay],
                           ["Taxable non-cash benefits", preview.taxable_non_cash_benefits],
                           ["Tax-exempt allowances", preview.tax_exempt_allowance],
-                          ["Employee pension", preview.pension_employee],
-                          ["NSSF employee", preview.nssf_employee],
-                          ["SHIF employee", preview.shif_employee],
-                          ["AHL employee", preview.ahl_employee],
-                          ["PAYE before reliefs", preview.paye_before_reliefs],
-                          ["Personal relief", preview.personal_relief],
-                          ["Insurance relief", preview.insurance_relief],
-                          ["PAYE after reliefs", preview.paye_after_reliefs],
+                          ...(isConsultantSelected
+                            ? [["Withholding tax (5%)", preview.withholding_tax]]
+                            : [
+                                ["Employee pension", preview.pension_employee],
+                                ["NSSF employee", preview.nssf_employee],
+                                ["SHIF employee", preview.shif_employee],
+                                ["AHL employee", preview.ahl_employee],
+                                ["PAYE before reliefs", preview.paye_before_reliefs],
+                                ["Personal relief", preview.personal_relief],
+                                ["Insurance relief", preview.insurance_relief],
+                                ["PAYE after reliefs", preview.paye_after_reliefs],
+                              ]),
                           ["Other deductions", preview.other_deductions],
                           ["Net pay", preview.net_pay],
                         ].map(([label, amount]) => (

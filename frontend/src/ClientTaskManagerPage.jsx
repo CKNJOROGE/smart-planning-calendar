@@ -4,6 +4,7 @@ import {
   listTaskYears,
   listTaskClients,
   createTaskClient,
+  deleteTaskClient,
   listClientTasks,
   createClientTask,
   updateClientTask,
@@ -34,11 +35,13 @@ export default function ClientTaskManagerPage() {
   const [newClientName, setNewClientName] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [subtaskRows, setSubtaskRows] = useState([emptySubtask()]);
+  const [editingRows, setEditingRows] = useState({});
 
   const selectedClient = useMemo(
     () => clients.find((c) => c.id === Number(selectedClientId)) || null,
     [clients, selectedClientId]
   );
+  const canManageClients = ["admin", "ceo"].includes(String(current?.role || "").toLowerCase());
 
   const groupedTasks = useMemo(() => {
     const groups = new Map();
@@ -131,6 +134,23 @@ export default function ClientTaskManagerPage() {
     }
   }
 
+  async function handleDeleteClient() {
+    if (!selectedClient) return;
+    if (!confirm(`Delete client "${selectedClient.name}"?`)) return;
+    try {
+      await deleteTaskClient(selectedClient.id);
+      const list = await listTaskClients(selectedYear);
+      setClients(list);
+      setSelectedClientId(list.length ? list[0].id : null);
+      setTasks([]);
+      showToast("Client deleted", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
   function addSubtaskRow() {
     setSubtaskRows((prev) => [...prev, emptySubtask()]);
   }
@@ -209,6 +229,65 @@ export default function ClientTaskManagerPage() {
     }
   }
 
+  function startEditRow(row) {
+    setEditingRows((prev) => ({
+      ...prev,
+      [row.id]: {
+        task: row.task || "",
+        subtask: row.subtask || "",
+        completion_date: row.completion_date || "",
+      },
+    }));
+  }
+
+  function cancelEditRow(rowId) {
+    setEditingRows((prev) => {
+      const next = { ...prev };
+      delete next[rowId];
+      return next;
+    });
+  }
+
+  function patchEditRow(rowId, patch) {
+    setEditingRows((prev) => ({
+      ...prev,
+      [rowId]: { ...(prev[rowId] || {}), ...patch },
+    }));
+  }
+
+  async function saveEditRow(row) {
+    const draft = editingRows[row.id];
+    if (!draft) return;
+    const payload = {
+      task: (draft.task || "").trim(),
+      subtask: (draft.subtask || "").trim(),
+      completion_date: draft.completion_date || null,
+    };
+    if (!payload.task) {
+      setErr("Task cannot be empty.");
+      return;
+    }
+    if (!payload.subtask) {
+      setErr("Subtask cannot be empty.");
+      return;
+    }
+    try {
+      await updateClientTask(row.id, payload);
+      const list = await listClientTasks({
+        year: selectedYear,
+        clientId: Number(selectedClientId),
+        quarter: selectedQuarter,
+      });
+      setTasks(list);
+      cancelEditRow(row.id);
+      showToast("Task updated", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
   if (busy && !current) {
     return (
       <div className="page-wrap client-task-page">
@@ -272,6 +351,17 @@ export default function ClientTaskManagerPage() {
             </button>
           ))}
           {!clients.length && <div className="muted">No clients yet. Add one above.</div>}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={handleDeleteClient}
+            disabled={!selectedClient || !canManageClients}
+            title={canManageClients ? "Delete selected client" : "Only admin/ceo can delete clients"}
+          >
+            Delete Selected Client
+          </button>
         </div>
       </div>
 
@@ -360,16 +450,45 @@ export default function ClientTaskManagerPage() {
             </thead>
             <tbody>
               {groupedTasks.map((group) =>
-                group.rows.map((row, idx) => (
+                group.rows.map((row) => {
+                  const draft = editingRows[row.id];
+                  const isEditing = !!draft;
+                  return (
                   <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                    {idx === 0 && (
-                      <>
-                        <td style={{ padding: 10 }} rowSpan={group.rows.length}>{group.owner}</td>
-                        <td style={{ padding: 10, fontWeight: 700 }} rowSpan={group.rows.length}>{group.task}</td>
-                      </>
-                    )}
-                    <td style={{ padding: 10 }}>{row.subtask}</td>
-                    <td style={{ padding: 10 }}>{row.completion_date || "-"}</td>
+                    <td style={{ padding: 10 }}>{group.owner}</td>
+                    <td style={{ padding: 10 }}>
+                      {isEditing ? (
+                        <input
+                          value={draft.task}
+                          onChange={(e) => patchEditRow(row.id, { task: e.target.value })}
+                          style={{ width: "100%" }}
+                        />
+                      ) : (
+                        <span style={{ fontWeight: 700 }}>{row.task}</span>
+                      )}
+                    </td>
+                    <td style={{ padding: 10 }}>
+                      {isEditing ? (
+                        <input
+                          value={draft.subtask}
+                          onChange={(e) => patchEditRow(row.id, { subtask: e.target.value })}
+                          style={{ width: "100%" }}
+                        />
+                      ) : (
+                        row.subtask
+                      )}
+                    </td>
+                    <td style={{ padding: 10 }}>
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={draft.completion_date}
+                          onChange={(e) => patchEditRow(row.id, { completion_date: e.target.value })}
+                        />
+                      ) : (
+                        row.completion_date || "-"
+                      )}
+                    </td>
                     <td style={{ padding: 10 }}>
                       <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
                         <input
@@ -381,25 +500,55 @@ export default function ClientTaskManagerPage() {
                       </label>
                     </td>
                     <td style={{ padding: 10 }}>
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => handleDeleteSubtask(row)}
-                        disabled={
-                          !current
-                          || !(
-                            current.role === "admin"
-                            || current.role === "ceo"
-                            || current.role === "supervisor"
-                            || Number(current.id) === Number(row.user_id)
-                          )
-                        }
-                        title="Owner/admin/supervisor can delete"
-                      >
-                        Delete
-                      </button>
+                      {isEditing ? (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button className="btn btn-primary" type="button" onClick={() => saveEditRow(row)}>
+                            Save
+                          </button>
+                          <button className="btn" type="button" onClick={() => cancelEditRow(row.id)}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <button
+                            className="btn"
+                            type="button"
+                            onClick={() => startEditRow(row)}
+                            disabled={
+                              !current
+                              || !(
+                                current.role === "admin"
+                                || current.role === "ceo"
+                                || current.role === "supervisor"
+                                || Number(current.id) === Number(row.user_id)
+                              )
+                            }
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="btn btn-danger"
+                            onClick={() => handleDeleteSubtask(row)}
+                            disabled={
+                              !current
+                              || !(
+                                current.role === "admin"
+                                || current.role === "ceo"
+                                || current.role === "supervisor"
+                                || Number(current.id) === Number(row.user_id)
+                              )
+                            }
+                            title="Owner/admin/supervisor can delete"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
-                ))
+                );
+                })
               )}
               {!groupedTasks.length && (
                 <tr>

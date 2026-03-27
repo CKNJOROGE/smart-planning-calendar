@@ -43,6 +43,7 @@ class UserOut(BaseModel):
     name: str
     email: EmailStr
     role: str
+    employment_type: str = "employee"
     supervisor_id: Optional[int] = None
     supervisor_name: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -76,6 +77,7 @@ class UserProfileOut(BaseModel):
     name: str
     email: EmailStr
     role: str
+    employment_type: str = "employee"
     supervisor_id: Optional[int] = None
     avatar_url: Optional[str] = None
 
@@ -117,6 +119,7 @@ class UserProfileUpdate(BaseModel):
     id_number: Optional[str] = None
     nssf_number: Optional[str] = None
     nhif_number: Optional[str] = None
+    employment_type: Optional[str] = None
 
 
 class UserCreate(BaseModel):
@@ -124,6 +127,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str
     role: str = "employee"
+    employment_type: str = "employee"
     avatar_url: Optional[str] = None
     phone: Optional[str] = None
     department: Optional[str] = None
@@ -896,6 +900,7 @@ class PayrollRunOut(BaseModel):
     owner_occupier_interest_relief: float
     paye_before_reliefs: float
     paye_after_reliefs: float
+    withholding_tax: float = 0
     net_pay: float
     employer_total_cost: float
     breakdown: dict[str, Any] = {}

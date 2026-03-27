@@ -14,6 +14,7 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), nullable=False, default="employee")
+    employment_type = Column(String(20), nullable=False, default="employee")
     avatar_url = Column(String(500), nullable=True)
     theme_preference = Column(String(20), nullable=True)
 
