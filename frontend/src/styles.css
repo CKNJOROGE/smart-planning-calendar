@@ -1820,6 +1820,65 @@ textarea{ resize: vertical; min-height: 90px; }
   box-shadow: 0 0 0 2px rgba(100, 2, 119, 0.22);
 }
 
+.task-mode-toggle-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-mode-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  transition: color 120ms ease;
+}
+
+.task-mode-label.active {
+  color: var(--text);
+}
+
+.task-mode-toggle {
+  border: 0;
+  cursor: pointer;
+  width: 122px;
+  height: 62px;
+  border-radius: 999px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  background: linear-gradient(120deg, #65e6b8 0%, #57a4f5 100%);
+  box-shadow: inset 0 2px 12px rgba(255, 255, 255, 0.2), 0 10px 20px rgba(69, 176, 214, 0.24);
+  transition: box-shadow 160ms ease, transform 120ms ease;
+}
+
+.task-mode-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 2px 12px rgba(255, 255, 255, 0.22), 0 12px 22px rgba(69, 176, 214, 0.28);
+}
+
+.task-mode-toggle:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(87, 164, 245, 0.35),
+    inset 0 2px 12px rgba(255, 255, 255, 0.24),
+    0 12px 22px rgba(69, 176, 214, 0.3);
+}
+
+.task-mode-toggle-knob {
+  width: 54px;
+  height: 54px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 12px 20px rgba(26, 85, 111, 0.28);
+  transform: translateX(0);
+  transition: transform 180ms ease;
+}
+
+.task-mode-toggle.is-edit .task-mode-toggle-knob {
+  transform: translateX(56px);
+}
+
 .dashboard-page {
   display: grid;
   gap: 12px;

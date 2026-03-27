@@ -335,21 +335,19 @@ export default function ClientTaskManagerPage() {
 
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 800, marginBottom: 8 }}>Mode</div>
-        <div className="row">
+        <div className="task-mode-toggle-wrap">
+          <span className={`task-mode-label ${!isEditMode ? "active" : ""}`}>View</span>
           <button
             type="button"
-            className={`btn task-choice-btn ${!isEditMode ? "task-choice-active" : ""}`}
-            onClick={() => setMode("view")}
+            className={`task-mode-toggle ${isEditMode ? "is-edit" : ""}`}
+            onClick={() => setMode((prev) => (prev === "edit" ? "view" : "edit"))}
+            role="switch"
+            aria-checked={isEditMode}
+            aria-label={`Switch to ${isEditMode ? "view" : "edit"} mode`}
           >
-            View Mode
+            <span className="task-mode-toggle-knob" />
           </button>
-          <button
-            type="button"
-            className={`btn task-choice-btn ${isEditMode ? "task-choice-active" : ""}`}
-            onClick={() => setMode("edit")}
-          >
-            Edit Mode
-          </button>
+          <span className={`task-mode-label ${isEditMode ? "active" : ""}`}>Edit</span>
         </div>
       </div>
 
