@@ -4,35 +4,10 @@ from datetime import datetime, date
 from .db import Base
 
 
-class Company(Base):
-    __tablename__ = "companies"
-
-    id = Column(Integer, primary_key=True)
-    name = Column(String(255), nullable=False)
-    slug = Column(String(100), unique=True, nullable=False, index=True)
-    logo_url = Column(String(500), nullable=True)
-    primary_color = Column(String(20), nullable=True, default="#3B82F6")
-    domain = Column(String(255), nullable=True)
-    subscription_plan = Column(String(50), nullable=False, default="free")
-    subscription_status = Column(String(50), nullable=False, default="trial")
-    subscription_expires_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-
-    users = relationship("User", back_populates="company")
-    events = relationship("Event", back_populates="company")
-    departments = relationship("Department", back_populates="company")
-    designations = relationship("Designation", back_populates="company")
-    clients = relationship("ClientAccount", back_populates="company")
-
-
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True)
-
-    # company (multi-tenant)
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
 
     # core identity/auth
     name = Column(String(120), nullable=False)
@@ -83,7 +58,6 @@ class User(Base):
         foreign_keys="Event.user_id",
     )
     supervisor = relationship("User", foreign_keys=[supervisor_id], remote_side=[id])
-    company = relationship("Company", back_populates="users")
     client_tasks = relationship("ClientTask", back_populates="user", foreign_keys="ClientTask.user_id")
     daily_activities = relationship("DailyActivity", back_populates="user", cascade="all, delete-orphan")
 
@@ -92,9 +66,6 @@ class Event(Base):
     __tablename__ = "events"
 
     id = Column(Integer, primary_key=True)
-
-    # multi-tenant
-    company_id = Column(Integer, ForeignKey("companies.id"), nullable=False, index=True)
 
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
