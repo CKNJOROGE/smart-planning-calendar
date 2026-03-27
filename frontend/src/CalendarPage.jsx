@@ -1248,8 +1248,9 @@ export default function CalendarPage() {
                 ["leave", "hospital"].includes((api?.type || "").toLowerCase()) &&
                 (api?.status || "").toLowerCase() === "pending";
               const label = `${api?.user?.name || "User"} • ${typeLabel(api?.type)}`;
+              const accent = colorByType(api?.type);
               return (
-                <div className="event-chip">
+                <div className="event-chip glass-event-chip" style={{ "--event-accent": accent }}>
                   <Avatar
                     name={api?.user?.name}
                     url={api?.user?.avatar_url}
