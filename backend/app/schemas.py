@@ -58,6 +58,16 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
+class MeOut(UserOut):
+    theme_preference: Optional[str] = None
+    effective_theme: str = "light"
+
+
+class ThemeUpdateIn(BaseModel):
+    theme: str
+    apply_to_all: bool = False
+
+
 # -------------------------
 # Profiles
 # -------------------------

@@ -51,9 +51,11 @@ from .schemas import (
     ResetPasswordIn,
     FirstAdminCreate,
     UserOut,
+    MeOut,
     UserProfileOut,
     UserProfileUpdate,
     UserCreate,
+    ThemeUpdateIn,
     AdminResetUserPasswordIn,
     AdminUserProfileOut,
     AdminUserProfileUpdate,
@@ -166,6 +168,19 @@ DEFAULT_LIBRARY_CATEGORIES = {
     "Disciplinary Management",
     "Training Template",
 }
+VALID_THEMES = {
+    "light",
+    "dark",
+    "slate",
+    "teal",
+    "forest",
+    "ocean",
+    "amber",
+    "rose",
+    "indigo",
+    "cocoa",
+}
+DEFAULT_THEME = "light"
 
 AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -245,6 +260,10 @@ def _run_startup_migrations():
             pass
         try:
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS employee_no VARCHAR(50)"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(20)"))
         except Exception:
             pass
 
@@ -433,6 +452,29 @@ def _is_admin_like(role: Optional[str]) -> bool:
 
 def _is_finance_reviewer(role: Optional[str]) -> bool:
     return (role or "").strip().lower() in {"finance", "admin", "ceo"}
+
+
+def _normalize_theme(raw_theme: Optional[str]) -> Optional[str]:
+    normalized = (raw_theme or "").strip().lower()
+    if not normalized:
+        return None
+    return normalized if normalized in VALID_THEMES else None
+
+
+def _require_theme(raw_theme: Optional[str]) -> str:
+    normalized = _normalize_theme(raw_theme)
+    if not normalized:
+        allowed = ", ".join(sorted(VALID_THEMES))
+        raise HTTPException(status_code=400, detail=f"theme must be one of: {allowed}")
+    return normalized
+
+
+def _attach_user_theme_metadata(user_obj: Optional[User]) -> None:
+    if not user_obj:
+        return
+    normalized_theme = _normalize_theme(getattr(user_obj, "theme_preference", None))
+    setattr(user_obj, "theme_preference", normalized_theme)
+    setattr(user_obj, "effective_theme", normalized_theme or DEFAULT_THEME)
 
 
 def _attach_user_supervisor_metadata(db: Session, user_obj: Optional[User]) -> None:
@@ -1718,14 +1760,40 @@ def reset_password(payload: ResetPasswordIn, db: Session = Depends(get_db)):
     return MessageOut(message="Password has been reset successfully.")
 
 
-@app.get("/me", response_model=UserOut)
+@app.get("/me", response_model=MeOut)
 def get_me(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     _attach_user_supervisor_metadata(db, user)
     _attach_user_payroll_metadata(db, user)
+    _attach_user_theme_metadata(user)
     return user
+
+
+@app.patch("/me/theme", response_model=MeOut)
+def update_my_theme(
+    payload: ThemeUpdateIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    theme = _require_theme(payload.theme)
+    apply_to_all = bool(payload.apply_to_all)
+
+    if apply_to_all:
+        if not _is_admin_like(current.role):
+            raise HTTPException(status_code=403, detail="Only admin/ceo can apply theme to all users")
+        db.query(User).update({User.theme_preference: theme}, synchronize_session=False)
+    else:
+        current.theme_preference = theme
+        db.add(current)
+
+    db.commit()
+    db.refresh(current)
+    _attach_user_supervisor_metadata(db, current)
+    _attach_user_payroll_metadata(db, current)
+    _attach_user_theme_metadata(current)
+    return current
 
 
 # -------------------------
@@ -2231,6 +2299,7 @@ def run_migration(
 ):
     migrations = {
         "add_approved_amount": "ALTER TABLE salary_advance_requests ADD COLUMN IF NOT EXISTS approved_amount NUMERIC(12, 2);",
+        "add_user_theme_preference": "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(20);",
     }
     if migration_name not in migrations:
         raise HTTPException(status_code=400, detail="Unknown migration")

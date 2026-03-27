@@ -111,6 +111,13 @@ export function me() {
   return request("/me");
 }
 
+export function updateTheme(theme, applyToAll = false) {
+  return request("/me/theme", {
+    method: "PATCH",
+    body: { theme, apply_to_all: !!applyToAll },
+  });
+}
+
 export function listUsers() {
   return request("/users");
 }

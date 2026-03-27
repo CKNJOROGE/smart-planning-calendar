@@ -16,9 +16,8 @@ import PerformanceManagementPage from "./PerformanceManagementPage";
 import IndividualGoalsPage from "./IndividualGoalsPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
 import ResetPasswordPage from "./ResetPasswordPage";
-import { getToken, clearToken, getFinanceAttention } from "./api";
-import { me } from "./api";
-import { ToastProvider } from "./ToastProvider";
+import { getToken, clearToken, getFinanceAttention, me, updateTheme } from "./api";
+import { ToastProvider, useToast } from "./ToastProvider";
 
 const THEME_OPTIONS = [
   { value: "light", label: "Light" },
@@ -40,16 +39,54 @@ function getInitialTheme() {
   return VALID_THEMES.has(storedTheme) ? storedTheme : "light";
 }
 
+function normalizeTheme(theme) {
+  return VALID_THEMES.has(theme) ? theme : null;
+}
+
 function Shell({ onLogout, theme, setTheme }) {
   const [user, setUser] = useState(null);
   const [financeAttentionTotal, setFinanceAttentionTotal] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { showToast } = useToast();
   const nav = useNavigate();
   const canManageThemePalette = ["admin", "ceo"].includes(String(user?.role || "").toLowerCase());
 
   useEffect(() => {
-    me().then(setUser).catch(() => setUser(null));
-  }, []);
+    me()
+      .then((payload) => {
+        setUser(payload);
+        const effectiveTheme = normalizeTheme(payload?.effective_theme);
+        if (effectiveTheme) {
+          setTheme(effectiveTheme);
+        }
+      })
+      .catch(() => setUser(null));
+  }, [setTheme]);
+
+  async function handleThemeChange(nextTheme) {
+    const normalizedTheme = normalizeTheme(nextTheme);
+    if (!normalizedTheme) return;
+    const applyToAll = canManageThemePalette;
+    setTheme(normalizedTheme);
+    try {
+      const payload = await updateTheme(normalizedTheme, applyToAll);
+      setUser(payload);
+      setTheme(normalizeTheme(payload?.effective_theme) || normalizedTheme);
+      showToast(applyToAll ? "Theme applied to all users" : "Theme synced to your account", "success");
+    } catch (err) {
+      showToast(String(err?.message || err), "error");
+      try {
+        const refreshed = await me();
+        setUser(refreshed);
+        const refreshedTheme = normalizeTheme(refreshed?.effective_theme);
+        if (refreshedTheme) {
+          setTheme(refreshedTheme);
+        }
+      } catch {
+        // keep current local value when refresh fails
+      }
+    }
+  }
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -187,7 +224,7 @@ function Shell({ onLogout, theme, setTheme }) {
           </div>
           <button
             className="btn sidebar-theme-btn"
-            onClick={() => setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"))}
+            onClick={() => handleThemeChange(theme === "dark" ? "light" : "dark")}
             title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           >
             {theme === "dark" ? "Light mode" : "Dark mode"}
@@ -201,7 +238,7 @@ function Shell({ onLogout, theme, setTheme }) {
                     key={option.value}
                     type="button"
                     className={`theme-swatch-btn${theme === option.value ? " active" : ""}`}
-                    onClick={() => setTheme(option.value)}
+                    onClick={() => handleThemeChange(option.value)}
                     aria-pressed={theme === option.value}
                     title={`Switch theme to ${option.label}`}
                   >
@@ -263,7 +300,11 @@ export default function App() {
         return;
       }
       try {
-        await me();
+        const payload = await me();
+        const effectiveTheme = normalizeTheme(payload?.effective_theme);
+        if (effectiveTheme) {
+          setTheme(effectiveTheme);
+        }
         setAuthState("authed");
       } catch {
         clearToken();
