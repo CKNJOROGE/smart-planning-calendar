@@ -19,6 +19,15 @@ function emptySubtask() {
   return { subtask: "", completion_date: "" };
 }
 
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\"", "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function canEditRow(current, row) {
   if (!current || !row) return false;
   return (
@@ -47,6 +56,8 @@ export default function ClientTaskManagerPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [subtaskRows, setSubtaskRows] = useState([emptySubtask()]);
   const [editingRows, setEditingRows] = useState({});
+  const [exportClientScope, setExportClientScope] = useState("selected");
+  const [exportPeriodScope, setExportPeriodScope] = useState("quarter");
 
   const isEditMode = mode === "edit";
   const canManageClients = ["admin", "ceo"].includes(String(current?.role || "").toLowerCase());
@@ -314,6 +325,161 @@ export default function ClientTaskManagerPage() {
     }
   }
 
+  async function handleExportPdf() {
+    try {
+      const selectedClientNum = Number(selectedClientId);
+      let targetClients = [];
+      if (exportClientScope === "all") {
+        targetClients = [...clients];
+      } else if (exportClientScope === "selected") {
+        const chosen = clients.find((c) => c.id === selectedClientNum);
+        if (chosen) targetClients = [chosen];
+      } else {
+        const explicitId = Number(exportClientScope);
+        const chosen = clients.find((c) => c.id === explicitId);
+        if (chosen) targetClients = [chosen];
+      }
+
+      if (!targetClients.length) {
+        showToast("No client selected for export", "error");
+        return;
+      }
+
+      const quarters = exportPeriodScope === "year" ? QUARTERS : [Number(selectedQuarter)];
+      const requests = [];
+      for (const client of targetClients) {
+        for (const quarter of quarters) {
+          requests.push(
+            listClientTasks({
+              year: Number(selectedYear),
+              clientId: Number(client.id),
+              quarter: Number(quarter),
+            }).then((rows) => ({ client, quarter, rows: rows || [] }))
+          );
+        }
+      }
+      const chunks = await Promise.all(requests);
+      const populatedChunks = chunks.filter((x) => Array.isArray(x.rows) && x.rows.length > 0);
+
+      if (!populatedChunks.length) {
+        showToast("No tasks found for chosen filters", "error");
+        return;
+      }
+
+      const sectionsHtml = populatedChunks
+        .map(({ client, quarter, rows }) => {
+          const groups = new Map();
+          for (const row of rows) {
+            const key = row.task_group_id || `legacy_${row.id}`;
+            if (!groups.has(key)) {
+              groups.set(key, {
+                task: row.task,
+                owner: row.user?.name || `User #${row.user_id}`,
+                subtasks: [],
+              });
+            }
+            groups.get(key).subtasks.push({
+              subtask: row.subtask || "",
+              completion_date: row.completion_date || "",
+              completed: !!row.completed,
+            });
+          }
+          const grouped = Array.from(groups.values());
+          const rowsHtml = grouped
+            .map(
+              (g) => `
+              <tr>
+                <td style="padding:8px;border-top:1px solid #e5e7eb;vertical-align:top;">${escapeHtml(g.owner)}</td>
+                <td style="padding:8px;border-top:1px solid #e5e7eb;vertical-align:top;">
+                  <div style="font-weight:700;margin-bottom:4px;">${escapeHtml(g.task)}</div>
+                  <ul style="margin:0;padding-left:18px;">
+                    ${g.subtasks
+                      .map(
+                        (s) => `<li style="margin:0 0 4px 0;">
+                          ${escapeHtml(s.subtask)}${s.completion_date ? ` - <span style="color:#475569;">${escapeHtml(s.completion_date)}</span>` : ""}
+                          <span style="margin-left:8px;color:${s.completed ? "#166534" : "#b45309"};font-weight:700;">
+                            ${s.completed ? "Done" : "Pending"}
+                          </span>
+                        </li>`
+                      )
+                      .join("")}
+                  </ul>
+                </td>
+              </tr>`
+            )
+            .join("");
+
+          return `
+            <section style="margin:0 0 16px 0;">
+              <h3 style="margin:0 0 8px 0;font-size:14px;">
+                ${escapeHtml(client.name)} - ${escapeHtml(String(selectedYear))} Q${escapeHtml(String(quarter))}
+              </h3>
+              <table style="width:100%;border-collapse:collapse;">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th style="text-align:left;padding:8px;">Employee</th>
+                    <th style="text-align:left;padding:8px;">Task & Subtasks</th>
+                  </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+              </table>
+            </section>`;
+        })
+        .join("");
+
+      const popup = window.open("", "_blank");
+      if (!popup) {
+        showToast("Popup blocked. Allow popups to export PDF.", "error");
+        return;
+      }
+
+      popup.document.open();
+      popup.document.write(`
+        <!doctype html>
+        <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>Client Task Manager Export</title>
+          </head>
+          <body style="font-family:Arial,sans-serif;padding:20px;color:#111;">
+            <h1 style="margin:0 0 8px 0;font-size:20px;">Client Task Manager Export</h1>
+            <div style="margin:0 0 16px 0;font-size:12px;color:#555;">
+              Year: ${escapeHtml(String(selectedYear))}<br/>
+              Client filter: ${escapeHtml(
+                exportClientScope === "all"
+                  ? "All clients"
+                  : exportClientScope === "selected"
+                    ? selectedClient?.name || "Selected client"
+                    : clients.find((c) => String(c.id) === String(exportClientScope))?.name || "Selected client"
+              )}<br/>
+              Period filter: ${escapeHtml(exportPeriodScope === "year" ? "Full year (Q1-Q4)" : `Quarter Q${selectedQuarter}`)}<br/>
+              Exported on: ${escapeHtml(new Date().toLocaleString())}
+            </div>
+            ${sectionsHtml}
+          </body>
+        </html>
+      `);
+      popup.document.close();
+
+      let printed = false;
+      const triggerPrint = () => {
+        if (printed || popup.closed) return;
+        printed = true;
+        popup.focus();
+        setTimeout(() => {
+          if (!popup.closed) popup.print();
+        }, 150);
+      };
+      popup.onload = triggerPrint;
+      setTimeout(triggerPrint, 400);
+      showToast("Preparing PDF export...", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
   if (busy && !current) {
     return (
       <div className="page-wrap client-task-page">
@@ -447,8 +613,38 @@ export default function ClientTaskManagerPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>4) Export PDF</div>
+        <div className="row">
+          <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
+            <label>Client filter</label>
+            <select value={exportClientScope} onChange={(e) => setExportClientScope(e.target.value)}>
+              <option value="selected">Selected client</option>
+              <option value="all">All clients</option>
+              {clients.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
+            <label>Period filter</label>
+            <select value={exportPeriodScope} onChange={(e) => setExportPeriodScope(e.target.value)}>
+              <option value="quarter">{`Selected quarter (Q${selectedQuarter})`}</option>
+              <option value="year">Full year (Q1-Q4)</option>
+            </select>
+          </div>
+          <div style={{ alignSelf: "end" }}>
+            <button type="button" className="btn btn-primary" onClick={handleExportPdf} disabled={!clients.length}>
+              Export PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 800, marginBottom: 8 }}>
-          4) Workplan {selectedClient ? `- ${selectedClient.name}` : ""}
+          5) Workplan {selectedClient ? `- ${selectedClient.name}` : ""}
         </div>
 
         {isEditMode && (
