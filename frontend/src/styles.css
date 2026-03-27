@@ -154,6 +154,10 @@ textarea{ resize: vertical; min-height: 90px; }
   backdrop-filter: blur(12px) saturate(125%);
   -webkit-backdrop-filter: blur(12px) saturate(125%);
 }
+
+.glass-event-chip .event-text {
+  color: #000000 !important;
+}
 .avatar-img{
   border-radius: 50%;
   object-fit: cover;
