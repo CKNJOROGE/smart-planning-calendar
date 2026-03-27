@@ -20,11 +20,26 @@ import { getToken, clearToken, getFinanceAttention } from "./api";
 import { me } from "./api";
 import { ToastProvider } from "./ToastProvider";
 
+const THEME_OPTIONS = [
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+  { value: "slate", label: "Slate Gray" },
+  { value: "teal", label: "Green Teal" },
+  { value: "forest", label: "Forest" },
+];
+
+const VALID_THEMES = new Set(THEME_OPTIONS.map((option) => option.value));
+
+function getInitialTheme() {
+  const storedTheme = localStorage.getItem("theme");
+  return VALID_THEMES.has(storedTheme) ? storedTheme : "light";
+}
+
 function Shell({ onLogout }) {
   const [user, setUser] = useState(null);
   const [financeAttentionTotal, setFinanceAttentionTotal] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "light");
+  const [theme, setTheme] = useState(getInitialTheme);
   const nav = useNavigate();
 
   useEffect(() => {
@@ -74,6 +89,7 @@ function Shell({ onLogout }) {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.style.colorScheme = theme === "dark" ? "dark" : "light";
     localStorage.setItem("theme", theme);
   }, [theme]);
 
@@ -172,11 +188,29 @@ function Shell({ onLogout }) {
           </div>
           <button
             className="btn sidebar-theme-btn"
-            onClick={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
-            title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+            onClick={() => setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"))}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           >
-            {theme === "light" ? "Dark mode" : "Light mode"}
+            {theme === "dark" ? "Light mode" : "Dark mode"}
           </button>
+          <div className="theme-picker" aria-label="Theme picker">
+            <div className="theme-picker-label">Theme Palette</div>
+            <div className="theme-swatch-list">
+              {THEME_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`theme-swatch-btn${theme === option.value ? " active" : ""}`}
+                  onClick={() => setTheme(option.value)}
+                  aria-pressed={theme === option.value}
+                  title={`Switch theme to ${option.label}`}
+                >
+                  <span className={`theme-swatch theme-${option.value}`} aria-hidden="true" />
+                  <span className="theme-swatch-text">{option.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
           <button className="btn sidebar-logout-btn" onClick={() => { onLogout(); nav("/login"); }}>
             Logout
           </button>
