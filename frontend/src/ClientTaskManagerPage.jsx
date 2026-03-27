@@ -19,6 +19,16 @@ function emptySubtask() {
   return { subtask: "", completion_date: "" };
 }
 
+function canEditRow(current, row) {
+  if (!current || !row) return false;
+  return (
+    current.role === "admin" ||
+    current.role === "ceo" ||
+    current.role === "supervisor" ||
+    Number(current.id) === Number(row.user_id)
+  );
+}
+
 export default function ClientTaskManagerPage() {
   const { showToast } = useToast();
 
@@ -32,16 +42,19 @@ export default function ClientTaskManagerPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  const [mode, setMode] = useState("view");
   const [newClientName, setNewClientName] = useState("");
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [subtaskRows, setSubtaskRows] = useState([emptySubtask()]);
   const [editingRows, setEditingRows] = useState({});
 
+  const isEditMode = mode === "edit";
+  const canManageClients = ["admin", "ceo"].includes(String(current?.role || "").toLowerCase());
+
   const selectedClient = useMemo(
     () => clients.find((c) => c.id === Number(selectedClientId)) || null,
     [clients, selectedClientId]
   );
-  const canManageClients = ["admin", "ceo"].includes(String(current?.role || "").toLowerCase());
 
   const groupedTasks = useMemo(() => {
     const groups = new Map();
@@ -116,8 +129,23 @@ export default function ClientTaskManagerPage() {
     })();
   }, [selectedYear, selectedClientId, selectedQuarter]);
 
+  useEffect(() => {
+    if (!isEditMode) setEditingRows({});
+  }, [isEditMode]);
+
+  async function refreshTasks() {
+    if (!selectedYear || !selectedClientId || !selectedQuarter) return;
+    const list = await listClientTasks({
+      year: selectedYear,
+      clientId: Number(selectedClientId),
+      quarter: selectedQuarter,
+    });
+    setTasks(list);
+  }
+
   async function handleCreateClient(e) {
     e.preventDefault();
+    if (!isEditMode) return;
     const name = (newClientName || "").trim();
     if (!name) return;
     try {
@@ -135,7 +163,7 @@ export default function ClientTaskManagerPage() {
   }
 
   async function handleDeleteClient() {
-    if (!selectedClient) return;
+    if (!isEditMode || !selectedClient || !canManageClients) return;
     if (!confirm(`Delete client "${selectedClient.name}"?`)) return;
     try {
       await deleteTaskClient(selectedClient.id);
@@ -165,6 +193,7 @@ export default function ClientTaskManagerPage() {
 
   async function handleCreateTask(e) {
     e.preventDefault();
+    if (!isEditMode) return;
     const taskTitle = (newTaskTitle || "").trim();
     if (!taskTitle || !selectedClientId) {
       setErr("Task title is required.");
@@ -191,12 +220,7 @@ export default function ClientTaskManagerPage() {
       });
       setNewTaskTitle("");
       setSubtaskRows([emptySubtask()]);
-      const list = await listClientTasks({
-        year: selectedYear,
-        clientId: Number(selectedClientId),
-        quarter: selectedQuarter,
-      });
-      setTasks(list);
+      await refreshTasks();
       showToast("Task workplan added", "success");
     } catch (e2) {
       const msg = String(e2.message || e2);
@@ -206,6 +230,7 @@ export default function ClientTaskManagerPage() {
   }
 
   async function handleToggleCompleted(row) {
+    if (!isEditMode || !canEditRow(current, row)) return;
     try {
       const updated = await updateClientTask(row.id, { completed: !row.completed });
       setTasks((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
@@ -217,6 +242,7 @@ export default function ClientTaskManagerPage() {
   }
 
   async function handleDeleteSubtask(row) {
+    if (!isEditMode || !canEditRow(current, row)) return;
     if (!confirm(`Delete subtask "${row.subtask}"?`)) return;
     try {
       await deleteClientTask(row.id);
@@ -230,6 +256,7 @@ export default function ClientTaskManagerPage() {
   }
 
   function startEditRow(row) {
+    if (!isEditMode || !canEditRow(current, row)) return;
     setEditingRows((prev) => ({
       ...prev,
       [row.id]: {
@@ -256,6 +283,7 @@ export default function ClientTaskManagerPage() {
   }
 
   async function saveEditRow(row) {
+    if (!isEditMode || !canEditRow(current, row)) return;
     const draft = editingRows[row.id];
     if (!draft) return;
     const payload = {
@@ -273,12 +301,7 @@ export default function ClientTaskManagerPage() {
     }
     try {
       await updateClientTask(row.id, payload);
-      const list = await listClientTasks({
-        year: selectedYear,
-        clientId: Number(selectedClientId),
-        quarter: selectedQuarter,
-      });
-      setTasks(list);
+      await refreshTasks();
       cancelEditRow(row.id);
       showToast("Task updated", "success");
     } catch (e) {
@@ -300,12 +323,32 @@ export default function ClientTaskManagerPage() {
 
   return (
     <div className="page-wrap client-task-page">
-        <div className="card" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 900, fontSize: 18 }}>Client Task Manager</div>
-          <div className="muted">
-          Year → Client → Quarter. Create one task with multiple subtasks and track each completion.
-          </div>
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 900, fontSize: 18 }}>Client Task Manager</div>
+        <div className="muted">
+          Year -&gt; Client -&gt; Quarter. View Mode is read-only. Edit Mode unlocks create/edit/delete actions.
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>Mode</div>
+        <div className="row">
+          <button
+            type="button"
+            className={`btn task-choice-btn ${!isEditMode ? "task-choice-active" : ""}`}
+            onClick={() => setMode("view")}
+          >
+            View Mode
+          </button>
+          <button
+            type="button"
+            className={`btn task-choice-btn ${isEditMode ? "task-choice-active" : ""}`}
+            onClick={() => setMode("edit")}
+          >
+            Edit Mode
+          </button>
+        </div>
+      </div>
 
       {err && <div className="error">{err}</div>}
 
@@ -326,19 +369,22 @@ export default function ClientTaskManagerPage() {
 
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 800, marginBottom: 8 }}>2) Client</div>
-        <form className="row" onSubmit={handleCreateClient} style={{ marginBottom: 10 }}>
-          <div className="field" style={{ flex: "1 1 260px", marginBottom: 0 }}>
-            <label>Add client</label>
-            <input
-              value={newClientName}
-              onChange={(e) => setNewClientName(e.target.value)}
-              placeholder="e.g., Titan Group"
-            />
-          </div>
-          <div style={{ alignSelf: "end" }}>
-            <button className="btn btn-primary" type="submit">Add Client</button>
-          </div>
-        </form>
+
+        {isEditMode && (
+          <form className="row" onSubmit={handleCreateClient} style={{ marginBottom: 10 }}>
+            <div className="field" style={{ flex: "1 1 260px", marginBottom: 0 }}>
+              <label>Add client</label>
+              <input
+                value={newClientName}
+                onChange={(e) => setNewClientName(e.target.value)}
+                placeholder="e.g., Titan Group"
+              />
+            </div>
+            <div style={{ alignSelf: "end" }}>
+              <button className="btn btn-primary" type="submit">Add Client</button>
+            </div>
+          </form>
+        )}
 
         <div className="row">
           {clients.map((c) => (
@@ -350,19 +396,22 @@ export default function ClientTaskManagerPage() {
               {c.name}
             </button>
           ))}
-          {!clients.length && <div className="muted">No clients yet. Add one above.</div>}
+          {!clients.length && <div className="muted">No clients yet.</div>}
         </div>
-        <div style={{ marginTop: 10 }}>
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={handleDeleteClient}
-            disabled={!selectedClient || !canManageClients}
-            title={canManageClients ? "Delete selected client" : "Only admin/ceo can delete clients"}
-          >
-            Delete Selected Client
-          </button>
-        </div>
+
+        {isEditMode && (
+          <div style={{ marginTop: 10 }}>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={handleDeleteClient}
+              disabled={!selectedClient || !canManageClients}
+              title={canManageClients ? "Delete selected client" : "Only admin/ceo can delete clients"}
+            >
+              Delete Client
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
@@ -386,55 +435,57 @@ export default function ClientTaskManagerPage() {
           4) Workplan {selectedClient ? `- ${selectedClient.name}` : ""}
         </div>
 
-        <form onSubmit={handleCreateTask} style={{ marginBottom: 14 }}>
-          <div className="field">
-            <label>Main task</label>
-            <input
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              placeholder="e.g., Quarterly compliance review"
-              disabled={!selectedClientId}
-            />
-          </div>
-
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Subtasks</div>
-          {subtaskRows.map((row, idx) => (
-            <div key={idx} className="row" style={{ marginBottom: 6 }}>
-              <div className="field" style={{ flex: "1 1 320px", marginBottom: 0 }}>
-                <label>{`Subtask ${idx + 1}`}</label>
-                <input
-                  value={row.subtask}
-                  onChange={(e) => updateSubtaskRow(idx, { subtask: e.target.value })}
-                  placeholder="Subtask description"
-                  disabled={!selectedClientId}
-                />
-              </div>
-              <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
-                <label>Completion date</label>
-                <input
-                  type="date"
-                  value={row.completion_date}
-                  onChange={(e) => updateSubtaskRow(idx, { completion_date: e.target.value })}
-                  disabled={!selectedClientId}
-                />
-              </div>
-              <div style={{ alignSelf: "end", display: "flex", gap: 8 }}>
-                <button type="button" className="btn" onClick={addSubtaskRow} disabled={!selectedClientId}>
-                  + Subtask
-                </button>
-                <button type="button" className="btn btn-danger" onClick={() => removeSubtaskRow(idx)} disabled={!selectedClientId || subtaskRows.length <= 1}>
-                  Remove
-                </button>
-              </div>
+        {isEditMode && (
+          <form onSubmit={handleCreateTask} style={{ marginBottom: 14 }}>
+            <div className="field">
+              <label>Main task</label>
+              <input
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                placeholder="e.g., Quarterly compliance review"
+                disabled={!selectedClientId}
+              />
             </div>
-          ))}
 
-          <div style={{ marginTop: 8 }}>
-            <button className="btn btn-primary" type="submit" disabled={!selectedClientId}>
-              Save Task Workplan
-            </button>
-          </div>
-        </form>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Subtasks</div>
+            {subtaskRows.map((row, idx) => (
+              <div key={idx} className="row" style={{ marginBottom: 6 }}>
+                <div className="field" style={{ flex: "1 1 320px", marginBottom: 0 }}>
+                  <label>{`Subtask ${idx + 1}`}</label>
+                  <input
+                    value={row.subtask}
+                    onChange={(e) => updateSubtaskRow(idx, { subtask: e.target.value })}
+                    placeholder="Subtask description"
+                    disabled={!selectedClientId}
+                  />
+                </div>
+                <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                  <label>Completion date</label>
+                  <input
+                    type="date"
+                    value={row.completion_date}
+                    onChange={(e) => updateSubtaskRow(idx, { completion_date: e.target.value })}
+                    disabled={!selectedClientId}
+                  />
+                </div>
+                <div style={{ alignSelf: "end", display: "flex", gap: 8 }}>
+                  <button type="button" className="btn" onClick={addSubtaskRow} disabled={!selectedClientId}>
+                    + Subtask
+                  </button>
+                  <button type="button" className="btn btn-danger" onClick={() => removeSubtaskRow(idx)} disabled={!selectedClientId || subtaskRows.length <= 1}>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            <div style={{ marginTop: 8 }}>
+              <button className="btn btn-primary" type="submit" disabled={!selectedClientId}>
+                Save Task Workplan
+              </button>
+            </div>
+          </form>
+        )}
 
         <div style={{ width: "100%", overflowX: "auto" }}>
           <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -445,114 +496,92 @@ export default function ClientTaskManagerPage() {
                 <th style={{ textAlign: "left", padding: 10 }}>Subtask</th>
                 <th style={{ textAlign: "left", padding: 10 }}>Completion Date</th>
                 <th style={{ textAlign: "left", padding: 10 }}>Completed</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
+                {isEditMode && <th style={{ textAlign: "left", padding: 10 }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {groupedTasks.map((group) =>
                 group.rows.map((row) => {
                   const draft = editingRows[row.id];
-                  const isEditing = !!draft;
+                  const isEditing = isEditMode && !!draft;
+                  const canEditThisRow = canEditRow(current, row);
                   return (
-                  <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                    <td style={{ padding: 10 }}>{group.owner}</td>
-                    <td style={{ padding: 10 }}>
-                      {isEditing ? (
-                        <input
-                          value={draft.task}
-                          onChange={(e) => patchEditRow(row.id, { task: e.target.value })}
-                          style={{ width: "100%" }}
-                        />
-                      ) : (
-                        <span style={{ fontWeight: 700 }}>{row.task}</span>
+                    <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <td style={{ padding: 10 }}>{group.owner}</td>
+                      <td style={{ padding: 10 }}>
+                        {isEditing ? (
+                          <input
+                            value={draft.task}
+                            onChange={(e) => patchEditRow(row.id, { task: e.target.value })}
+                            style={{ width: "100%" }}
+                          />
+                        ) : (
+                          <span style={{ fontWeight: 700 }}>{row.task}</span>
+                        )}
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        {isEditing ? (
+                          <input
+                            value={draft.subtask}
+                            onChange={(e) => patchEditRow(row.id, { subtask: e.target.value })}
+                            style={{ width: "100%" }}
+                          />
+                        ) : (
+                          row.subtask
+                        )}
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={draft.completion_date}
+                            onChange={(e) => patchEditRow(row.id, { completion_date: e.target.value })}
+                          />
+                        ) : (
+                          row.completion_date || "-"
+                        )}
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
+                          <input
+                            type="checkbox"
+                            checked={!!row.completed}
+                            onChange={() => handleToggleCompleted(row)}
+                            disabled={!isEditMode || !canEditThisRow}
+                          />
+                          {row.completed ? "Done" : "Pending"}
+                        </label>
+                      </td>
+                      {isEditMode && (
+                        <td style={{ padding: 10 }}>
+                          {isEditing ? (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button className="btn btn-primary" type="button" onClick={() => saveEditRow(row)}>
+                                Save
+                              </button>
+                              <button className="btn" type="button" onClick={() => cancelEditRow(row.id)}>
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button className="btn" type="button" onClick={() => startEditRow(row)} disabled={!canEditThisRow}>
+                                Edit
+                              </button>
+                              <button className="btn btn-danger" type="button" onClick={() => handleDeleteSubtask(row)} disabled={!canEditThisRow}>
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </td>
                       )}
-                    </td>
-                    <td style={{ padding: 10 }}>
-                      {isEditing ? (
-                        <input
-                          value={draft.subtask}
-                          onChange={(e) => patchEditRow(row.id, { subtask: e.target.value })}
-                          style={{ width: "100%" }}
-                        />
-                      ) : (
-                        row.subtask
-                      )}
-                    </td>
-                    <td style={{ padding: 10 }}>
-                      {isEditing ? (
-                        <input
-                          type="date"
-                          value={draft.completion_date}
-                          onChange={(e) => patchEditRow(row.id, { completion_date: e.target.value })}
-                        />
-                      ) : (
-                        row.completion_date || "-"
-                      )}
-                    </td>
-                    <td style={{ padding: 10 }}>
-                      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
-                        <input
-                          type="checkbox"
-                          checked={!!row.completed}
-                          onChange={() => handleToggleCompleted(row)}
-                        />
-                        {row.completed ? "Done" : "Pending"}
-                      </label>
-                    </td>
-                    <td style={{ padding: 10 }}>
-                      {isEditing ? (
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <button className="btn btn-primary" type="button" onClick={() => saveEditRow(row)}>
-                            Save
-                          </button>
-                          <button className="btn" type="button" onClick={() => cancelEditRow(row.id)}>
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <button
-                            className="btn"
-                            type="button"
-                            onClick={() => startEditRow(row)}
-                            disabled={
-                              !current
-                              || !(
-                                current.role === "admin"
-                                || current.role === "ceo"
-                                || current.role === "supervisor"
-                                || Number(current.id) === Number(row.user_id)
-                              )
-                            }
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="btn btn-danger"
-                            onClick={() => handleDeleteSubtask(row)}
-                            disabled={
-                              !current
-                              || !(
-                                current.role === "admin"
-                                || current.role === "ceo"
-                                || current.role === "supervisor"
-                                || Number(current.id) === Number(row.user_id)
-                              )
-                            }
-                            title="Owner/admin/supervisor can delete"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
+                    </tr>
+                  );
                 })
               )}
               {!groupedTasks.length && (
                 <tr>
-                  <td colSpan={6} style={{ padding: 14 }} className="muted">
+                  <td colSpan={isEditMode ? 6 : 5} style={{ padding: 14 }} className="muted">
                     {busy ? "Loading..." : "No tasks for this year/client/quarter yet."}
                   </td>
                 </tr>
