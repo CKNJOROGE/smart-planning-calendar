@@ -26,6 +26,11 @@ const THEME_OPTIONS = [
   { value: "slate", label: "Slate Gray" },
   { value: "teal", label: "Green Teal" },
   { value: "forest", label: "Forest" },
+  { value: "ocean", label: "Ocean Blue" },
+  { value: "amber", label: "Amber Sand" },
+  { value: "rose", label: "Rose Blush" },
+  { value: "indigo", label: "Indigo Mist" },
+  { value: "cocoa", label: "Cocoa Cream" },
 ];
 
 const VALID_THEMES = new Set(THEME_OPTIONS.map((option) => option.value));
