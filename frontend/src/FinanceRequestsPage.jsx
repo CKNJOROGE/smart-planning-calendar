@@ -828,7 +828,7 @@ export default function FinanceRequestsPage() {
 
   if (busy && !current) {
     return (
-      <div className="page-wrap">
+      <div className="page-wrap finance-page">
         <div className="card">
           <LoadingState label="Loading finance requests..." />
         </div>
@@ -1037,7 +1037,7 @@ export default function FinanceRequestsPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap finance-page">
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>Finance Requests</div>
         <div className="muted">Use the request menu to navigate between finance modules.</div>

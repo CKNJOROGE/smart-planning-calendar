@@ -211,7 +211,7 @@ export default function ClientTaskManagerPage() {
 
   if (busy && !current) {
     return (
-      <div className="page-wrap">
+      <div className="page-wrap client-task-page">
         <div className="card">
           <LoadingState label="Loading task manager..." />
         </div>

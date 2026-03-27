@@ -35,12 +35,12 @@ function getInitialTheme() {
   return VALID_THEMES.has(storedTheme) ? storedTheme : "light";
 }
 
-function Shell({ onLogout }) {
+function Shell({ onLogout, theme, setTheme }) {
   const [user, setUser] = useState(null);
   const [financeAttentionTotal, setFinanceAttentionTotal] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [theme, setTheme] = useState(getInitialTheme);
   const nav = useNavigate();
+  const canManageThemePalette = ["admin", "ceo"].includes(String(user?.role || "").toLowerCase());
 
   useEffect(() => {
     me().then(setUser).catch(() => setUser(null));
@@ -86,12 +86,6 @@ function Shell({ onLogout }) {
       clearInterval(timer);
     };
   }, [user?.role]);
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    document.documentElement.style.colorScheme = theme === "dark" ? "dark" : "light";
-    localStorage.setItem("theme", theme);
-  }, [theme]);
 
   return (
     <div className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
@@ -193,24 +187,26 @@ function Shell({ onLogout }) {
           >
             {theme === "dark" ? "Light mode" : "Dark mode"}
           </button>
-          <div className="theme-picker" aria-label="Theme picker">
-            <div className="theme-picker-label">Theme Palette</div>
-            <div className="theme-swatch-list">
-              {THEME_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`theme-swatch-btn${theme === option.value ? " active" : ""}`}
-                  onClick={() => setTheme(option.value)}
-                  aria-pressed={theme === option.value}
-                  title={`Switch theme to ${option.label}`}
-                >
-                  <span className={`theme-swatch theme-${option.value}`} aria-hidden="true" />
-                  <span className="theme-swatch-text">{option.label}</span>
-                </button>
-              ))}
+          {canManageThemePalette && (
+            <div className="theme-picker" aria-label="Theme picker">
+              <div className="theme-picker-label">Theme Palette</div>
+              <div className="theme-swatch-list">
+                {THEME_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`theme-swatch-btn${theme === option.value ? " active" : ""}`}
+                    onClick={() => setTheme(option.value)}
+                    aria-pressed={theme === option.value}
+                    title={`Switch theme to ${option.label}`}
+                  >
+                    <span className={`theme-swatch theme-${option.value}`} aria-hidden="true" />
+                    <span className="theme-swatch-text">{option.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           <button className="btn sidebar-logout-btn" onClick={() => { onLogout(); nav("/login"); }}>
             Logout
           </button>
@@ -246,6 +242,13 @@ function Shell({ onLogout }) {
 
 export default function App() {
   const [authState, setAuthState] = useState("checking");
+  const [theme, setTheme] = useState(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.style.colorScheme = theme === "dark" ? "dark" : "light";
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     (async () => {
@@ -292,7 +295,7 @@ export default function App() {
             </>
           ) : (
             <>
-              <Route path="/*" element={<Shell onLogout={handleLogout} />} />
+              <Route path="/*" element={<Shell onLogout={handleLogout} theme={theme} setTheme={setTheme} />} />
             </>
           )}
         </Routes>

@@ -371,7 +371,7 @@ export default function DashboardPage() {
 
   if (busy && !overview.today) {
     return (
-      <div className="page-wrap">
+      <div className="page-wrap dashboard-page">
         <div className="card">
           <LoadingState label="Loading dashboard..." />
         </div>

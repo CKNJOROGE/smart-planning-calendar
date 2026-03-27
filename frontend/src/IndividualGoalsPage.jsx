@@ -391,7 +391,7 @@ export default function IndividualGoalsPage() {
 
   if (busy || !employeePayload || !supervisorPayload) {
     return (
-      <div className="page-wrap">
+      <div className="page-wrap goals-page">
         <div className="card">
           <LoadingState label="Loading appraisal form..." />
         </div>
@@ -400,7 +400,7 @@ export default function IndividualGoalsPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap goals-page">
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>Individual Goals</div>
         <div className="muted">Employee: {targetUser?.name || "-"} | Department: {targetUser?.department || "-"} | Designation: {targetUser?.designation || "-"}</div>

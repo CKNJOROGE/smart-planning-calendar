@@ -245,7 +245,7 @@ export default function PerformanceManagementPage() {
   }
 
   return (
-    <div className="page-wrap">
+    <div className="page-wrap performance-page">
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>Performance Management</div>
         <div className="muted">
@@ -334,7 +334,7 @@ export default function PerformanceManagementPage() {
           }}
         >
           {PERSPECTIVE_OPTIONS.map((p) => (
-            <div key={`company_group_${p.value}`} style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10, background: "#fbfcfe" }}>
+            <div key={`company_group_${p.value}`} className="performance-perspective-card" style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 10, background: "#fbfcfe" }}>
               <div style={{ fontWeight: 800, marginBottom: 6 }}>{p.label}</div>
               <div style={{ width: "100%", overflowX: "auto" }}>
                 <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>

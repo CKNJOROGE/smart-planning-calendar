@@ -118,7 +118,7 @@ export default function MyProfilePage() {
   if (err) return <div style={{ color: "crimson" }}>{err}</div>;
   if (!profile) {
     return (
-      <div className="page-wrap">
+      <div className="page-wrap profile-page">
         <div className="card">
           <LoadingState label="Loading profile..." />
         </div>

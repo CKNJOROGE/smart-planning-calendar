@@ -135,7 +135,7 @@ export default function LibraryPage() {
 
   if (loading) {
     return (
-      <div className="page-wrap">
+      <div className="page-wrap library-page">
         <div className="card">
           <LoadingState label="Loading library..." />
         </div>
