@@ -1441,13 +1441,48 @@ def _attach_leave_review_metadata(
     setattr(e, "can_current_user_reject", can_reject)
 
 
-def _biweekly_period_for(d: date) -> tuple[date, date]:
-    # Anchor to a Monday to keep 14-day windows stable.
-    anchor = date(2025, 1, 6)
-    n = (d - anchor).days // 14
-    start = anchor + timedelta(days=n * 14)
-    end = start + timedelta(days=13)
-    return start, end
+def _previous_reimbursement_due_date(d: date) -> date:
+    if d.month == 2 and d.day == 28:
+        return date(d.year, 2, 15)
+    if d.day == 30:
+        return date(d.year, d.month, 15)
+    if d.day == 15:
+        prev_month = d.month - 1 or 12
+        prev_year = d.year - 1 if prev_month == 12 else d.year
+        if prev_month == 2:
+            return date(prev_year, 2, 28)
+        return date(prev_year, prev_month, 30)
+    raise ValueError("Not a reimbursement due date")
+
+
+def _reimbursement_period_from_due_date(due_date: date) -> tuple[date, date]:
+    if due_date.month == 2 and due_date.day == 28:
+        return date(due_date.year, 2, 16), due_date
+    if due_date.day == 30:
+        return date(due_date.year, due_date.month, 16), due_date
+    if due_date.day == 15:
+        previous_due_date = _previous_reimbursement_due_date(due_date)
+        return previous_due_date + timedelta(days=1), due_date
+    raise ValueError("Not a reimbursement due date")
+
+
+def _reimbursement_period_for(d: date) -> tuple[date, date]:
+    due_date = _reimbursement_due_date_for(d)
+    return _reimbursement_period_from_due_date(due_date)
+
+
+def _reimbursement_due_date_for(d: date) -> date:
+    if d.month == 2 and d.day >= 28:
+        return date(d.year, 2, 28)
+    if d.day >= 30:
+        return date(d.year, d.month, 30)
+    if d.day >= 15:
+        return date(d.year, d.month, 15)
+    prev_month = d.month - 1 or 12
+    prev_year = d.year - 1 if prev_month == 12 else d.year
+    if prev_month == 2:
+        return date(prev_year, 2, 28)
+    return date(prev_year, prev_month, 30)
 
 
 def _is_reimbursement_due_day(d: date) -> bool:
@@ -1458,7 +1493,7 @@ def _is_reimbursement_due_day(d: date) -> bool:
 
 def _reimbursement_due_message(today: date, can_submit: bool) -> str:
     if can_submit:
-        return "Cash reimbursement submission is open today. Submit your 2-week reimbursement."
+        return "Cash reimbursement submission is open today. Submit your reimbursement for this period."
     if today.month == 2:
         return "Cash reimbursement can be submitted on February 28."
     return "Cash reimbursement can be submitted on the 15th and 30th of each month."
@@ -1470,12 +1505,12 @@ def _resolve_reimbursement_period(
     period_end: Optional[date],
 ) -> tuple[date, date]:
     if period_start is None and period_end is None:
-        return _biweekly_period_for(today)
+        return _reimbursement_period_for(today)
     if period_start is None or period_end is None:
         raise HTTPException(status_code=400, detail="period_start and period_end must both be provided")
     if period_end < period_start:
         raise HTTPException(status_code=400, detail="period_end cannot be before period_start")
-    expected_start, expected_end = _biweekly_period_for(period_start)
+    expected_start, expected_end = _reimbursement_period_from_due_date(period_end)
     if expected_start != period_start or expected_end != period_end:
         raise HTTPException(status_code=400, detail="Invalid reimbursement period")
     return period_start, period_end
@@ -1489,12 +1524,9 @@ def _reimbursement_can_submit(
 ) -> bool:
     if already_submitted_for_period:
         return False
-    current_start, current_end = _biweekly_period_for(today)
-    is_current_period = target_period_start == current_start and target_period_end == current_end
-    if is_current_period:
-        return _is_reimbursement_due_day(today)
-    # Allow late submissions for past periods.
-    return target_period_end < current_start
+    current_end = _reimbursement_due_date_for(today)
+    # Allow submissions for the current due period and any older missed period.
+    return target_period_end <= current_end
 
 
 def _reimbursement_submit_message_for_period(
@@ -1506,11 +1538,10 @@ def _reimbursement_submit_message_for_period(
 ) -> str:
     if already_submitted_for_period:
         return "You already submitted this period's reimbursement."
-    current_start, current_end = _biweekly_period_for(today)
-    is_current_period = target_period_start == current_start and target_period_end == current_end
-    if is_current_period:
+    current_end = _reimbursement_due_date_for(today)
+    if target_period_end == current_end:
         return _reimbursement_due_message(today, can_submit)
-    if target_period_end < current_start:
+    if target_period_end < current_end:
         if can_submit:
             return "Late submission is open for this past period."
         return "Late submission for this period is not available."
@@ -2892,7 +2923,7 @@ def list_cash_reimbursement_periods(
     current: User = Depends(get_current_user),
 ):
     today = date.today()
-    current_start, current_end = _biweekly_period_for(today)
+    current_start, current_end = _reimbursement_period_for(today)
 
     draft_rows = (
         db.query(CashReimbursementDraft.period_start, CashReimbursementDraft.period_end)
@@ -3165,7 +3196,7 @@ def submit_cash_reimbursement(
         .first()
     )
     if existing:
-        raise HTTPException(status_code=400, detail="Cash reimbursement already submitted for this biweekly period")
+        raise HTTPException(status_code=400, detail="Cash reimbursement already submitted for this submission period")
     can_submit = _reimbursement_can_submit(today, period_start, period_end, already_submitted_for_period=False)
     if not can_submit:
         raise HTTPException(
@@ -3178,8 +3209,8 @@ def submit_cash_reimbursement(
                 already_submitted_for_period=False,
             ),
         )
-    current_start, current_end = _biweekly_period_for(today)
-    is_late_submission = not (period_start == current_start and period_end == current_end)
+    current_end = _reimbursement_due_date_for(today)
+    is_late_submission = period_end != current_end or not _is_reimbursement_due_day(today)
 
     used_event_ids = {
         int(x[0]) for x in db.query(CashReimbursementItem.source_event_id)
@@ -5130,7 +5161,7 @@ def get_dashboard_overview(
     upcoming_birthdays.sort(key=lambda x: (x.days_until, x.user_name.lower()))
 
     reimbursement_due = _is_reimbursement_due_day(today)
-    reimbursement_period_start, reimbursement_period_end = _biweekly_period_for(today)
+    reimbursement_period_start, reimbursement_period_end = _reimbursement_period_for(today)
     already_submitted_for_period = bool(
         db.query(CashReimbursementRequest.id)
         .filter(
@@ -5140,35 +5171,15 @@ def get_dashboard_overview(
         )
         .first()
     )
-    
-    has_late = False
-    if not already_submitted_for_period and not reimbursement_due:
-        prev_period_start, prev_period_end = None, None
-        if today.day < 15:
-            prev_period_start = today.replace(day=1)
-            prev_period_end = today.replace(day=14)
-        else:
-            prev_period_start = today.replace(day=15)
-            prev_period_end = today.replace(day=28) if today.month == 2 else today.replace(day=30)
-        
-        if prev_period_start and prev_period_end and prev_period_end < today:
-            already_submitted_prev = db.query(CashReimbursementRequest.id).filter(
-                CashReimbursementRequest.user_id == current.id,
-                CashReimbursementRequest.period_start == prev_period_start,
-                CashReimbursementRequest.period_end == prev_period_end,
-            ).first()
-            if not already_submitted_prev:
-                has_late = True
-                reimbursement_period_start, reimbursement_period_end = prev_period_start, prev_period_end
-    
-    reimbursement_can_submit = (reimbursement_due or has_late) and not already_submitted_for_period
-    
-    if already_submitted_for_period and not has_late:
+
+    reimbursement_can_submit = not already_submitted_for_period
+
+    if already_submitted_for_period:
         reimbursement_submit_message = "You already submitted this period's reimbursement."
-    elif has_late:
-        reimbursement_submit_message = f"LATE: Submit your reimbursement for {reimbursement_period_start} to {reimbursement_period_end} now!"
-    else:
+    elif reimbursement_due:
         reimbursement_submit_message = _reimbursement_due_message(today, reimbursement_can_submit)
+    else:
+        reimbursement_submit_message = f"LATE: Submit your reimbursement for {reimbursement_period_start} to {reimbursement_period_end} now!"
 
     return DashboardOverviewOut(
         today=today,
