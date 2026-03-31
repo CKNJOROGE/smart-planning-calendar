@@ -580,6 +580,11 @@ class FinanceAttentionOut(BaseModel):
     total: int = 0
 
 
+class PayrollAttentionOut(BaseModel):
+    pending_confirmation: int = 0
+
+
+
 class CashRequisitionCreateIn(BaseModel):
     amount: float
     purpose: str

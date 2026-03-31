@@ -16,7 +16,7 @@ import PerformanceManagementPage from "./PerformanceManagementPage";
 import IndividualGoalsPage from "./IndividualGoalsPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
 import ResetPasswordPage from "./ResetPasswordPage";
-import { getToken, clearToken, getFinanceAttention, me, updateTheme } from "./api";
+import { getToken, clearToken, getFinanceAttention, getPayrollAttention, me, updateTheme } from "./api";
 import { ToastProvider, useToast } from "./ToastProvider";
 
 const THEME_OPTIONS = [
@@ -46,6 +46,7 @@ function normalizeTheme(theme) {
 function Shell({ onLogout, theme, setTheme }) {
   const [user, setUser] = useState(null);
   const [financeAttentionTotal, setFinanceAttentionTotal] = useState(0);
+  const [payrollAttentionTotal, setPayrollAttentionTotal] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [themePaletteOpen, setThemePaletteOpen] = useState(false);
   const { showToast } = useToast();
@@ -130,6 +131,37 @@ function Shell({ onLogout, theme, setTheme }) {
     };
   }, [user?.role]);
 
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    let lastTotal = 0;
+    async function loadAttention() {
+      try {
+        const data = await getPayrollAttention();
+        const newTotal = Number(data?.pending_confirmation || 0);
+        if (!cancelled) {
+          if (newTotal > lastTotal && lastTotal > 0 && Notification.permission === "granted") {
+            const diff = newTotal - lastTotal;
+            new Notification("Payroll Confirmation Needed", {
+              body: `${diff} payroll run(s) need your confirmation`,
+              icon: "/favicon.ico",
+            });
+          }
+          lastTotal = newTotal;
+          setPayrollAttentionTotal(newTotal);
+        }
+      } catch {
+        if (!cancelled) setPayrollAttentionTotal(0);
+      }
+    }
+    loadAttention();
+    const timer = setInterval(loadAttention, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [user]);
+
   return (
     <div className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className={`app-sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
@@ -194,8 +226,32 @@ function Shell({ onLogout, theme, setTheme }) {
                 <span className="sidebar-link-text">Payroll Admin Portal</span>
               </NavLink>
             )}
-            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/my-payroll">
+            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/my-payroll" style={{ position: "relative" }}>
               <span className="sidebar-link-text">Payroll</span>
+              {payrollAttentionTotal > 0 && (
+                <span
+                  aria-label={`${payrollAttentionTotal} payroll confirmation needed`}
+                  title={`${payrollAttentionTotal} payroll run(s) need your confirmation`}
+                  style={{
+                    position: "absolute",
+                    right: 8,
+                    bottom: 6,
+                    minWidth: 18,
+                    height: 18,
+                    padding: "0 5px",
+                    borderRadius: 999,
+                    background: "#dc2626",
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    lineHeight: "18px",
+                    textAlign: "center",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                  }}
+                >
+                  {payrollAttentionTotal > 99 ? "99+" : payrollAttentionTotal}
+                </span>
+              )}
             </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/performance-management">
               <span className="sidebar-link-text">Performance Management</span>

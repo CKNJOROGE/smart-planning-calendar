@@ -824,6 +824,10 @@ export function listMyPayrollRuns() {
   return request("/payroll/my-runs");
 }
 
+export function getPayrollAttention() {
+  return request("/payroll/attention");
+}
+
 export function confirmPayrollRun(runId) {
   return request(`/payroll/runs/${runId}/confirm`, { method: "POST" });
 }

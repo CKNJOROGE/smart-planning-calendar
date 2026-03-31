@@ -116,6 +116,7 @@ from .schemas import (
     PayrollRunOut,
     PayrollSaveIn,
     PayrollStatutoryOut,
+    PayrollAttentionOut,
     PerformanceCompanyGoalIn,
     PerformanceCompanyGoalOut,
     PerformanceDepartmentGoalIn,
@@ -3177,6 +3178,20 @@ def get_finance_attention(
         salary_advance=salary_advance,
         total=total,
     )
+
+
+@app.get("/payroll/attention", response_model=PayrollAttentionOut)
+def get_payroll_attention(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    pending = db.query(PayrollRun.id).filter(
+        PayrollRun.status == "approved",
+        PayrollRun.employee_confirmed == False,
+        PayrollRun.employee_id == current.id,
+    ).count()
+    return PayrollAttentionOut(pending_confirmation=pending)
+
 
 
 @app.post("/finance/reimbursements/submit", response_model=CashReimbursementRequestOut)
