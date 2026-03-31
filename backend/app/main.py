@@ -1116,7 +1116,10 @@ def _calculate_payroll_breakdown(
     gross_salary_for_statutory = max(gross_cash_pay - tax_exempt_allowance, Decimal("0.00"))
     employment_type = _normalize_employment_type(getattr(employee, "employment_type", None))
     if employment_type == "consultant":
-        withholding_tax = (gross_cash_pay * Decimal("0.05")).quantize(Decimal("0.01"))
+        if gross_cash_pay <= Decimal("24000"):
+            withholding_tax = Decimal("0.00")
+        else:
+            withholding_tax = (gross_cash_pay * Decimal("0.05")).quantize(Decimal("0.01"))
         nssf_employee = Decimal("0.00")
         nssf_employer = Decimal("0.00")
         pension_employee = Decimal("0.00")

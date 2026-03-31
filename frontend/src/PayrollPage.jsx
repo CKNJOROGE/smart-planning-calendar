@@ -781,7 +781,7 @@ export default function PayrollPage() {
                 </div>
                 {isConsultantSelected && (
                   <div className="muted" style={{ marginTop: 4 }}>
-                    Consultant mode: only withholding tax (5%) is applied in payroll calculations.
+                    Consultant mode: withholding tax (5%) applied on salary above KES 24,000. No deduction for KES 24,000 or below.
                   </div>
                 )}
               </div>
@@ -896,7 +896,7 @@ export default function PayrollPage() {
                     {statChip("Gross Cash", fmtCurrency(preview.gross_cash_pay))}
                     {statChip("Taxable Income", fmtCurrency(preview.taxable_income))}
                     {statChip(
-                      isConsultantSelected ? "Withholding Tax (5%)" : "PAYE",
+                      isConsultantSelected ? "Withholding Tax" : "PAYE",
                       fmtCurrency(isConsultantSelected ? preview.withholding_tax : preview.paye_after_reliefs)
                     )}
                     {!isConsultantSelected && statChip("SHIF", fmtCurrency(preview.shif_employee))}
@@ -920,7 +920,7 @@ export default function PayrollPage() {
                           ["Taxable non-cash benefits", preview.taxable_non_cash_benefits],
                           ["Tax-exempt allowances", preview.tax_exempt_allowance],
                           ...(isConsultantSelected
-                            ? [["Withholding tax (5%)", preview.withholding_tax]]
+                            ? [["Withholding tax", preview.withholding_tax]]
                             : [
                                 ["Employee pension", preview.pension_employee],
                                 ["NSSF employee", preview.nssf_employee],
