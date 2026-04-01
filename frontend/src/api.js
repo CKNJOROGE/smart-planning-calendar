@@ -828,6 +828,14 @@ export function getPayrollAttention() {
   return request("/payroll/attention");
 }
 
+export function getPayrollAdminAttention() {
+  return request("/payroll/admin-attention");
+}
+
+export function getEmployeesWithConfirmedPending() {
+  return request("/payroll/employees-confirmed");
+}
+
 export function confirmPayrollRun(runId) {
   return request(`/payroll/runs/${runId}/confirm`, { method: "POST" });
 }

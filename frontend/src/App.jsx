@@ -16,7 +16,7 @@ import PerformanceManagementPage from "./PerformanceManagementPage";
 import IndividualGoalsPage from "./IndividualGoalsPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
 import ResetPasswordPage from "./ResetPasswordPage";
-import { getToken, clearToken, getFinanceAttention, getPayrollAttention, me, updateTheme } from "./api";
+import { getToken, clearToken, getFinanceAttention, getPayrollAttention, getPayrollAdminAttention, me, updateTheme } from "./api";
 import { ToastProvider, useToast } from "./ToastProvider";
 
 const THEME_OPTIONS = [
@@ -47,6 +47,7 @@ function Shell({ onLogout, theme, setTheme }) {
   const [user, setUser] = useState(null);
   const [financeAttentionTotal, setFinanceAttentionTotal] = useState(0);
   const [payrollAttentionTotal, setPayrollAttentionTotal] = useState(0);
+  const [payrollAdminAttentionTotal, setPayrollAdminAttentionTotal] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [themePaletteOpen, setThemePaletteOpen] = useState(false);
   const { showToast } = useToast();
@@ -162,6 +163,41 @@ function Shell({ onLogout, theme, setTheme }) {
     };
   }, [user]);
 
+  useEffect(() => {
+    const role = (user?.role || "").toLowerCase();
+    if (!["finance", "admin", "ceo"].includes(role)) {
+      setPayrollAdminAttentionTotal(0);
+      return;
+    }
+    let cancelled = false;
+    let lastTotal = 0;
+    async function loadAttention() {
+      try {
+        const data = await getPayrollAdminAttention();
+        const newTotal = Number(data?.confirmed_pending_payment || 0);
+        if (!cancelled) {
+          if (newTotal > lastTotal && lastTotal > 0 && Notification.permission === "granted") {
+            const diff = newTotal - lastTotal;
+            new Notification("Payroll Confirmed by Employee", {
+              body: `${diff} payroll run(s) confirmed and ready for payment`,
+              icon: "/favicon.ico",
+            });
+          }
+          lastTotal = newTotal;
+          setPayrollAdminAttentionTotal(newTotal);
+        }
+      } catch {
+        if (!cancelled) setPayrollAdminAttentionTotal(0);
+      }
+    }
+    loadAttention();
+    const timer = setInterval(loadAttention, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [user]);
+
   return (
     <div className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
       <aside className={`app-sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
@@ -222,8 +258,32 @@ function Shell({ onLogout, theme, setTheme }) {
               )}
             </NavLink>
             {["finance", "admin", "ceo"].includes(String(user?.role || "").toLowerCase()) && (
-              <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/payroll">
+              <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/payroll" style={{ position: "relative" }}>
                 <span className="sidebar-link-text">Payroll Admin Portal</span>
+                {payrollAdminAttentionTotal > 0 && (
+                  <span
+                    aria-label={`${payrollAdminAttentionTotal} confirmed pending payment`}
+                    title={`${payrollAdminAttentionTotal} payroll run(s) confirmed and ready for payment`}
+                    style={{
+                      position: "absolute",
+                      right: 8,
+                      bottom: 6,
+                      minWidth: 18,
+                      height: 18,
+                      padding: "0 5px",
+                      borderRadius: 999,
+                      background: "#dc2626",
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 800,
+                      lineHeight: "18px",
+                      textAlign: "center",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+                    }}
+                  >
+                    {payrollAdminAttentionTotal > 99 ? "99+" : payrollAdminAttentionTotal}
+                  </span>
+                )}
               </NavLink>
             )}
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/my-payroll" style={{ position: "relative" }}>

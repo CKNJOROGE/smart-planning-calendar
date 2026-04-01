@@ -13,6 +13,7 @@ import {
   savePayrollRun,
   listPayrollRuns,
   markPayrollRunPaid,
+  getEmployeesWithConfirmedPending,
 } from "./api";
 import { useToast } from "./ToastProvider";
 import LoadingState from "./LoadingState";
@@ -284,6 +285,7 @@ export default function PayrollPage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingRun, setSavingRun] = useState(false);
   const [savingStatutory, setSavingStatutory] = useState(false);
+  const [confirmedEmployeeIds, setConfirmedEmployeeIds] = useState(new Set());
   const { showToast } = useToast();
 
   const role = String(current?.role || "").toLowerCase();
@@ -320,6 +322,16 @@ export default function PayrollPage() {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (!canOpen) return;
+    getEmployeesWithConfirmedPending()
+      .then((rows) => {
+        const ids = new Set((rows || []).map((r) => r.employee_id));
+        setConfirmedEmployeeIds(ids);
+      })
+      .catch(() => {});
+  }, [canOpen]);
 
   async function loadEmployeePayroll(userId, payrollMonth) {
     if (!userId) return;
@@ -748,6 +760,7 @@ export default function PayrollPage() {
           <div className="payroll-employee-list">
             {filteredEmployees.map((row) => {
               const active = Number(selectedEmployeeId) === Number(row.id);
+              const hasConfirmed = confirmedEmployeeIds.has(row.id);
               return (
                 <button
                   key={row.id}
@@ -755,7 +768,21 @@ export default function PayrollPage() {
                   className={`btn payroll-employee-btn${active ? " active" : ""}`}
                   onClick={() => setSelectedEmployeeId(String(row.id))}
                 >
-                  <div style={{ fontWeight: 800 }}>{row.name}</div>
+                  <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 6 }}>
+                    {row.name}
+                    {hasConfirmed && (
+                      <span
+                        title="Payroll confirmed, awaiting payment"
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: "#dc2626",
+                          display: "inline-block",
+                        }}
+                      />
+                    )}
+                  </div>
                   <div className="muted" style={{ fontSize: 12 }}>
                     {row.department || "Unassigned"} | {row.designation || row.role} | {row.employment_type || "employee"}
                   </div>

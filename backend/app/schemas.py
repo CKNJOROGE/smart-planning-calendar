@@ -584,6 +584,16 @@ class PayrollAttentionOut(BaseModel):
     pending_confirmation: int = 0
 
 
+class PayrollAdminAttentionOut(BaseModel):
+    confirmed_pending_payment: int = 0
+
+
+class PayrollEmployeeConfirmedOut(BaseModel):
+    employee_id: int
+    confirmed_pending_payment: bool
+
+
+
 
 class CashRequisitionCreateIn(BaseModel):
     amount: float

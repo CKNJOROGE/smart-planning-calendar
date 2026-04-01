@@ -117,6 +117,8 @@ from .schemas import (
     PayrollSaveIn,
     PayrollStatutoryOut,
     PayrollAttentionOut,
+    PayrollAdminAttentionOut,
+    PayrollEmployeeConfirmedOut,
     PerformanceCompanyGoalIn,
     PerformanceCompanyGoalOut,
     PerformanceDepartmentGoalIn,
@@ -3193,6 +3195,23 @@ def get_payroll_attention(
     return PayrollAttentionOut(pending_confirmation=pending)
 
 
+@app.get("/payroll/admin-attention", response_model=PayrollAdminAttentionOut)
+def get_payroll_admin_attention(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    role = (current.role or "").strip().lower()
+    if role not in {"finance", "admin", "ceo"}:
+        return PayrollAdminAttentionOut(confirmed_pending_payment=0)
+
+    confirmed_pending = db.query(PayrollRun.id).filter(
+        PayrollRun.status == "approved",
+        PayrollRun.employee_confirmed == True,
+    ).count()
+    return PayrollAdminAttentionOut(confirmed_pending_payment=confirmed_pending)
+
+
+
 
 @app.post("/finance/reimbursements/submit", response_model=CashReimbursementRequestOut)
 def submit_cash_reimbursement(
@@ -4203,6 +4222,25 @@ def list_payroll_employees(
     for row in rows:
         _attach_user_supervisor_metadata(db, row)
     return rows
+
+
+@app.get("/payroll/employees-confirmed", response_model=List[PayrollEmployeeConfirmedOut])
+def list_employees_with_confirmed_pending(
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    subq = (
+        db.query(PayrollRun.employee_id)
+        .filter(
+            PayrollRun.status == "approved",
+            PayrollRun.employee_confirmed == True,
+        )
+        .distinct()
+    ).subquery()
+    rows = db.query(User.id).filter(User.id.in_(subq)).all()
+    return [PayrollEmployeeConfirmedOut(employee_id=row.id, confirmed_pending_payment=True) for row in rows]
+
 
 
 @app.get("/payroll/profiles/{user_id}", response_model=PayrollProfileOut)
