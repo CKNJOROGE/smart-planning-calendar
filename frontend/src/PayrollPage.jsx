@@ -983,7 +983,16 @@ export default function PayrollPage() {
                           </td>
                           <td style={{ padding: 10 }}>
                             {row.employee_confirmed ? (
-                              <span className="dashboard-status-badge dashboard-status-ok" style={{ color: "#eab308" }}>Confirmed</span>
+                              <span
+                                style={{
+                                  background: "linear-gradient(to bottom, #cfc09f 27%, #ffecb3 40%, #3a2c0f 78%)",
+                                  WebkitBackgroundClip: "text",
+                                  WebkitTextFillColor: "transparent",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                Confirmed
+                              </span>
                             ) : (
                               <span className="dashboard-status-badge dashboard-status-pending">Pending</span>
                             )}
