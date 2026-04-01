@@ -346,10 +346,10 @@ export default function PayrollPage() {
 
   useEffect(() => {
     if (!selectedEmployeeId || !canOpen) return;
-    listPayrollRuns({ employeeId: Number(selectedEmployeeId), payrollMonth: runForm.payroll_month })
+    listPayrollRuns({ employeeId: Number(selectedEmployeeId) })
       .then((rows) => setRuns(rows || []))
       .catch(() => {});
-  }, [runForm.payroll_month, selectedEmployeeId, canOpen]);
+  }, [selectedEmployeeId, canOpen]);
 
   const filteredEmployees = useMemo(() => {
     const query = employeeSearch.trim().toLowerCase();
