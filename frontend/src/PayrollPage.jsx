@@ -989,7 +989,7 @@ export default function PayrollPage() {
                                   WebkitBackgroundClip: "text",
                                   WebkitTextFillColor: "transparent",
                                   fontWeight: 700,
-                                  filter: "drop-shadow(0 1px 1px #c6bb9f) drop-shadow(2px 2px 4px rgba(0,0,0,0.3))",
+                                  filter: "drop-shadow(-1px 0 1px #c6bb9f) drop-shadow(0 1px 1px #c6bb9f) drop-shadow(3px 3px 6px rgba(0,0,0,0.5))",
                                 }}
                               >
                                 Confirmed
