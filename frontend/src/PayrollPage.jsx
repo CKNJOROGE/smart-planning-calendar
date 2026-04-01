@@ -324,13 +324,9 @@ export default function PayrollPage() {
   async function loadEmployeePayroll(userId, payrollMonth) {
     if (!userId) return;
     try {
-      const [profileData, runRows] = await Promise.all([
-        getPayrollProfile(userId),
-        listPayrollRuns({ employeeId: userId, payrollMonth }),
-      ]);
+      const profileData = await getPayrollProfile(userId);
       setProfile(profileData);
       setProfileForm(profileStateFromApi(profileData));
-      setRuns(runRows || []);
       setPreview(null);
     } catch (e) {
       const text = String(e.message || e);
@@ -462,7 +458,7 @@ export default function PayrollPage() {
     try {
       const result = await savePayrollRun(runPayloadFromState(runForm, selectedEmployeeId, "draft"));
       setPreview(result);
-      const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId), payrollMonth: runForm.payroll_month });
+      const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId) });
       setRuns(updatedRuns || []);
       showToast("Payroll saved as draft", "success");
     } catch (e) {
@@ -481,7 +477,7 @@ export default function PayrollPage() {
     try {
       const result = await savePayrollRun(runPayloadFromState(runForm, selectedEmployeeId, "approved"));
       setPreview(result);
-      const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId), payrollMonth: runForm.payroll_month });
+      const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId) });
       setRuns(updatedRuns || []);
       showToast("Payroll submitted - employee can now confirm", "success");
     } catch (e) {
@@ -498,7 +494,7 @@ export default function PayrollPage() {
     setErr("");
     try {
       await markPayrollRunPaid(Number(runId));
-      const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId), payrollMonth: runForm.payroll_month });
+      const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId) });
       setRuns(updatedRuns || []);
       showToast("Payroll marked as paid", "success");
     } catch (e) {
