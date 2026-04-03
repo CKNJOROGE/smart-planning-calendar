@@ -479,6 +479,38 @@ export async function deleteClientTask(taskId) {
   return res.json();
 }
 
+export function listProbationRecords(clientId = null) {
+  const qs = clientId != null && clientId !== "" ? `?client_id=${encodeURIComponent(String(clientId))}` : "";
+  return request(`/task-manager/probation-records${qs}`);
+}
+
+export function createProbationRecord(payload) {
+  return request("/task-manager/probation-records", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function updateProbationRecord(recordId, payload) {
+  return request(`/task-manager/probation-records/${recordId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function deleteProbationRecord(recordId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/task-manager/probation-records/${recordId}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
+  }
+  return res.json();
+}
+
 export function listDashboardOverview() {
   return request("/dashboard/overview");
 }

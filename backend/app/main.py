@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import List, Optional
@@ -28,6 +29,7 @@ from .models import (
     Designation,
     ClientAccount,
     ClientTask,
+    ProbationRecord,
     DailyActivity,
     CashReimbursementRequest,
     CashReimbursementItem,
@@ -78,6 +80,9 @@ from .schemas import (
     ClientTaskCreate,
     ClientTaskUpdate,
     ClientTaskOut,
+    ProbationRecordCreate,
+    ProbationRecordUpdate,
+    ProbationRecordOut,
     DailyActivityCreate,
     DailyActivityUpdate,
     DailyActivityOut,
@@ -628,6 +633,16 @@ DEFAULT_PAYROLL_SOURCE_NOTES = [
     "Social Health Insurance contributions for formal sector are 2.75% of gross salary with a KES 300 monthly minimum.",
     "NSSF Year 4 contribution notice published February 18, 2026 sets LEL at KES 9,000 and UEL at KES 72,000.",
 ]
+
+
+def _add_months(source: date, months: int) -> date:
+    if months < 0:
+        raise HTTPException(status_code=400, detail="probation months cannot be negative")
+    month_index = source.month - 1 + months
+    year = source.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(source.day, monthrange(year, month)[1])
+    return date(year, month, day)
 
 
 def _require_payroll_access(current: User) -> None:
@@ -2809,6 +2824,116 @@ def delete_client_task(
         raise HTTPException(status_code=403, detail="Not allowed")
 
     db.delete(t)
+    db.commit()
+    return {"ok": True}
+
+
+@app.get("/task-manager/probation-records", response_model=List[ProbationRecordOut])
+def list_probation_records(
+    client_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    q = db.query(ProbationRecord)
+    if client_id is not None:
+        q = q.filter(ProbationRecord.client_id == client_id)
+    rows = q.order_by(
+        ProbationRecord.probation_end_date.asc(),
+        ProbationRecord.hire_date.asc(),
+        ProbationRecord.id.asc(),
+    ).all()
+    for row in rows:
+        _ = row.client
+        _ = row.created_by
+    return [_to_probation_record(row) for row in rows]
+
+
+@app.post("/task-manager/probation-records", response_model=ProbationRecordOut)
+def create_probation_record(
+    payload: ProbationRecordCreate,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    employee_name = (payload.employee_name or "").strip()
+    if not employee_name:
+        raise HTTPException(status_code=400, detail="employee_name is required")
+    if payload.probation_months < 1:
+        raise HTTPException(status_code=400, detail="probation_months must be at least 1")
+    if payload.probation_months > 60:
+        raise HTTPException(status_code=400, detail="probation_months cannot exceed 60")
+
+    client = db.query(ClientAccount).filter(ClientAccount.id == payload.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    probation_end_date = _add_months(payload.hire_date, payload.probation_months)
+    record = ProbationRecord(
+        client_id=payload.client_id,
+        created_by_id=current.id,
+        employee_name=employee_name,
+        hire_date=payload.hire_date,
+        probation_months=payload.probation_months,
+        probation_end_date=probation_end_date,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    _ = record.client
+    _ = record.created_by
+    return _to_probation_record(record)
+
+
+@app.patch("/task-manager/probation-records/{record_id}", response_model=ProbationRecordOut)
+def update_probation_record(
+    record_id: int,
+    payload: ProbationRecordUpdate,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    record = db.query(ProbationRecord).filter(ProbationRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Probation record not found")
+    if current.role not in {"admin", "ceo", "supervisor"} and record.created_by_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    incoming = payload.dict(exclude_unset=True)
+    if "employee_name" in incoming:
+        employee_name = (incoming["employee_name"] or "").strip()
+        if not employee_name:
+            raise HTTPException(status_code=400, detail="employee_name cannot be empty")
+        record.employee_name = employee_name
+    if "hire_date" in incoming:
+        record.hire_date = incoming["hire_date"]
+    if "probation_months" in incoming:
+        probation_months = int(incoming["probation_months"] or 0)
+        if probation_months < 1:
+            raise HTTPException(status_code=400, detail="probation_months must be at least 1")
+        if probation_months > 60:
+            raise HTTPException(status_code=400, detail="probation_months cannot exceed 60")
+        record.probation_months = probation_months
+
+    record.probation_end_date = _add_months(record.hire_date, record.probation_months)
+    record.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(record)
+    _ = record.client
+    _ = record.created_by
+    return _to_probation_record(record)
+
+
+@app.delete("/task-manager/probation-records/{record_id}")
+def delete_probation_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    record = db.query(ProbationRecord).filter(ProbationRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Probation record not found")
+    if current.role not in {"admin", "ceo", "supervisor"} and record.created_by_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    db.delete(record)
     db.commit()
     return {"ok": True}
 
@@ -5076,6 +5201,25 @@ def _to_task_reminder(task: ClientTask) -> TaskReminderOut:
     )
 
 
+def _to_probation_record(record: ProbationRecord) -> ProbationRecordOut:
+    client_name = record.client.name if record.client else f"Client #{record.client_id}"
+    created_by_name = record.created_by.name if record.created_by else f"User #{record.created_by_id}"
+    return ProbationRecordOut(
+        id=record.id,
+        client_id=record.client_id,
+        client_name=client_name,
+        created_by_id=record.created_by_id,
+        created_by_name=created_by_name,
+        employee_name=record.employee_name,
+        hire_date=record.hire_date,
+        probation_months=record.probation_months,
+        probation_end_date=record.probation_end_date,
+        days_until_end=(record.probation_end_date - date.today()).days,
+        created_at=record.created_at,
+        updated_at=record.updated_at,
+    )
+
+
 def _next_birthday_for(dob: date, today: date) -> date:
     month = dob.month
     day = dob.day
@@ -5189,6 +5333,21 @@ def get_dashboard_overview(
         _ = item.user
         _ = item.client
 
+    probation_limit = today + timedelta(days=30)
+    probation_rows = (
+        db.query(ProbationRecord)
+        .filter(
+            ProbationRecord.probation_end_date.isnot(None),
+            ProbationRecord.probation_end_date >= today,
+            ProbationRecord.probation_end_date <= probation_limit,
+        )
+        .order_by(ProbationRecord.probation_end_date.asc(), ProbationRecord.id.asc())
+        .all()
+    )
+    for item in probation_rows:
+        _ = item.client
+        _ = item.created_by
+
     birthday_limit = today + timedelta(days=7)
     birthday_rows = (
         db.query(User)
@@ -5245,6 +5404,7 @@ def get_dashboard_overview(
         unfinished_count=unfinished_count,
         upcoming_subtasks=[_to_task_reminder(t) for t in upcoming_rows],
         due_subtasks=[_to_task_reminder(t) for t in due_rows],
+        probation_reminders=[_to_probation_record(item) for item in probation_rows],
         upcoming_birthdays=upcoming_birthdays,
         reimbursement_can_submit=reimbursement_can_submit,
         reimbursement_submit_due_today=reimbursement_due,

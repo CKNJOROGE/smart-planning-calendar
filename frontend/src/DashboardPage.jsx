@@ -20,6 +20,21 @@ function dueBadgeClass(daysUntilDue) {
   return "ok";
 }
 
+function probationBadgeLabel(daysUntilEnd) {
+  if (daysUntilEnd === 30) return "1 month left";
+  if (daysUntilEnd === 14) return "2 weeks left";
+  if (daysUntilEnd === 0) return "Ends today";
+  if (daysUntilEnd < 0) return `${Math.abs(daysUntilEnd)} day(s) overdue`;
+  return `${daysUntilEnd} day(s) left`;
+}
+
+function probationBadgeClass(daysUntilEnd) {
+  if (daysUntilEnd < 0) return "dashboard-status-danger";
+  if (daysUntilEnd <= 14) return "dashboard-status-warn";
+  if (daysUntilEnd <= 30) return "dashboard-status-info";
+  return "dashboard-status-ok";
+}
+
 function groupActivitiesByPost(items) {
   const groups = new Map();
   for (const item of items || []) {
@@ -101,6 +116,7 @@ export default function DashboardPage() {
     unfinished_count: 0,
     upcoming_subtasks: [],
     due_subtasks: [],
+    probation_reminders: [],
     upcoming_birthdays: [],
     reimbursement_can_submit: false,
     reimbursement_submit_due_today: false,
@@ -672,6 +688,34 @@ export default function DashboardPage() {
         </div>
 
         <div className="dashboard-right-stack">
+          {!!overview.probation_reminders?.length && (
+            <div className="card dashboard-panel">
+              <div className="dashboard-panel-head">
+                <div className="dashboard-panel-title">Probation Tracker</div>
+              </div>
+              <div className="dashboard-mini-list">
+                {overview.probation_reminders.map((record) => (
+                  <div key={record.id} className="dashboard-mini-item" style={{ borderLeft: "4px solid #f59e0b" }}>
+                    <div className="dashboard-mini-head">
+                      <div>
+                        <div className="dashboard-task-title">{record.employee_name}</div>
+                        <div className="dashboard-task-subtitle">{record.client_name}</div>
+                      </div>
+                      <span className={`dashboard-status-badge ${probationBadgeClass(record.days_until_end)}`}>
+                        {probationBadgeLabel(record.days_until_end)}
+                      </span>
+                    </div>
+                    <div className="dashboard-mini-meta">
+                      <span>Hire: {formatDate(record.hire_date)}</span>
+                      <span>End: {formatDate(record.probation_end_date)}</span>
+                      <span>{record.probation_months} month(s)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {!!overview.upcoming_birthdays?.length && (
             <div className="card dashboard-panel">
               <div className="dashboard-panel-head">

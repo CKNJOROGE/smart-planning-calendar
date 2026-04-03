@@ -9,6 +9,10 @@ import {
   createClientTask,
   updateClientTask,
   deleteClientTask,
+  listProbationRecords,
+  createProbationRecord,
+  updateProbationRecord,
+  deleteProbationRecord,
 } from "./api";
 import { useToast } from "./ToastProvider";
 import LoadingState from "./LoadingState";
@@ -17,6 +21,48 @@ const QUARTERS = [1, 2, 3, 4];
 
 function emptySubtask() {
   return { subtask: "", completion_date: "" };
+}
+
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+
+function addMonthsToDateInput(dateInput, months) {
+  if (!dateInput || !months) return "";
+  const [yearText, monthText, dayText] = String(dateInput).split("-");
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return "";
+  const monthIndex = month - 1 + Number(months);
+  const targetYear = year + Math.floor(monthIndex / 12);
+  const targetMonth = ((monthIndex % 12) + 12) % 12;
+  const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const targetDay = Math.min(day, lastDay);
+  return `${targetYear}-${pad2(targetMonth + 1)}-${pad2(targetDay)}`;
+}
+
+function formatDateInputValue(dateInput) {
+  if (!dateInput) return "-";
+  const parsed = new Date(`${dateInput}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return dateInput;
+  return parsed.toLocaleDateString();
+}
+
+function probationReminderLabel(daysUntilEnd) {
+  if (daysUntilEnd === 30) return "1 month left";
+  if (daysUntilEnd === 14) return "2 weeks left";
+  if (daysUntilEnd === 0) return "Ends today";
+  if (daysUntilEnd < 0) return `${Math.abs(daysUntilEnd)} day(s) overdue`;
+  if (daysUntilEnd < 14) return `${daysUntilEnd} day(s) left`;
+  return `${daysUntilEnd} day(s) left`;
+}
+
+function probationReminderClass(daysUntilEnd) {
+  if (daysUntilEnd < 0) return "dashboard-status-danger";
+  if (daysUntilEnd <= 14) return "dashboard-status-warn";
+  if (daysUntilEnd <= 30) return "dashboard-status-info";
+  return "dashboard-status-ok";
 }
 
 function escapeHtml(value) {
@@ -56,6 +102,14 @@ export default function ClientTaskManagerPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [subtaskRows, setSubtaskRows] = useState([emptySubtask()]);
   const [editingRows, setEditingRows] = useState({});
+  const [probationRecords, setProbationRecords] = useState([]);
+  const [probationDraft, setProbationDraft] = useState({
+    employee_name: "",
+    hire_date: "",
+    probation_months: "3",
+  });
+  const [probationEditingRows, setProbationEditingRows] = useState({});
+  const [probationBusy, setProbationBusy] = useState(false);
   const [exportClientScope, setExportClientScope] = useState("selected");
   const [exportPeriodScope, setExportPeriodScope] = useState("quarter");
 
@@ -65,6 +119,11 @@ export default function ClientTaskManagerPage() {
   const selectedClient = useMemo(
     () => clients.find((c) => c.id === Number(selectedClientId)) || null,
     [clients, selectedClientId]
+  );
+
+  const probationDraftEndDate = useMemo(
+    () => addMonthsToDateInput(probationDraft.hire_date, Number(probationDraft.probation_months || 0)),
+    [probationDraft.hire_date, probationDraft.probation_months]
   );
 
   const groupedTasks = useMemo(() => {
@@ -141,6 +200,25 @@ export default function ClientTaskManagerPage() {
   }, [selectedYear, selectedClientId, selectedQuarter]);
 
   useEffect(() => {
+    if (!selectedClientId) {
+      setProbationRecords([]);
+      setProbationEditingRows({});
+      return;
+    }
+    (async () => {
+      setProbationBusy(true);
+      try {
+        const list = await listProbationRecords(Number(selectedClientId));
+        setProbationRecords(list || []);
+      } catch (e) {
+        setErr(String(e.message || e));
+      } finally {
+        setProbationBusy(false);
+      }
+    })();
+  }, [selectedClientId]);
+
+  useEffect(() => {
     if (!isEditMode) setEditingRows({});
   }, [isEditMode]);
 
@@ -152,6 +230,124 @@ export default function ClientTaskManagerPage() {
       quarter: selectedQuarter,
     });
     setTasks(list);
+  }
+
+  async function refreshProbationRecords() {
+    if (!selectedClientId) return;
+    const list = await listProbationRecords(Number(selectedClientId));
+    setProbationRecords(list || []);
+  }
+
+  function startEditProbation(record) {
+    if (!isEditMode || !record) return;
+    setProbationEditingRows((prev) => ({
+      ...prev,
+      [record.id]: {
+        employee_name: record.employee_name || "",
+        hire_date: record.hire_date || "",
+        probation_months: String(record.probation_months || ""),
+      },
+    }));
+  }
+
+  function cancelEditProbation(recordId) {
+    setProbationEditingRows((prev) => {
+      const next = { ...prev };
+      delete next[recordId];
+      return next;
+    });
+  }
+
+  function patchProbationEdit(recordId, patch) {
+    setProbationEditingRows((prev) => ({
+      ...prev,
+      [recordId]: { ...(prev[recordId] || {}), ...patch },
+    }));
+  }
+
+  async function handleCreateProbation(e) {
+    e.preventDefault();
+    if (!isEditMode || !selectedClientId) return;
+    const employeeName = (probationDraft.employee_name || "").trim();
+    const hireDate = probationDraft.hire_date || "";
+    const probationMonths = Number(probationDraft.probation_months);
+    if (!employeeName) {
+      setErr("Employee name is required.");
+      return;
+    }
+    if (!hireDate) {
+      setErr("Date of hire is required.");
+      return;
+    }
+    if (!Number.isFinite(probationMonths) || probationMonths < 1) {
+      setErr("Probation period must be at least 1 month.");
+      return;
+    }
+    try {
+      await createProbationRecord({
+        client_id: Number(selectedClientId),
+        employee_name: employeeName,
+        hire_date: hireDate,
+        probation_months: probationMonths,
+      });
+      setProbationDraft({ employee_name: "", hire_date: "", probation_months: "3" });
+      await refreshProbationRecords();
+      showToast("Probation record added", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function saveProbationRecord(record) {
+    if (!isEditMode || !record) return;
+    const draft = probationEditingRows[record.id];
+    if (!draft) return;
+    const employeeName = (draft.employee_name || "").trim();
+    const hireDate = draft.hire_date || "";
+    const probationMonths = Number(draft.probation_months);
+    if (!employeeName) {
+      setErr("Employee name cannot be empty.");
+      return;
+    }
+    if (!hireDate) {
+      setErr("Date of hire cannot be empty.");
+      return;
+    }
+    if (!Number.isFinite(probationMonths) || probationMonths < 1) {
+      setErr("Probation period must be at least 1 month.");
+      return;
+    }
+    try {
+      await updateProbationRecord(record.id, {
+        employee_name: employeeName,
+        hire_date: hireDate,
+        probation_months: probationMonths,
+      });
+      await refreshProbationRecords();
+      cancelEditProbation(record.id);
+      showToast("Probation record updated", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function handleDeleteProbation(record) {
+    if (!isEditMode || !record) return;
+    if (!confirm(`Delete probation record for "${record.employee_name}"?`)) return;
+    try {
+      await deleteProbationRecord(record.id);
+      setProbationRecords((prev) => prev.filter((row) => row.id !== record.id));
+      cancelEditProbation(record.id);
+      showToast("Probation record deleted", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
   }
 
   async function handleCreateClient(e) {
@@ -495,7 +691,7 @@ export default function ClientTaskManagerPage() {
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>Client Task Manager</div>
         <div className="muted">
-          Year -&gt; Client -&gt; Quarter. View Mode is read-only. Edit Mode unlocks create/edit/delete actions.
+          Year -&gt; Client -&gt; Quarter -&gt; Probation Tracker. View Mode is read-only. Edit Mode unlocks create/edit/delete actions.
         </div>
       </div>
 
@@ -613,7 +809,161 @@ export default function ClientTaskManagerPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 800, marginBottom: 8 }}>4) Export PDF</div>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>4) Probation Tracker</div>
+        <div className="muted" style={{ marginBottom: 12 }}>
+          Track new employees for {selectedClient?.name || "the selected client"} and watch the probation end date update automatically.
+        </div>
+
+        {isEditMode && (
+          <form onSubmit={handleCreateProbation} style={{ marginBottom: 14 }}>
+            <div className="row">
+              <div className="field" style={{ flex: "1 1 240px", marginBottom: 0 }}>
+                <label>Employee name</label>
+                <input
+                  value={probationDraft.employee_name}
+                  onChange={(e) => setProbationDraft((prev) => ({ ...prev, employee_name: e.target.value }))}
+                  placeholder="e.g., Jane Doe"
+                  disabled={!selectedClientId}
+                />
+              </div>
+              <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                <label>Date of hire</label>
+                <input
+                  type="date"
+                  value={probationDraft.hire_date}
+                  onChange={(e) => setProbationDraft((prev) => ({ ...prev, hire_date: e.target.value }))}
+                  disabled={!selectedClientId}
+                />
+              </div>
+              <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                <label>Probation period (months)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={probationDraft.probation_months}
+                  onChange={(e) => setProbationDraft((prev) => ({ ...prev, probation_months: e.target.value }))}
+                  placeholder="3"
+                  disabled={!selectedClientId}
+                />
+              </div>
+              <div className="field" style={{ flex: "1 1 200px", marginBottom: 0 }}>
+                <label>End of probation</label>
+                <input value={probationDraftEndDate} readOnly placeholder="Auto-calculated" />
+              </div>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <button className="btn btn-primary" type="submit" disabled={!selectedClientId}>
+                Save Probation Record
+              </button>
+            </div>
+          </form>
+        )}
+
+        {!selectedClientId ? (
+          <div className="muted">Select a client to view and add probation records.</div>
+        ) : probationBusy ? (
+          <LoadingState label="Loading probation tracker..." compact />
+        ) : !probationRecords.length ? (
+          <div className="muted">No probation records yet for this client.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {probationRecords.map((record) => {
+              const draft = probationEditingRows[record.id];
+              const isEditing = isEditMode && !!draft;
+              const editableEndDate = isEditing
+                ? addMonthsToDateInput(draft.hire_date, Number(draft.probation_months || 0))
+                : record.probation_end_date;
+              return (
+                <div key={record.id} className="card" style={{ padding: 12, borderRadius: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
+                    <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                      {isEditing ? (
+                        <div className="field" style={{ marginBottom: 0 }}>
+                          <label>Employee name</label>
+                          <input
+                            value={draft.employee_name}
+                            onChange={(e) => patchProbationEdit(record.id, { employee_name: e.target.value })}
+                          />
+                        </div>
+                      ) : (
+                        <div style={{ fontWeight: 800, fontSize: 15 }}>{record.employee_name}</div>
+                      )}
+                      <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                        {record.client_name}
+                      </div>
+                    </div>
+                    <span className={`dashboard-status-badge ${probationReminderClass(record.days_until_end)}`}>
+                      {probationReminderLabel(record.days_until_end)}
+                    </span>
+                  </div>
+
+                  <div className="row" style={{ marginTop: 10 }}>
+                    <div className="field" style={{ flex: "1 1 170px", marginBottom: 0 }}>
+                      <label>Date of hire</label>
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={draft.hire_date}
+                          onChange={(e) => patchProbationEdit(record.id, { hire_date: e.target.value })}
+                        />
+                      ) : (
+                        <input value={formatDateInputValue(record.hire_date)} readOnly />
+                      )}
+                    </div>
+                    <div className="field" style={{ flex: "1 1 170px", marginBottom: 0 }}>
+                      <label>Probation period (months)</label>
+                      {isEditing ? (
+                        <input
+                          type="number"
+                          min="1"
+                          max="60"
+                          value={draft.probation_months}
+                          onChange={(e) => patchProbationEdit(record.id, { probation_months: e.target.value })}
+                        />
+                      ) : (
+                        <input value={String(record.probation_months)} readOnly />
+                      )}
+                    </div>
+                    <div className="field" style={{ flex: "1 1 200px", marginBottom: 0 }}>
+                      <label>End of probation</label>
+                      <input value={formatDateInputValue(editableEndDate)} readOnly />
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                    <div className="helper">This date is calculated automatically from the hire date and probation period.</div>
+                    {isEditMode && (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {isEditing ? (
+                          <>
+                            <button type="button" className="btn btn-primary" onClick={() => saveProbationRecord(record)}>
+                              Save
+                            </button>
+                            <button type="button" className="btn" onClick={() => cancelEditProbation(record.id)}>
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button type="button" className="btn" onClick={() => startEditProbation(record)}>
+                            Edit
+                          </button>
+                        )}
+                        <button type="button" className="btn btn-danger" onClick={() => handleDeleteProbation(record)}>
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>5) Export PDF</div>
         <div className="row">
           <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
             <label>Client filter</label>
@@ -644,7 +994,7 @@ export default function ClientTaskManagerPage() {
 
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 800, marginBottom: 8 }}>
-          5) Workplan {selectedClient ? `- ${selectedClient.name}` : ""}
+          6) Workplan {selectedClient ? `- ${selectedClient.name}` : ""}
         </div>
 
         {isEditMode && (

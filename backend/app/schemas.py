@@ -391,6 +391,37 @@ class ClientTaskOut(BaseModel):
         from_attributes = True
 
 
+class ProbationRecordCreate(BaseModel):
+    client_id: int
+    employee_name: str
+    hire_date: date
+    probation_months: int
+
+
+class ProbationRecordUpdate(BaseModel):
+    employee_name: Optional[str] = None
+    hire_date: Optional[date] = None
+    probation_months: Optional[int] = None
+
+
+class ProbationRecordOut(BaseModel):
+    id: int
+    client_id: int
+    client_name: str
+    created_by_id: int
+    created_by_name: str
+    employee_name: str
+    hire_date: date
+    probation_months: int
+    probation_end_date: date
+    days_until_end: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # -------------------------
 # Dashboard
 # -------------------------
@@ -452,6 +483,7 @@ class DashboardOverviewOut(BaseModel):
     unfinished_count: int
     upcoming_subtasks: List[TaskReminderOut]
     due_subtasks: List[TaskReminderOut]
+    probation_reminders: List[ProbationRecordOut] = []
     upcoming_birthdays: List[BirthdayReminderOut] = []
     reimbursement_can_submit: bool = False
     reimbursement_submit_due_today: bool = False

@@ -160,6 +160,7 @@ class ClientAccount(Base):
 
     created_by = relationship("User", foreign_keys=[created_by_id])
     tasks = relationship("ClientTask", back_populates="client", cascade="all, delete-orphan")
+    probation_records = relationship("ProbationRecord", back_populates="client", cascade="all, delete-orphan")
 
 
 class ClientTask(Base):
@@ -181,6 +182,23 @@ class ClientTask(Base):
 
     client = relationship("ClientAccount", back_populates="tasks")
     user = relationship("User", back_populates="client_tasks", foreign_keys=[user_id])
+
+
+class ProbationRecord(Base):
+    __tablename__ = "probation_records"
+
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=False, index=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    employee_name = Column(String(255), nullable=False)
+    hire_date = Column(Date, nullable=False, index=True)
+    probation_months = Column(Integer, nullable=False)
+    probation_end_date = Column(Date, nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    client = relationship("ClientAccount", back_populates="probation_records")
+    created_by = relationship("User", foreign_keys=[created_by_id])
 
 
 class DailyActivity(Base):
