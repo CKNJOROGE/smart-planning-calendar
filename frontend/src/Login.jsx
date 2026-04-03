@@ -25,19 +25,23 @@ export default function Login({ onLoggedIn }) {
     const linkDistance = 110;
     const linkDistanceSq = linkDistance * linkDistance;
     const cellSize = 120;
-    const maxLinksPerParticle = 10;
+    const maxLinksPerParticle = 6;
     const neighborOffsets = [
       [-1, -1], [0, -1], [1, -1],
       [-1, 0], [0, 0], [1, 0],
       [-1, 1], [0, 1], [1, 1],
     ];
 
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
     function getParticleCount(width) {
-      if (width >= 1280) return 1000; // laptop/desktop: max density
-      if (width >= 1024) return 820;
-      if (width >= 768) return 620;
-      if (width >= 480) return 420;
-      return 260;
+      if (width >= 1280) return 900; // laptop/desktop: max density
+      if (width >= 1024) return 740;
+      if (width >= 768) return 560;
+      if (width >= 480) return 380;
+      return 230;
     }
 
     function resize() {
@@ -56,34 +60,46 @@ export default function Login({ onLoggedIn }) {
     function seed() {
       particles.length = 0;
       for (let i = 0; i < particleCount; i += 1) {
+        const depth = 0.25 + Math.random() * 0.75;
+        const baseRadius = 0.9 + Math.random() * 1.8;
         particles.push({
           x: Math.random() * window.innerWidth,
           y: Math.random() * window.innerHeight,
-          vx: (Math.random() - 0.5) * 0.9,
-          vy: (Math.random() - 0.5) * 0.9,
-          r: 1 + Math.random() * 2.2,
+          vx: (Math.random() - 0.5) * (0.45 + depth * 0.7),
+          vy: (Math.random() - 0.5) * (0.45 + depth * 0.7),
+          z: depth,
+          r: baseRadius * (0.55 + depth * 0.95),
         });
       }
     }
 
     function draw() {
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      const centerX = window.innerWidth / 2;
+      const centerY = window.innerHeight / 2;
+      const mouseDx = mouse.x - centerX;
+      const mouseDy = mouse.y - centerY;
+      const pointerActive = mouse.x > -1000 && mouse.y > -1000;
+
       for (const p of particles) {
         // Add subtle ambient drift so particles never become static.
-        p.vx += (Math.random() - 0.5) * 0.028;
-        p.vy += (Math.random() - 0.5) * 0.028;
+        const drift = 0.016 + p.z * 0.018;
+        p.vx += (Math.random() - 0.5) * drift;
+        p.vy += (Math.random() - 0.5) * drift;
 
         const dx = p.x - mouse.x;
         const dy = p.y - mouse.y;
         const distSq = dx * dx + dy * dy;
         if (distSq < 12000) {
           const force = (12000 - distSq) / 12000;
-          p.vx += (dx / 120) * force * 0.08;
-          p.vy += (dy / 120) * force * 0.08;
+          const depthInfluence = 0.45 + p.z * 0.85;
+          p.vx += (dx / 120) * force * 0.08 * depthInfluence;
+          p.vy += (dy / 120) * force * 0.08 * depthInfluence;
         }
 
-        p.vx *= 0.9985;
-        p.vy *= 0.9985;
+        const drag = 0.9989 - p.z * 0.00035;
+        p.vx *= drag;
+        p.vy *= drag;
         p.x += p.vx;
         p.y += p.vy;
 
@@ -92,9 +108,15 @@ export default function Login({ onLoggedIn }) {
         if (p.y < -20) p.y = window.innerHeight + 20;
         if (p.y > window.innerHeight + 20) p.y = -20;
 
+        const parallaxX = pointerActive ? (mouseDx / Math.max(centerX, 1)) * (1 - p.z) * 14 : 0;
+        const parallaxY = pointerActive ? (mouseDy / Math.max(centerY, 1)) * (1 - p.z) * 14 : 0;
+        const renderX = p.x + parallaxX;
+        const renderY = p.y + parallaxY;
+        const alpha = clamp(0.12 + p.z * 0.32, 0.12, 0.44);
+
         ctx.beginPath();
-        ctx.fillStyle = "rgba(100, 2, 119, 0.35)";
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(100, 2, 119, ${alpha})`;
+        ctx.arc(renderX, renderY, p.r, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -127,7 +149,8 @@ export default function Login({ onLoggedIn }) {
             if (distSq >= linkDistanceSq) continue;
 
             const d = Math.sqrt(distSq);
-            const alpha = (1 - d / linkDistance) * 0.22;
+            const depthBlend = (a.z + b.z) / 2;
+            const alpha = (1 - d / linkDistance) * 0.22 * (0.35 + depthBlend * 0.85);
             ctx.beginPath();
             ctx.strokeStyle = `rgba(100, 2, 119, ${alpha})`;
             ctx.lineWidth = 1;
