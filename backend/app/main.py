@@ -3499,8 +3499,8 @@ def decide_cash_reimbursement(
     comment = (payload.comment or "").strip()
     if not payload.approve and not comment:
         raise HTTPException(status_code=400, detail="Comment is required when denying")
-    if payload.approve and req.total_amount <= 0:
-        raise HTTPException(status_code=400, detail="All reimbursement rows are rejected. Reject the request instead.")
+    if payload.approve and req.total_amount < 0:
+        raise HTTPException(status_code=400, detail="Reimbursement amount cannot be negative.")
 
     role = (current.role or "").strip().lower()
     now = datetime.utcnow()
