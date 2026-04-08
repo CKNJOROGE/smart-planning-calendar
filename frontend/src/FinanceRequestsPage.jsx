@@ -61,10 +61,16 @@ function statusPillClass(status) {
   return "dashboard-status-warn";
 }
 
-function statusLabel(status, isLateSubmission = false) {
+function statusLabel(status, isLateSubmission = false, itemCount = null) {
   const s = (status || "").toLowerCase();
   let label = status || "-";
-  if (s === "pending_approval") label = "pending approval (awaiting approvals)";
+  const isEmptySubmission = Number(itemCount || 0) === 0;
+  if (isEmptySubmission) {
+    if (s === "pending_approval") label = "nothing to submit (awaiting approvals)";
+    else if (s === "pending_reimbursement") label = "nothing to submit (approved, waiting payout)";
+    else if (s === "amount_reimbursed") label = "nothing to submit (paid)";
+    else if (s === "rejected") label = "nothing to submit (rejected)";
+  } else if (s === "pending_approval") label = "pending approval (awaiting approvals)";
   else if (s === "pending_reimbursement") label = "pending reimbursement (approved, waiting payout)";
   else if (s === "amount_reimbursed") label = "amount reimbursed (paid)";
   else if (s === "rejected") label = "rejected";
@@ -141,7 +147,7 @@ function buildReimbursementRecordText(r) {
     `Requester: ${r.user?.name || `User #${r.user_id}`}`,
     `Period: ${r.period_start} to ${r.period_end}`,
     `Total: ${fmtCurrency(r.total_amount)}`,
-    `Status: ${statusLabel(r.status, !!r.is_late_submission)}`,
+    `Status: ${statusLabel(r.status, !!r.is_late_submission, (r.items || []).length)}`,
     `Submitted: ${fmtDateTime(r.submitted_at)}`,
     `CEO Decision: ${decisionLabel(r.ceo_decision)}`,
     `CEO Comment: ${r.ceo_comment || "-"}`,
@@ -503,10 +509,11 @@ export default function FinanceRequestsPage() {
       const { periodStart, periodEnd } = parseReimbursementPeriodKey(
         selectedReimbursementPeriod || reimbursementPeriodKey(draft.period_start, draft.period_end)
       );
+      const hasAnyItems = ((draft?.auto_items || []).length + cleaned.length) > 0;
       await submitCashReimbursement(cleaned, periodStart, periodEnd);
       setManualItems([emptyManual()]);
       await loadData();
-      showToast("Cash reimbursement submitted for approval", "success");
+      showToast(hasAnyItems ? "Cash reimbursement submitted for approval" : "Nothing to submit submitted for approval", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
@@ -1153,7 +1160,7 @@ export default function FinanceRequestsPage() {
                   const k = reimbursementPeriodKey(p.period_start, p.period_end);
                   const statusBits = [];
                   if (p.is_current) statusBits.push("Current");
-                  if (p.has_submission) statusBits.push(`Submitted: ${statusLabel(p.submission_status, p.is_late_submission)}`);
+                  if (p.has_submission) statusBits.push(`Submitted: ${statusLabel(p.submission_status, p.is_late_submission, p.submission_item_count)}`);
                   else if (p.can_submit && !p.is_current) statusBits.push("Late submission open");
                   return (
                     <option key={k} value={k}>
@@ -1171,7 +1178,7 @@ export default function FinanceRequestsPage() {
             </div>
             {selectedReimbursementMeta?.has_submission && (
               <div className="muted" style={{ marginBottom: 10 }}>
-                Submission status: {statusLabel(selectedReimbursementMeta.submission_status, selectedReimbursementMeta.is_late_submission)}
+                Submission status: {statusLabel(selectedReimbursementMeta.submission_status, selectedReimbursementMeta.is_late_submission, selectedReimbursementMeta.submission_item_count)}
               </div>
             )}
 
@@ -1272,7 +1279,7 @@ export default function FinanceRequestsPage() {
                     <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
                     <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
                             <td style={{ padding: 10 }}>
-                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission)}</span>
+                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission, r.items?.length || 0)}</span>
                             </td>
                     <td style={{ padding: 10 }}>
                       <div>CEO: {decisionLabel(r.ceo_decision)}</div>
@@ -1438,7 +1445,7 @@ export default function FinanceRequestsPage() {
                             <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
                             <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
                             <td style={{ padding: 10 }}>
-                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission)}</span>
+                              <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission, r.items?.length || 0)}</span>
                             </td>
                             <td style={{ padding: 10 }}>
                               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

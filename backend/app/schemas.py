@@ -526,6 +526,7 @@ class CashReimbursementPeriodOut(BaseModel):
     has_draft: bool = False
     has_submission: bool = False
     submission_status: Optional[str] = None
+    submission_item_count: int = 0
     is_late_submission: bool = False
     can_submit: bool = False
     submit_message: Optional[str] = None

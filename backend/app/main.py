@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from starlette.middleware.base import BaseHTTPMiddleware
 from jose import jwt
-from sqlalchemy import or_, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
@@ -3079,6 +3079,7 @@ def list_cash_reimbursement_periods(
     for p_start, p_end in sorted(periods, key=lambda x: (x[0], x[1]), reverse=True):
         req = request_by_period.get((p_start, p_end))
         has_submission = req is not None
+        submission_item_count = len(req.items) if req else 0
         can_submit = _reimbursement_can_submit(today, p_start, p_end, has_submission)
         out.append(
             CashReimbursementPeriodOut(
@@ -3088,6 +3089,7 @@ def list_cash_reimbursement_periods(
                 has_draft=((p_start, p_end) in draft_periods),
                 has_submission=has_submission,
                 submission_status=req.status if req else None,
+                submission_item_count=submission_item_count,
                 is_late_submission=bool(req.is_late_submission) if req else False,
                 can_submit=can_submit,
                 submit_message=_reimbursement_submit_message_for_period(
@@ -3442,9 +3444,6 @@ def submit_cash_reimbursement(
         total += amount
         if source_event_id is not None:
             used_event_ids.add(source_event_id)
-
-    if not all_items:
-        raise HTTPException(status_code=400, detail="No reimbursement items to submit for this period")
 
     req = CashReimbursementRequest(
         user_id=current.id,
