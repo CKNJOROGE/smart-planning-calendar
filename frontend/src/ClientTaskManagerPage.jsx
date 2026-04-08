@@ -110,7 +110,6 @@ export default function ClientTaskManagerPage() {
   });
   const [probationEditingRows, setProbationEditingRows] = useState({});
   const [probationBusy, setProbationBusy] = useState(false);
-  const [exportClientScope, setExportClientScope] = useState("selected");
   const [exportPeriodScope, setExportPeriodScope] = useState("quarter");
 
   const isEditMode = mode === "edit";
@@ -523,36 +522,22 @@ export default function ClientTaskManagerPage() {
 
   async function handleExportPdf() {
     try {
-      const selectedClientNum = Number(selectedClientId);
-      let targetClients = [];
-      if (exportClientScope === "all") {
-        targetClients = [...clients];
-      } else if (exportClientScope === "selected") {
-        const chosen = clients.find((c) => c.id === selectedClientNum);
-        if (chosen) targetClients = [chosen];
-      } else {
-        const explicitId = Number(exportClientScope);
-        const chosen = clients.find((c) => c.id === explicitId);
-        if (chosen) targetClients = [chosen];
-      }
-
-      if (!targetClients.length) {
+      const chosenClient = clients.find((c) => c.id === Number(selectedClientId));
+      if (!chosenClient) {
         showToast("No client selected for export", "error");
         return;
       }
 
       const quarters = exportPeriodScope === "year" ? QUARTERS : [Number(selectedQuarter)];
       const requests = [];
-      for (const client of targetClients) {
-        for (const quarter of quarters) {
-          requests.push(
-            listClientTasks({
-              year: Number(selectedYear),
-              clientId: Number(client.id),
-              quarter: Number(quarter),
-            }).then((rows) => ({ client, quarter, rows: rows || [] }))
-          );
-        }
+      for (const quarter of quarters) {
+        requests.push(
+          listClientTasks({
+            year: Number(selectedYear),
+            clientId: Number(chosenClient.id),
+            quarter: Number(quarter),
+          }).then((rows) => ({ client: chosenClient, quarter, rows: rows || [] }))
+        );
       }
       const chunks = await Promise.all(requests);
       const populatedChunks = chunks.filter((x) => Array.isArray(x.rows) && x.rows.length > 0);
@@ -641,13 +626,7 @@ export default function ClientTaskManagerPage() {
             <h1 style="margin:0 0 8px 0;font-size:20px;">Client Task Manager Export</h1>
             <div style="margin:0 0 16px 0;font-size:12px;color:#555;">
               Year: ${escapeHtml(String(selectedYear))}<br/>
-              Client filter: ${escapeHtml(
-                exportClientScope === "all"
-                  ? "All clients"
-                  : exportClientScope === "selected"
-                    ? selectedClient?.name || "Selected client"
-                    : clients.find((c) => String(c.id) === String(exportClientScope))?.name || "Selected client"
-              )}<br/>
+              Client: ${escapeHtml(chosenClient.name)}<br/>
               Period filter: ${escapeHtml(exportPeriodScope === "year" ? "Full year (Q1-Q4)" : `Quarter Q${selectedQuarter}`)}<br/>
               Exported on: ${escapeHtml(new Date().toLocaleString())}
             </div>
@@ -966,18 +945,6 @@ export default function ClientTaskManagerPage() {
         <div style={{ fontWeight: 800, marginBottom: 8 }}>5) Export PDF</div>
         <div className="row">
           <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
-            <label>Client filter</label>
-            <select value={exportClientScope} onChange={(e) => setExportClientScope(e.target.value)}>
-              <option value="selected">Selected client</option>
-              <option value="all">All clients</option>
-              {clients.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
             <label>Period filter</label>
             <select value={exportPeriodScope} onChange={(e) => setExportPeriodScope(e.target.value)}>
               <option value="quarter">{`Selected quarter (Q${selectedQuarter})`}</option>
@@ -985,7 +952,7 @@ export default function ClientTaskManagerPage() {
             </select>
           </div>
           <div style={{ alignSelf: "end" }}>
-            <button type="button" className="btn btn-primary" onClick={handleExportPdf} disabled={!clients.length}>
+            <button type="button" className="btn btn-primary" onClick={handleExportPdf} disabled={!selectedClientId}>
               Export PDF
             </button>
           </div>
