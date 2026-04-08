@@ -380,6 +380,17 @@ export function createLibraryCategory(name) {
   });
 }
 
+export function getSharedNotebook() {
+  return request("/shared-notebook");
+}
+
+export function updateSharedNotebook(content) {
+  return request("/shared-notebook", {
+    method: "PATCH",
+    body: { content: content || "" },
+  });
+}
+
 export async function uploadLibraryDocument({ title, category, file }) {
   const token = getToken();
   const form = new FormData();

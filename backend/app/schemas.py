@@ -295,6 +295,22 @@ class LibraryCategoryOut(BaseModel):
         from_attributes = True
 
 
+class SharedNotebookOut(BaseModel):
+    id: int
+    content: str = ""
+    updated_by_id: Optional[int] = None
+    updated_at: datetime
+    created_at: datetime
+    updated_by: Optional[UserOut] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SharedNotebookUpdateIn(BaseModel):
+    content: str = ""
+
+
 class DepartmentCreate(BaseModel):
     name: str
 

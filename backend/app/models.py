@@ -122,6 +122,18 @@ class LibraryCategory(Base):
     created_by = relationship("User", foreign_keys=[created_by_id])
 
 
+class SharedNotebook(Base):
+    __tablename__ = "shared_notebook"
+
+    id = Column(Integer, primary_key=True)
+    content = Column(Text, nullable=False, default="")
+    updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    updated_by = relationship("User", foreign_keys=[updated_by_id])
+
+
 class Department(Base):
     __tablename__ = "departments"
 

@@ -25,6 +25,7 @@ from .models import (
     Event,
     CompanyDocument,
     LibraryCategory,
+    SharedNotebook,
     Department,
     Designation,
     ClientAccount,
@@ -70,6 +71,8 @@ from .schemas import (
     CompanyDocumentOut,
     LibraryCategoryCreate,
     LibraryCategoryOut,
+    SharedNotebookOut,
+    SharedNotebookUpdateIn,
     DepartmentCreate,
     DepartmentOut,
     DesignationCreate,
@@ -2442,6 +2445,17 @@ def run_migration(
 # -------------------------
 # Company Library
 # -------------------------
+def _get_or_create_shared_notebook(db: Session, current: Optional[User] = None) -> SharedNotebook:
+    row = db.query(SharedNotebook).order_by(SharedNotebook.id.asc()).first()
+    if row:
+        return row
+    row = SharedNotebook(content="", updated_by_id=current.id if current else None)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
 def _normalize_library_category_name(raw: str) -> str:
     return " ".join((raw or "").strip().split())
 
@@ -2563,6 +2577,33 @@ async def upload_company_document(
     db.refresh(doc)
     _ = doc.uploaded_by
     return doc
+
+
+@app.get("/shared-notebook", response_model=SharedNotebookOut)
+def get_shared_notebook(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    row = _get_or_create_shared_notebook(db)
+    _ = row.updated_by
+    return row
+
+
+@app.patch("/shared-notebook", response_model=SharedNotebookOut)
+def update_shared_notebook(
+    payload: SharedNotebookUpdateIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    content = payload.content if payload.content is not None else ""
+    row = _get_or_create_shared_notebook(db, current)
+    row.content = content
+    row.updated_by_id = current.id
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(row)
+    _ = row.updated_by
+    return row
 
 
 @app.delete("/library/documents/{doc_id}")

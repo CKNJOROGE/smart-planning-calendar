@@ -7,6 +7,7 @@ import UsersPage from "./UsersPage";
 import UserProfilePage from "./UserProfilePage";
 import ApprovalsPage from "./ApprovalsPage";
 import LibraryPage from "./LibraryPage";
+import SharedNotebookPage from "./SharedNotebookPage";
 import ClientTaskManagerPage from "./ClientTaskManagerPage";
 import DashboardPage from "./DashboardPage";
 import FinanceRequestsPage from "./FinanceRequestsPage";
@@ -227,6 +228,9 @@ function Shell({ onLogout, theme, setTheme }) {
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/library">
               <span className="sidebar-link-text">Library</span>
             </NavLink>
+            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/shared-notebook">
+              <span className="sidebar-link-text">Shared Notebook</span>
+            </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/client-task-manager">
               <span className="sidebar-link-text">Client Task Manager</span>
             </NavLink>
@@ -394,6 +398,7 @@ function Shell({ onLogout, theme, setTheme }) {
             <Route path="/" element={<CalendarPage />} />
             <Route path="/profile" element={<MyProfilePage />} />
             <Route path="/library" element={<LibraryPage />} />
+            <Route path="/shared-notebook" element={<SharedNotebookPage />} />
             <Route path="/client-task-manager" element={<ClientTaskManagerPage />} />
             <Route path="/finance-requests" element={<FinanceRequestsPage />} />
             <Route path="/payroll" element={<PayrollPage />} />
