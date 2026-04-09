@@ -2141,6 +2141,11 @@ textarea{ resize: vertical; min-height: 90px; }
   padding-right: 4px;
 }
 
+.dashboard-mini-list--tall {
+  min-height: 500px;
+  max-height: 500px;
+}
+
 .dashboard-mini-item {
   border: 1px solid var(--border);
   border-radius: 10px;

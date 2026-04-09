@@ -368,10 +368,10 @@ export default function DashboardPage() {
     }
   }
 
-  function renderTaskList(items, emptyText) {
+  function renderTaskList(items, emptyText, listClassName = "") {
     if (!items.length) return <div className="muted">{emptyText}</div>;
     return (
-      <div className="dashboard-mini-list">
+      <div className={`dashboard-mini-list ${listClassName}`.trim()}>
         {items.map((t) => (
           <div key={t.id} className="dashboard-mini-item">
             <div className="dashboard-mini-head">
@@ -703,7 +703,7 @@ export default function DashboardPage() {
               <div className="dashboard-panel-head">
                 <div className="dashboard-panel-title">Probation Tracker</div>
               </div>
-              <div className="dashboard-mini-list">
+              <div className="dashboard-mini-list dashboard-mini-list--tall">
                 {overview.probation_reminders.map((record) => (
                   <div key={record.id} className="dashboard-mini-item" style={{ borderLeft: "4px solid #f59e0b" }}>
                     <div className="dashboard-mini-head">
@@ -758,7 +758,7 @@ export default function DashboardPage() {
             <div className="dashboard-panel-head">
               <div className="dashboard-panel-title">Due Tasks</div>
             </div>
-            {renderTaskList(overview.due_subtasks, "No due or overdue subtasks pending completion.")}
+            {renderTaskList(overview.due_subtasks, "No due or overdue subtasks pending completion.", "dashboard-mini-list--tall")}
           </div>
         </div>
       </div>
