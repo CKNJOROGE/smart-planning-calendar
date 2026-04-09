@@ -1253,7 +1253,7 @@ export default function FinanceRequestsPage() {
             <div style={{ marginTop: 10, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <button className="btn" type="button" onClick={addManualRow} disabled={!draft.can_edit_manual}>+ Add Manual Item</button>
               <button className="btn" type="button" onClick={saveManualDraft} disabled={!draft.can_edit_manual}>Save Draft</button>
-              {draft.can_submit && (
+              {draft.can_submit && (draft.submit_due_today || (selectedReimbursementMeta && !selectedReimbursementMeta.is_current)) && (
                 <button className="btn btn-primary" type="button" onClick={submitReimbursement} disabled={busy}>
                   {selectedReimbursementMeta && !selectedReimbursementMeta.is_current ? "Submit Late Reimbursement" : "Submit 2-Week Reimbursement"}
                 </button>
