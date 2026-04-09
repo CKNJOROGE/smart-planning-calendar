@@ -1557,9 +1557,9 @@ def _reimbursement_can_submit(
 ) -> bool:
     if already_submitted_for_period:
         return False
-    current_end = _reimbursement_due_date_for(today)
-    # Allow submissions for the current due period and any older missed period.
-    return target_period_end <= current_end
+    # Allow the period only once its due date has arrived.
+    # Older missed periods remain available for late submission.
+    return today >= target_period_end
 
 
 def _reimbursement_submit_message_for_period(
@@ -5434,7 +5434,12 @@ def get_dashboard_overview(
         .first()
     )
 
-    reimbursement_can_submit = not already_submitted_for_period
+    reimbursement_can_submit = _reimbursement_can_submit(
+        today,
+        reimbursement_period_start,
+        reimbursement_period_end,
+        already_submitted_for_period,
+    )
 
     reimbursement_submit_message = _reimbursement_submit_message_for_period(
         today,
