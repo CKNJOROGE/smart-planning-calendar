@@ -1549,45 +1549,6 @@ def _resolve_reimbursement_period(
     return period_start, period_end
 
 
-def _resolve_reimbursement_period_for_user(
-    db: Session,
-    current: User,
-    today: date,
-    period_start: Optional[date],
-    period_end: Optional[date],
-) -> tuple[date, date]:
-    if period_start is None and period_end is None:
-        return _reimbursement_period_for(today)
-    if period_start is None or period_end is None:
-        raise HTTPException(status_code=400, detail="period_start and period_end must both be provided")
-    if period_end < period_start:
-        raise HTTPException(status_code=400, detail="period_end cannot be before period_start")
-    try:
-        return _resolve_reimbursement_period(today, period_start, period_end)
-    except HTTPException:
-        has_request = bool(
-            db.query(CashReimbursementRequest.id)
-            .filter(
-                CashReimbursementRequest.user_id == current.id,
-                CashReimbursementRequest.period_start == period_start,
-                CashReimbursementRequest.period_end == period_end,
-            )
-            .first()
-        )
-        has_draft = bool(
-            db.query(CashReimbursementDraft.id)
-            .filter(
-                CashReimbursementDraft.user_id == current.id,
-                CashReimbursementDraft.period_start == period_start,
-                CashReimbursementDraft.period_end == period_end,
-            )
-            .first()
-        )
-        if has_request or has_draft:
-            return period_start, period_end
-        raise
-
-
 def _reimbursement_can_submit(
     today: date,
     target_period_start: date,
@@ -3035,7 +2996,7 @@ def get_cash_reimbursement_draft(
     current: User = Depends(get_current_user),
 ):
     today = date.today()
-    period_start, period_end = _resolve_reimbursement_period_for_user(db, current, today, period_start, period_end)
+    period_start, period_end = _resolve_reimbursement_period(today, period_start, period_end)
     due_today = _is_reimbursement_due_day(today)
     already_submitted_for_period = bool(
         db.query(CashReimbursementRequest.id)
@@ -3202,7 +3163,7 @@ def save_cash_reimbursement_draft(
     current: User = Depends(get_current_user),
 ):
     today = date.today()
-    period_start, period_end = _resolve_reimbursement_period_for_user(db, current, today, period_start, period_end)
+    period_start, period_end = _resolve_reimbursement_period(today, period_start, period_end)
 
     existing_submission = (
         db.query(CashReimbursementRequest.id)
@@ -3438,7 +3399,7 @@ def submit_cash_reimbursement(
     current: User = Depends(get_current_user),
 ):
     today = date.today()
-    period_start, period_end = _resolve_reimbursement_period_for_user(db, current, today, period_start, period_end)
+    period_start, period_end = _resolve_reimbursement_period(today, period_start, period_end)
     existing = (
         db.query(CashReimbursementRequest)
         .filter(
