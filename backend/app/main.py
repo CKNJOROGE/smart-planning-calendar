@@ -5423,7 +5423,6 @@ def get_dashboard_overview(
             )
     upcoming_birthdays.sort(key=lambda x: (x.days_until, x.user_name.lower()))
 
-    reimbursement_due = _is_reimbursement_due_day(today)
     reimbursement_period_start, reimbursement_period_end = _reimbursement_period_for(today)
     already_submitted_for_period = bool(
         db.query(CashReimbursementRequest.id)
@@ -5437,12 +5436,13 @@ def get_dashboard_overview(
 
     reimbursement_can_submit = not already_submitted_for_period
 
-    if already_submitted_for_period:
-        reimbursement_submit_message = "You already submitted this period's reimbursement."
-    elif reimbursement_due:
-        reimbursement_submit_message = _reimbursement_due_message(today, reimbursement_can_submit)
-    else:
-        reimbursement_submit_message = f"LATE: Submit your reimbursement for {reimbursement_period_start} to {reimbursement_period_end} now!"
+    reimbursement_submit_message = _reimbursement_submit_message_for_period(
+        today,
+        reimbursement_period_start,
+        reimbursement_period_end,
+        reimbursement_can_submit,
+        already_submitted_for_period,
+    )
 
     return DashboardOverviewOut(
         today=today,
@@ -5455,7 +5455,7 @@ def get_dashboard_overview(
         probation_reminders=[_to_probation_record(item) for item in probation_rows],
         upcoming_birthdays=upcoming_birthdays,
         reimbursement_can_submit=reimbursement_can_submit,
-        reimbursement_submit_due_today=reimbursement_due,
+        reimbursement_submit_due_today=today == reimbursement_period_end,
         reimbursement_submit_period_start=reimbursement_period_start,
         reimbursement_submit_period_end=reimbursement_period_end,
         reimbursement_submit_message=reimbursement_submit_message,
