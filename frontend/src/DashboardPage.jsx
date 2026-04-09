@@ -125,6 +125,12 @@ export default function DashboardPage() {
     reimbursement_submit_message: "",
   });
   const isCeo = currentUser?.role === "ceo";
+  const reimbursementPeriodEnd = overview.reimbursement_submit_period_end || "";
+  const todayKey = overview.today || "";
+  const reimbursementIsOpenCurrentPeriod =
+    !!overview.reimbursement_can_submit && !!reimbursementPeriodEnd && reimbursementPeriodEnd >= todayKey;
+  const reimbursementIsLate =
+    !!overview.reimbursement_can_submit && !overview.reimbursement_submit_due_today && !reimbursementIsOpenCurrentPeriod;
 
   const groupedTodayPosts = useMemo(
     () => groupActivitiesByUserDay(overview.todays_activities)
@@ -427,7 +433,7 @@ export default function DashboardPage() {
       </div>
 
       {err && <div className="error">{err}</div>}
-      {(overview.reimbursement_submit_due_today || overview.reimbursement_can_submit) && (
+      {(overview.reimbursement_submit_due_today || reimbursementIsOpenCurrentPeriod || reimbursementIsLate) && (
         <div
           className="card"
           style={{
@@ -437,13 +443,17 @@ export default function DashboardPage() {
           }}
         >
           <div style={{ fontWeight: 900, marginBottom: 4, color: overview.reimbursement_submit_due_today ? "#dc2626" : "#000" }}>
-            {overview.reimbursement_submit_due_today ? "⚠️ Cash Reimbursement Due TODAY" : "⏰ Cash Reimbursement - Late Submission"}
+            {overview.reimbursement_submit_due_today
+              ? "Cash Reimbursement Due TODAY"
+              : reimbursementIsOpenCurrentPeriod
+                ? "Cash Reimbursement - Current Period Open"
+                : "Cash Reimbursement - Late Submission"}
           </div>
           <div style={{ fontSize: 14 }}>
             Submit your reimbursement for {formatDate(overview.reimbursement_submit_period_start)} to {formatDate(overview.reimbursement_submit_period_end)}.
           </div>
           <div className="muted" style={{ marginTop: 4 }}>
-            {overview.reimbursement_submit_message || "Submission is open today."}
+            {overview.reimbursement_submit_message || (reimbursementIsOpenCurrentPeriod ? "Submission is open for this period." : "Submission is open today.")}
           </div>
         </div>
       )}

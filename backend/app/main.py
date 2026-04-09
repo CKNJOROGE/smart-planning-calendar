@@ -1479,6 +1479,17 @@ def _previous_reimbursement_due_date(d: date) -> date:
     raise ValueError("Not a reimbursement due date")
 
 
+def _reimbursement_due_dates_for_month(year: int, month: int) -> list[date]:
+    if month == 2:
+        return [date(year, 2, 28)]
+    return [date(year, month, 15), date(year, month, 30)]
+
+
+def _shift_month(year: int, month: int, offset: int) -> tuple[int, int]:
+    total = month - 1 + offset
+    return year + total // 12, total % 12 + 1
+
+
 def _reimbursement_period_from_due_date(due_date: date) -> tuple[date, date]:
     if due_date.month == 2 and due_date.day == 28:
         return date(due_date.year, 2, 16), due_date
@@ -1496,17 +1507,15 @@ def _reimbursement_period_for(d: date) -> tuple[date, date]:
 
 
 def _reimbursement_due_date_for(d: date) -> date:
-    if d.month == 2 and d.day >= 28:
-        return date(d.year, 2, 28)
-    if d.day >= 30:
-        return date(d.year, d.month, 30)
-    if d.day >= 15:
-        return date(d.year, d.month, 15)
-    prev_month = d.month - 1 or 12
-    prev_year = d.year - 1 if prev_month == 12 else d.year
-    if prev_month == 2:
-        return date(prev_year, 2, 28)
-    return date(prev_year, prev_month, 30)
+    candidates: list[date] = []
+    for offset in range(0, 3):
+        year, month = _shift_month(d.year, d.month, offset)
+        for candidate in _reimbursement_due_dates_for_month(year, month):
+            if candidate >= d:
+                candidates.append(candidate)
+    if candidates:
+        return min(candidates)
+    raise ValueError("Could not determine reimbursement due date")
 
 
 def _is_reimbursement_due_day(d: date) -> bool:
@@ -1517,7 +1526,7 @@ def _is_reimbursement_due_day(d: date) -> bool:
 
 def _reimbursement_due_message(today: date, can_submit: bool) -> str:
     if can_submit:
-        return "Cash reimbursement submission is open today. Submit your reimbursement for this period."
+        return "Cash reimbursement submission is open for this period. Submit your reimbursement now."
     if today.month == 2:
         return "Cash reimbursement can be submitted on February 28."
     return "Cash reimbursement can be submitted on the 15th and 30th of each month."
@@ -3414,8 +3423,7 @@ def submit_cash_reimbursement(
                 already_submitted_for_period=False,
             ),
         )
-    current_end = _reimbursement_due_date_for(today)
-    is_late_submission = period_end != current_end or not _is_reimbursement_due_day(today)
+    is_late_submission = period_end < today
 
     used_event_ids = {
         int(x[0]) for x in db.query(CashReimbursementItem.source_event_id)

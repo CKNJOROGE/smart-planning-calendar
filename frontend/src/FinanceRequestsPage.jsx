@@ -385,8 +385,12 @@ export default function FinanceRequestsPage() {
         periodRows.find((p) => p.is_current)?.period_start,
         periodRows.find((p) => p.is_current)?.period_end
       );
+      const selectedPeriod = (periodRows || []).find((p) => reimbursementPeriodKey(p.period_start, p.period_end) === selectedReimbursementPeriod) || null;
+      const shouldPreferCurrent = !!currentKey && (!selectedPeriod || selectedPeriod.is_current || selectedPeriod.has_submission);
       const fallbackKey = currentKey || (periodRows[0] ? reimbursementPeriodKey(periodRows[0].period_start, periodRows[0].period_end) : "");
-      const effectivePeriodKey = periodKeys.has(selectedReimbursementPeriod) ? selectedReimbursementPeriod : fallbackKey;
+      const effectivePeriodKey = shouldPreferCurrent
+        ? currentKey
+        : (periodKeys.has(selectedReimbursementPeriod) ? selectedReimbursementPeriod : fallbackKey);
       if (effectivePeriodKey) {
         setSelectedReimbursementPeriod(effectivePeriodKey);
         await loadReimbursementDraftForSelected(effectivePeriodKey);
