@@ -2142,7 +2142,6 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 .dashboard-mini-list--tall {
-  min-height: 500px;
   max-height: 500px;
 }
 
