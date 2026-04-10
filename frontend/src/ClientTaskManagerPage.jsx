@@ -368,6 +368,8 @@ async function buildWorkplanReportPdfWithLogo(report, fallbackClientName = "") {
   const ai = report?.ai_report || {};
   const title = ai.title || report?.title || "Client Workplan Report";
   const clientName = report?.client?.name || fallbackClientName || "";
+  const periodLabel = `${report?.year || ""} Q${report?.quarter || ""}`.trim();
+  const reportTypeLabel = getReportKindLabel(report?.report_kind);
 
   const ensureSpace = (y, needed = 16) => {
     if (y + needed > pageHeight - 16) {
