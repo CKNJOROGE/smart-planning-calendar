@@ -463,6 +463,10 @@ class ClientTaskReportOut(BaseModel):
     ai_report: Optional[ClientTaskReportAIOut] = None
 
 
+class ClientTaskReportRestoreIn(BaseModel):
+    report: ClientTaskReportOut
+
+
 class ClientTaskReportHistoryOut(BaseModel):
     id: int
     client_id: int

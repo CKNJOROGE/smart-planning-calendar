@@ -7,6 +7,7 @@ import {
   listClientWorkplanReportHistory,
   getSavedClientWorkplanReport,
   deleteSavedClientWorkplanReport,
+  createClientWorkplanReportFromPayload,
   createTaskClient,
   deleteTaskClient,
   listClientTasks,
@@ -910,11 +911,26 @@ export default function ClientTaskManagerPage() {
       return;
     }
     try {
+      const snapshot = await getSavedClientWorkplanReport(row.id);
       await deleteSavedClientWorkplanReport(row.id);
-      showToast("Saved report deleted", "success");
-      if (reportPreview?.client?.id === row.client_id && reportPreview?.year === row.year && reportPreview?.quarter === row.quarter) {
-        setReportPreview(null);
-      }
+      setReportPreview((prev) =>
+        prev?.client?.id === row.client_id && prev?.year === row.year && prev?.quarter === row.quarter ? null : prev
+      );
+      showToast("Saved report deleted", "success", {
+        actionLabel: "Undo",
+        onAction: async () => {
+          try {
+            const restored = await createClientWorkplanReportFromPayload({ report: snapshot });
+            await refreshReportHistory();
+            setReportPreview(restored);
+            showToast("Report restored", "success");
+          } catch (restoreErr) {
+            const restoreMsg = String(restoreErr.message || restoreErr);
+            setErr(restoreMsg);
+            showToast(restoreMsg, "error");
+          }
+        },
+      });
       await refreshReportHistory();
     } catch (e) {
       const msg = String(e.message || e);
@@ -1301,8 +1317,14 @@ export default function ClientTaskManagerPage() {
                   <button type="button" className="btn" onClick={() => handleOpenSavedReport(row.id)}>
                     Open
                   </button>
-                  <button type="button" className="btn btn-danger" onClick={() => handleDeleteSavedReport(row)}>
-                    Delete
+                  <button
+                    type="button"
+                    className="btn btn-danger icon-btn"
+                    onClick={() => handleDeleteSavedReport(row)}
+                    aria-label={`Delete report ${row.title}`}
+                    title="Delete report"
+                  >
+                    <span aria-hidden="true">🗑</span>
                   </button>
                 </div>
               </div>

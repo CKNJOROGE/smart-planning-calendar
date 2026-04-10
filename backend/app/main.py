@@ -90,6 +90,7 @@ from .schemas import (
     ClientTaskReportAIOut,
     ClientTaskReportOut,
     ClientTaskReportHistoryOut,
+    ClientTaskReportRestoreIn,
     ProbationRecordCreate,
     ProbationRecordUpdate,
     ProbationRecordOut,
@@ -3053,6 +3054,20 @@ def delete_saved_client_task_workplan_report(
     db.delete(row)
     db.commit()
     return {"ok": True}
+
+
+@app.post("/task-manager/reports/workplan/restore", response_model=ClientTaskReportOut)
+def restore_saved_client_task_workplan_report(
+    payload: ClientTaskReportRestoreIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    report = payload.report
+    client = db.query(ClientAccount).filter(ClientAccount.id == report.client.id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    restored = _persist_client_task_workplan_report(db, report, current.id)
+    return _row_to_client_task_report(restored)
 
 
 @app.post("/task-manager/tasks", response_model=List[ClientTaskOut])

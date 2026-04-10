@@ -508,6 +508,13 @@ export async function deleteSavedClientWorkplanReport(reportId) {
   return text ? JSON.parse(text) : null;
 }
 
+export function createClientWorkplanReportFromPayload(payload) {
+  return request("/task-manager/reports/workplan/restore", {
+    method: "POST",
+    body: payload,
+  });
+}
+
 export function createClientTask(payload) {
   return request("/task-manager/tasks", { method: "POST", body: payload });
 }
