@@ -51,7 +51,7 @@ class Settings(BaseSettings):
 
     # Optional Gemini-powered report narration
     GEMINI_API_KEY: str = ""
-    GEMINI_REPORT_MODEL: str = "gemini-2.5-flash"
+    GEMINI_REPORT_MODEL: str = "gemini-2.5-flash-lite"
     GEMINI_REPORT_MAX_OUTPUT_TOKENS: int = 4000
 
     def list_from_csv(self, value: str) -> list[str]:

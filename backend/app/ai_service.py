@@ -9,6 +9,10 @@ from pydantic import BaseModel, ValidationError
 from .config import settings
 
 logger = logging.getLogger(__name__)
+DEFAULT_GEMINI_REPORT_MODELS = (
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+)
 
 
 class ClientWorkplanAISection(BaseModel):
@@ -82,38 +86,60 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
 
     model_input = json.dumps(payload, default=str)
 
-    try:
-        response = client.models.generate_content(
-            model=settings.GEMINI_REPORT_MODEL,
-            contents=[f"{prompt}\n\nReport input:\n{model_input}"],
-            config={
-                "response_mime_type": "application/json",
-                "response_schema": ClientWorkplanAIReport,
-                "temperature": 0.4,
-                "max_output_tokens": settings.GEMINI_REPORT_MAX_OUTPUT_TOKENS,
-            },
-        )
-    except Exception as exc:
-        logger.exception("Gemini workplan report request failed: %s", exc)
-        return None
+    configured_model = (settings.GEMINI_REPORT_MODEL or "").strip()
+    candidate_models = [configured_model, *DEFAULT_GEMINI_REPORT_MODELS]
+    seen_models: set[str] = set()
+    ordered_models: list[str] = []
+    for model_name in candidate_models:
+        if model_name and model_name not in seen_models:
+            seen_models.add(model_name)
+            ordered_models.append(model_name)
 
-    parsed = getattr(response, "parsed", None)
-    if parsed is not None:
+    last_error: Optional[Exception] = None
+    for model_name in ordered_models:
         try:
-            parsed_payload = parsed.model_dump() if hasattr(parsed, "model_dump") else parsed
-            return ClientWorkplanAIReport.model_validate(parsed_payload)
-        except ValidationError:
-            logger.exception("Gemini parsed report failed validation")
-            return None
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[f"{prompt}\n\nReport input:\n{model_input}"],
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": ClientWorkplanAIReport,
+                    "temperature": 0.4,
+                    "max_output_tokens": settings.GEMINI_REPORT_MAX_OUTPUT_TOKENS,
+                },
+            )
+        except Exception as exc:
+            last_error = exc
+            logger.exception("Gemini workplan report request failed for %s: %s", model_name, exc)
+            continue
 
-    raw_text = getattr(response, "text", "") or ""
-    if not raw_text:
-        logger.error("Gemini workplan report returned no text output")
-        return None
+        parsed = getattr(response, "parsed", None)
+        if parsed is not None:
+            try:
+                parsed_payload = parsed.model_dump() if hasattr(parsed, "model_dump") else parsed
+                return ClientWorkplanAIReport.model_validate(parsed_payload)
+            except ValidationError:
+                last_error = ValidationError.from_exception_data(
+                    "ClientWorkplanAIReport",
+                    [{"type": "value_error", "loc": ("parsed",), "msg": "Gemini parsed report failed validation", "input": parsed}],
+                )
+                logger.exception("Gemini parsed report failed validation for %s", model_name)
+                continue
 
-    try:
-        data = json.loads(raw_text)
-        return ClientWorkplanAIReport.model_validate(data)
-    except (json.JSONDecodeError, ValidationError):
-        logger.exception("Failed to parse Gemini workplan report response")
-        return None
+        raw_text = getattr(response, "text", "") or ""
+        if not raw_text:
+            last_error = RuntimeError(f"Gemini model {model_name} returned no text output")
+            logger.error("Gemini workplan report returned no text output for %s", model_name)
+            continue
+
+        try:
+            data = json.loads(raw_text)
+            return ClientWorkplanAIReport.model_validate(data)
+        except (json.JSONDecodeError, ValidationError) as exc:
+            last_error = exc
+            logger.exception("Failed to parse Gemini workplan report response for %s", model_name)
+            continue
+
+    if last_error is not None:
+        logger.error("Gemini workplan report failed after trying %s", ", ".join(ordered_models))
+    return None
