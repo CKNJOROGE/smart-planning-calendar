@@ -8,7 +8,6 @@ from pydantic import BaseModel, ValidationError
 
 from .config import settings
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -25,27 +24,30 @@ class ClientWorkplanAIReport(BaseModel):
     closing_note: str
 
 
-_client: Optional[OpenAI] = None
-_openai_import_error: Optional[Exception] = None
+_client: Optional["genai.Client"] = None
+_gemini_import_error: Optional[Exception] = None
 
 
-def _get_client() -> Optional[OpenAI]:
+def _get_client() -> Optional["genai.Client"]:
     global _client
-    global _openai_import_error
-    if not settings.OPENAI_API_KEY:
+    global _gemini_import_error
+
+    if not settings.GEMINI_API_KEY:
         return None
+
     if _client is None:
         try:
-            from openai import OpenAI as _OpenAI
+            from google import genai
         except Exception as exc:  # pragma: no cover - optional dependency
-            _openai_import_error = exc
+            _gemini_import_error = exc
+            logger.exception("Gemini client import failed: %s", exc)
             return None
-        _client = _OpenAI(api_key=settings.OPENAI_API_KEY)
+        _client = genai.Client(api_key=settings.GEMINI_API_KEY)
     return _client
 
 
-def is_openai_report_enabled() -> bool:
-    return bool(settings.OPENAI_API_KEY and settings.OPENAI_REPORT_MODEL)
+def is_gemini_report_enabled() -> bool:
+    return bool(settings.GEMINI_API_KEY and settings.GEMINI_REPORT_MODEL)
 
 
 def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIReport]:
@@ -65,40 +67,6 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
             "Turn the supplied workplan data into a polished client-facing report that reads like a finished document."
         )
 
-    schema = {
-        "name": "client_workplan_ai_report",
-        "schema": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {
-                "title": {"type": "string"},
-                "opening_summary": {"type": "string"},
-                "sections": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "heading": {"type": "string"},
-                            "paragraphs": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                            "bullets": {
-                                "type": "array",
-                                "items": {"type": "string"},
-                            },
-                        },
-                        "required": ["heading", "paragraphs", "bullets"],
-                    },
-                },
-                "closing_note": {"type": "string"},
-            },
-            "required": ["title", "opening_summary", "sections", "closing_note"],
-        },
-        "strict": True,
-    }
-
     prompt = (
         f"{instruction}\n"
         "Write for a business client. Keep the language specific, concrete, and professional.\n"
@@ -112,56 +80,38 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
         "If the report is for the end of a quarter, focus on completed work, notable outcomes, and what remains pending."
     )
 
+    model_input = json.dumps(payload, default=str)
+
     try:
-        response = client.responses.create(
-            model=settings.OPENAI_REPORT_MODEL,
-            input=[
-                {
-                    "role": "system",
-                    "content": prompt,
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(payload, default=str),
-                },
-            ],
-            text={
-                "format": {
-                    "type": "json_schema",
-                    "name": schema["name"],
-                    "schema": schema["schema"],
-                    "strict": True,
-                }
+        response = client.models.generate_content(
+            model=settings.GEMINI_REPORT_MODEL,
+            contents=[f"{prompt}\n\nReport input:\n{model_input}"],
+            config={
+                "response_mime_type": "application/json",
+                "response_schema": ClientWorkplanAIReport,
+                "temperature": 0.4,
+                "max_output_tokens": settings.GEMINI_REPORT_MAX_OUTPUT_TOKENS,
             },
-            max_output_tokens=settings.OPENAI_REPORT_MAX_OUTPUT_TOKENS,
         )
     except Exception as exc:
-        logger.exception("OpenAI workplan report request failed: %s", exc)
+        logger.exception("Gemini workplan report request failed: %s", exc)
         return None
 
-    response_error = getattr(response, "error", None)
-    if response_error:
-        logger.error("OpenAI workplan report returned an error object: %s", response_error)
-        return None
-
-    raw_text = getattr(response, "output_text", "") or ""
+    raw_text = getattr(response, "text", "") or ""
     if not raw_text:
-        output_items = getattr(response, "output", None) or []
-        chunks: list[str] = []
-        for item in output_items:
-            content = getattr(item, "content", None) or []
-            for content_item in content:
-                text = getattr(content_item, "text", None)
-                if text:
-                    chunks.append(str(text))
-        raw_text = "".join(chunks).strip()
-    if not raw_text:
-        logger.error("OpenAI workplan report returned no text output")
+        parsed = getattr(response, "parsed", None)
+        if parsed is not None:
+            try:
+                return ClientWorkplanAIReport.model_validate(parsed.model_dump() if hasattr(parsed, "model_dump") else parsed)
+            except ValidationError:
+                logger.exception("Gemini parsed report failed validation")
+                return None
+        logger.error("Gemini workplan report returned no text output")
         return None
 
     try:
         data = json.loads(raw_text)
         return ClientWorkplanAIReport.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
-        logger.exception("Failed to parse OpenAI workplan report response")
+        logger.exception("Failed to parse Gemini workplan report response")
         return None
