@@ -2981,8 +2981,14 @@ def get_client_task_workplan_report(
         ],
     }
     ai_report = build_client_workplan_ai_report(ai_payload)
-    if ai_report is not None:
-        report.ai_report = ClientTaskReportAIOut(**ai_report.model_dump())
+    if ai_report is None:
+        raise HTTPException(status_code=502, detail="AI report generation failed")
+
+    report.ai_report = ClientTaskReportAIOut(**ai_report.model_dump())
+    if ai_report.title:
+        report.title = ai_report.title.strip()
+    if ai_report.opening_summary:
+        report.overview = ai_report.opening_summary.strip()
     _persist_client_task_workplan_report(db, report, current.id)
     return report
 

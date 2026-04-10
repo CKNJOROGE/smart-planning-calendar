@@ -8,11 +8,17 @@ from pydantic import BaseModel, ValidationError
 from .config import settings
 
 
+class ClientWorkplanAISection(BaseModel):
+    heading: str
+    paragraphs: list[str] = []
+    bullets: list[str] = []
+
+
 class ClientWorkplanAIReport(BaseModel):
-    executive_summary: str
-    completed_highlights: list[str] = []
-    pending_focus: list[str] = []
-    recommended_next_steps: list[str] = []
+    title: str
+    opening_summary: str
+    sections: list[ClientWorkplanAISection] = []
+    closing_note: str
 
 
 _client: Optional[OpenAI] = None
@@ -46,13 +52,13 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
     report_kind = (payload.get("report_kind") or "start").strip().lower()
     if report_kind == "end":
         instruction = (
-            "You are writing an end-of-quarter client workplan report. "
-            "Focus on completed work, notable outcomes, pending items, and concise next steps."
+            "You are writing a complete end-of-quarter client workplan report. "
+            "Turn the supplied workplan data into a polished client-facing report that reads like a finished document."
         )
     else:
         instruction = (
-            "You are writing a start-of-quarter client workplan report. "
-            "Focus on planned work, priorities, scope, and concise next steps."
+            "You are writing a complete start-of-quarter client workplan report. "
+            "Turn the supplied workplan data into a polished client-facing report that reads like a finished document."
         )
 
     schema = {
@@ -61,26 +67,30 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "executive_summary": {"type": "string"},
-                "completed_highlights": {
+                "title": {"type": "string"},
+                "opening_summary": {"type": "string"},
+                "sections": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "heading": {"type": "string"},
+                            "paragraphs": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "bullets": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": ["heading", "paragraphs", "bullets"],
+                    },
                 },
-                "pending_focus": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
-                "recommended_next_steps": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                },
+                "closing_note": {"type": "string"},
             },
-            "required": [
-                "executive_summary",
-                "completed_highlights",
-                "pending_focus",
-                "recommended_next_steps",
-            ],
+            "required": ["title", "opening_summary", "sections", "closing_note"],
         },
         "strict": True,
     }
@@ -90,8 +100,12 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
         "Write for a business client. Keep the language specific, concrete, and professional.\n"
         "Do not mention that you are an AI.\n"
         "Use only the supplied data. Do not invent work that is not in the payload.\n"
-        "If there are no completed items, say that clearly in the summary.\n"
-        "Return concise bullet-friendly content."
+        "Do not include task tables or raw JSON.\n"
+        "Return a title, a short opening summary, 3 to 5 sections, and a closing note.\n"
+        "Each section should have a heading, 1 to 2 short paragraphs, and bullet points only where they add value.\n"
+        "If there are no completed items, say that clearly.\n"
+        "If the report is for the start of a quarter, focus on the planned work and priorities.\n"
+        "If the report is for the end of a quarter, focus on completed work, notable outcomes, and what remains pending."
     )
 
     try:

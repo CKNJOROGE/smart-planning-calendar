@@ -77,6 +77,99 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function getReportStatusColor(status) {
+  if (status === "completed") return "#166534";
+  if (status === "in_progress") return "#b45309";
+  return "#b91c1c";
+}
+
+function buildWorkplanReportMarkup(report, fallbackClientName = "") {
+  if (!report) return "";
+  const ai = report.ai_report || {};
+  const sections = Array.isArray(ai.sections) ? ai.sections : [];
+  const title = ai.title || report.title || "Client Workplan Report";
+  const openingSummary =
+    ai.opening_summary ||
+    ai.executive_summary ||
+    report.overview ||
+    "";
+  const reportTypeLabel = report.report_kind === "end" ? "End of Quarter" : "Start of Quarter";
+  const legacyHighlights = Array.isArray(ai.completed_highlights) ? ai.completed_highlights : [];
+  const legacyPending = Array.isArray(ai.pending_focus) ? ai.pending_focus : [];
+  const legacyNextSteps = Array.isArray(ai.recommended_next_steps) ? ai.recommended_next_steps : [];
+
+  const renderParagraphs = (paragraphs, fallbackClass = "report-preview-paragraph") =>
+    (paragraphs || [])
+      .map((paragraph) => `<p class="${fallbackClass}">${escapeHtml(paragraph)}</p>`)
+      .join("");
+
+  const renderBullets = (bullets, className = "report-preview-bullets") =>
+    (bullets || []).length
+      ? `<ul class="${className}">
+          ${(bullets || []).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("")}
+        </ul>`
+      : "";
+
+  return `
+    <section class="report-preview-body report-preview-ai-document">
+      <div class="report-preview-kicker">
+        <span class="report-preview-ai-badge">AI Generated Report</span>
+        <span>Client: ${escapeHtml(report.client?.name || fallbackClientName)}</span>
+        <span>Period: ${escapeHtml(String(report.year))} Q${escapeHtml(String(report.quarter))}</span>
+        <span>Type: ${escapeHtml(reportTypeLabel)}</span>
+      </div>
+      <h1 class="report-preview-report-title">${escapeHtml(title)}</h1>
+      ${openingSummary ? `<p class="report-preview-summary">${escapeHtml(openingSummary)}</p>` : ""}
+      ${
+        sections.length
+          ? sections
+              .map(
+                (section) => `
+                  <section class="report-preview-section">
+                    <h2 class="report-preview-section-title">${escapeHtml(section.heading)}</h2>
+                    ${renderParagraphs(section.paragraphs)}
+                    ${renderBullets(section.bullets)}
+                  </section>
+                `
+              )
+              .join("")
+          : legacyHighlights.length || legacyPending.length || legacyNextSteps.length
+            ? `
+              <section class="report-preview-section">
+                <h2 class="report-preview-section-title">Key points</h2>
+                ${
+                  legacyHighlights.length
+                    ? `
+                      <h3 class="report-preview-mini-title">Completed highlights</h3>
+                      ${renderBullets(legacyHighlights, "report-preview-bullets report-preview-bullets--success")}
+                    `
+                    : ""
+                }
+                ${
+                  legacyPending.length
+                    ? `
+                      <h3 class="report-preview-mini-title">Pending focus</h3>
+                      ${renderBullets(legacyPending, "report-preview-bullets report-preview-bullets--warn")}
+                    `
+                    : ""
+                }
+                ${
+                  legacyNextSteps.length
+                    ? `
+                      <h3 class="report-preview-mini-title">Next steps</h3>
+                      ${renderBullets(legacyNextSteps, "report-preview-bullets report-preview-bullets--accent")}
+                    `
+                    : ""
+                }
+              </section>
+            `
+            : ""
+      }
+      ${ai.closing_note ? `<p class="report-preview-closing">${escapeHtml(ai.closing_note)}</p>` : ""}
+    </section>
+  `;
+}
+
 function canEditRow(current, row) {
   if (!current || !row) return false;
   return (
@@ -117,6 +210,7 @@ export default function ClientTaskManagerPage() {
   const [reportKind, setReportKind] = useState("start");
   const [reportHistory, setReportHistory] = useState([]);
   const [reportGenerating, setReportGenerating] = useState(false);
+  const [reportPreview, setReportPreview] = useState(null);
 
   const isEditMode = mode === "edit";
   const canManageClients = ["admin", "ceo"].includes(String(current?.role || "").toLowerCase());
@@ -222,6 +316,19 @@ export default function ClientTaskManagerPage() {
       }
     })();
   }, [selectedClientId]);
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setReportPreview(null);
+      }
+    }
+    if (reportPreview) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+    return undefined;
+  }, [reportPreview]);
 
   useEffect(() => {
     if (!selectedClientId || !selectedYear || !selectedQuarter) {
@@ -682,127 +789,12 @@ export default function ClientTaskManagerPage() {
     }
   }
 
-  function openWorkplanReportWindow(report, fallbackClientName = "") {
+  function printWorkplanReport(report, fallbackClientName = "") {
     if (!report) return;
-
-    const statusColor = (status) => {
-      if (status === "completed") return "#166534";
-      if (status === "in_progress") return "#b45309";
-      return "#b91c1c";
-    };
-
-    const bodyHtml = `
-      <section style="margin:0 0 18px 0;">
-        <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">
-          Client: ${escapeHtml(report.client?.name || fallbackClientName)}<br/>
-          Period: ${escapeHtml(String(report.year))} Q${escapeHtml(String(report.quarter))}<br/>
-          Report type: ${escapeHtml(report.report_kind === "end" ? "End of Quarter" : "Start of Quarter")}
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 18px 0;">
-          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f8fafc;">
-            <div style="font-size:12px;color:#6b7280;">Workplan groups</div>
-            <div style="font-size:24px;font-weight:800;">${escapeHtml(String(report.totals.total_groups))}</div>
-          </div>
-          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f8fafc;">
-            <div style="font-size:12px;color:#6b7280;">Subtasks</div>
-            <div style="font-size:24px;font-weight:800;">${escapeHtml(String(report.totals.total_subtasks))}</div>
-          </div>
-          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f8fafc;">
-            <div style="font-size:12px;color:#6b7280;">Completed</div>
-            <div style="font-size:24px;font-weight:800;color:#166534;">${escapeHtml(String(report.totals.completed_subtasks))}</div>
-          </div>
-          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f8fafc;">
-            <div style="font-size:12px;color:#6b7280;">Completion</div>
-            <div style="font-size:24px;font-weight:800;color:#1d4ed8;">${escapeHtml(String(report.totals.completion_percent))}%</div>
-          </div>
-        </div>
-        <p style="margin:0 0 18px 0;line-height:1.6;color:#111827;">${escapeHtml(report.overview)}</p>
-        ${
-          report.ai_report
-            ? `
-              <div style="border:1px solid #dbeafe;border-radius:12px;padding:14px;margin:0 0 18px 0;background:#eff6ff;">
-                <div style="font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#1d4ed8;margin-bottom:8px;">
-                  AI Narrative
-                </div>
-                <div style="font-weight:700;margin-bottom:10px;line-height:1.6;color:#0f172a;">
-                  ${escapeHtml(report.ai_report.executive_summary)}
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
-                  <div>
-                    <div style="font-size:12px;font-weight:800;margin-bottom:6px;color:#166534;">Completed Highlights</div>
-                    <ul style="margin:0;padding-left:18px;">
-                      ${(report.ai_report.completed_highlights || [])
-                        .map((item) => `<li style="margin:0 0 4px 0;">${escapeHtml(item)}</li>`)
-                        .join("")}
-                    </ul>
-                  </div>
-                  <div>
-                    <div style="font-size:12px;font-weight:800;margin-bottom:6px;color:#b45309;">Pending Focus</div>
-                    <ul style="margin:0;padding-left:18px;">
-                      ${(report.ai_report.pending_focus || [])
-                        .map((item) => `<li style="margin:0 0 4px 0;">${escapeHtml(item)}</li>`)
-                        .join("")}
-                    </ul>
-                  </div>
-                  <div>
-                    <div style="font-size:12px;font-weight:800;margin-bottom:6px;color:#1d4ed8;">Next Steps</div>
-                    <ul style="margin:0;padding-left:18px;">
-                      ${(report.ai_report.recommended_next_steps || [])
-                        .map((item) => `<li style="margin:0 0 4px 0;">${escapeHtml(item)}</li>`)
-                        .join("")}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            `
-            : ""
-        }
-        <table style="width:100%;border-collapse:collapse;">
-          <thead>
-            <tr style="background:#f8fafc;">
-              <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Task</th>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Status</th>
-              <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Subtasks</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${report.groups
-              .map(
-                (group) => `
-                  <tr>
-                    <td style="padding:10px;border-bottom:1px solid #e5e7eb;vertical-align:top;">
-                      <div style="font-weight:800;margin-bottom:4px;">${escapeHtml(group.task)}</div>
-                      <div style="font-size:12px;color:#6b7280;">${escapeHtml(group.task_group_id)}</div>
-                    </td>
-                    <td style="padding:10px;border-bottom:1px solid #e5e7eb;vertical-align:top;">
-                      <span style="font-weight:800;color:${statusColor(group.status)};">${escapeHtml(group.status.replaceAll("_", " "))}</span><br/>
-                      <span style="font-size:12px;color:#6b7280;">${escapeHtml(String(group.completed_subtasks))} completed / ${escapeHtml(String(group.total_subtasks))} total</span>
-                    </td>
-                    <td style="padding:10px;border-bottom:1px solid #e5e7eb;vertical-align:top;">
-                      <ul style="margin:0;padding-left:18px;">
-                        ${group.subtasks
-                          .map(
-                            (subtask) => `
-                              <li style="margin:0 0 6px 0;">
-                                ${escapeHtml(subtask.subtask)}
-                                <span style="margin-left:8px;font-weight:700;color:${subtask.completed ? "#166534" : "#b45309"};">
-                                  ${subtask.completed ? "Done" : "Pending"}
-                                </span>
-                              </li>`
-                          )
-                          .join("")}
-                      </ul>
-                    </td>
-                  </tr>`
-              )
-              .join("")}
-          </tbody>
-        </table>
-      </section>`;
-
+    const bodyHtml = buildWorkplanReportMarkup(report, fallbackClientName);
     const popup = window.open("", "_blank");
     if (!popup) {
-      showToast("Popup blocked. Allow popups to open the report.", "error");
+      showToast("Popup blocked. Allow popups to print the report.", "error");
       return;
     }
 
@@ -813,11 +805,30 @@ export default function ClientTaskManagerPage() {
         <head>
           <meta charset="utf-8" />
           <title>${escapeHtml(report.title)}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 28px; color: #111827; background: #ffffff; }
+            .report-preview-body { margin: 0; }
+            .report-preview-kicker { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 12px; color: #6b7280; margin-bottom: 12px; }
+            .report-preview-ai-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+            .report-preview-report-title { margin: 0 0 10px 0; font-size: 24px; line-height: 1.2; }
+            .report-preview-summary { margin: 0 0 18px 0; line-height: 1.7; color: #111827; font-size: 14px; }
+            .report-preview-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
+            .report-preview-section-title { margin: 0 0 8px 0; font-size: 16px; line-height: 1.35; }
+            .report-preview-mini-title { margin: 14px 0 6px 0; font-size: 13px; font-weight: 800; color: #374151; text-transform: uppercase; letter-spacing: .03em; }
+            .report-preview-paragraph { margin: 0 0 10px 0; line-height: 1.7; font-size: 14px; }
+            .report-preview-bullets { margin: 8px 0 0 0; padding-left: 18px; }
+            .report-preview-bullets li { margin: 0 0 6px 0; line-height: 1.6; }
+            .report-preview-bullets--success li::marker { color: #166534; }
+            .report-preview-bullets--warn li::marker { color: #b45309; }
+            .report-preview-bullets--accent li::marker { color: #1d4ed8; }
+            .report-preview-closing { margin: 20px 0 0 0; font-weight: 700; line-height: 1.7; font-size: 14px; }
+          </style>
         </head>
-        <body style="font-family:Arial,sans-serif;padding:24px;color:#111827;">
-          <h1 style="margin:0 0 8px 0;font-size:22px;">${escapeHtml(report.title)}</h1>
-          <div style="margin:0 0 16px 0;font-size:12px;color:#6b7280;">
-            Generated on ${escapeHtml(new Date(report.generated_at).toLocaleString())}
+        <body>
+          <h1 style="margin:0 0 8px 0;font-size:22px;">${escapeHtml(report.ai_report?.title || report.title)}</h1>
+          <div style="margin:0 0 16px 0;font-size:12px;color:#6b7280;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <span>AI-generated report</span>
+            <span>Generated on ${escapeHtml(new Date(report.generated_at).toLocaleString())}</span>
           </div>
           ${bodyHtml}
         </body>
@@ -852,8 +863,8 @@ export default function ClientTaskManagerPage() {
         quarter: Number(selectedQuarter),
         reportKind,
       });
-      openWorkplanReportWindow(report, chosenClient.name);
-      showToast("Preparing client report...", "success");
+      setReportPreview(report);
+      showToast("AI report ready", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
@@ -866,12 +877,21 @@ export default function ClientTaskManagerPage() {
   async function handleOpenSavedReport(reportId) {
     try {
       const report = await getSavedClientWorkplanReport(reportId);
-      openWorkplanReportWindow(report, selectedClient?.name || "");
+      setReportPreview(report);
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
       showToast(msg, "error");
     }
+  }
+
+  function closeReportPreview() {
+    setReportPreview(null);
+  }
+
+  function handlePrintCurrentPreview() {
+    if (!reportPreview) return;
+    printWorkplanReport(reportPreview, selectedClient?.name || "");
   }
 
   if (busy && !current) {
@@ -1178,8 +1198,8 @@ export default function ClientTaskManagerPage() {
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 800, marginBottom: 8 }}>6) Client Workplan Report</div>
+      <div className={`card report-card${reportGenerating ? " is-generating" : ""}`} style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>6) AI Client Workplan Report</div>
         <div className="row">
           <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
             <label>Report type</label>
@@ -1200,16 +1220,19 @@ export default function ClientTaskManagerPage() {
           </div>
         </div>
         {reportGenerating && (
-          <div style={{ marginTop: 12 }}>
-            <LoadingState label="Generating client report..." compact />
+          <div className="report-card-overlay" aria-live="polite" aria-busy="true">
+            <div className="report-card-overlay-panel">
+              <LoadingState label="Writing AI report..." compact />
+              <div className="report-card-overlay-text">Turning the client workplan into a polished report and saving it.</div>
+            </div>
           </div>
         )}
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 800, marginBottom: 8 }}>7) Saved Report History</div>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>7) Saved AI Report History</div>
         <div className="muted" style={{ marginBottom: 10 }}>
-          Recent generated reports for this client, quarter and report type.
+          Recent AI-generated reports for this client, quarter and report type.
         </div>
         {!reportHistory.length ? (
           <div className="muted">No saved reports yet.</div>
@@ -1224,8 +1247,13 @@ export default function ClientTaskManagerPage() {
                 <div>
                   <div style={{ fontWeight: 800 }}>{row.title}</div>
                   <div className="muted" style={{ fontSize: 12 }}>
-                    {row.client_name} · {row.year} Q{row.quarter} · {row.report_kind === "end" ? "End report" : "Start report"} ·{" "}
+                    {row.client_name} - {row.year} Q{row.quarter} - {row.report_kind === "end" ? "End report" : "Start report"} -{" "}
                     {new Date(row.created_at).toLocaleString()}
+                  </div>
+                  <div style={{ marginTop: 6 }}>
+                    <span className="event-chip" style={{ background: "#eff6ff", color: "#1d4ed8" }}>
+                      AI generated
+                    </span>
                   </div>
                   <div className="muted" style={{ fontSize: 12 }}>
                     Generated by {row.generated_by_name}
@@ -1406,6 +1434,47 @@ export default function ClientTaskManagerPage() {
           </table>
         </div>
       </div>
+
+      {reportPreview && (
+        <div
+          className="modal-overlay report-preview-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="report-preview-title"
+          onClick={closeReportPreview}
+        >
+          <div className="modal report-preview-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header report-preview-modal-header">
+              <div>
+                <div className="report-preview-modal-badge">AI Generated Report</div>
+                <h2 className="modal-title" id="report-preview-title">{reportPreview.ai_report?.title || reportPreview.title}</h2>
+                <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>
+                  Generated on {new Date(reportPreview.generated_at).toLocaleString()}
+                </div>
+              </div>
+              <button type="button" className="btn" onClick={closeReportPreview} aria-label="Close report preview">
+                Close
+              </button>
+            </div>
+
+            <div className="report-preview-scroll">
+              <div
+                className="report-preview-document"
+                dangerouslySetInnerHTML={{ __html: buildWorkplanReportMarkup(reportPreview, selectedClient?.name || "") }}
+              />
+            </div>
+
+            <div className="modal-actions report-preview-actions">
+              <button type="button" className="btn" onClick={closeReportPreview}>
+                Back
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handlePrintCurrentPreview}>
+                Print / Save PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

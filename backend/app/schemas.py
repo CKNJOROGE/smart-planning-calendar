@@ -432,9 +432,19 @@ class ClientTaskReportTotalsOut(BaseModel):
     completion_percent: float
 
 
+class ClientTaskReportAISectionOut(BaseModel):
+    heading: str
+    paragraphs: List[str] = []
+    bullets: List[str] = []
+
+
 class ClientTaskReportAIOut(BaseModel):
-    model: str
-    executive_summary: str
+    model: Optional[str] = None
+    title: Optional[str] = None
+    opening_summary: Optional[str] = None
+    sections: List[ClientTaskReportAISectionOut] = []
+    closing_note: Optional[str] = None
+    executive_summary: Optional[str] = None
     completed_highlights: List[str] = []
     pending_focus: List[str] = []
     recommended_next_steps: List[str] = []
