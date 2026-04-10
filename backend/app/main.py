@@ -158,7 +158,7 @@ from .email_service import (
     password_reset_delivery_ready,
     password_reset_delivery_configuration_errors,
 )
-from .ai_service import build_client_workplan_ai_report
+from .ai_service import GeminiReportTemporarilyUnavailableError, build_client_workplan_ai_report
 
 logger = logging.getLogger(__name__)
 
@@ -2980,7 +2980,11 @@ def get_client_task_workplan_report(
             for group in report.groups
         ],
     }
-    ai_report = build_client_workplan_ai_report(ai_payload)
+    try:
+        ai_report = build_client_workplan_ai_report(ai_payload)
+    except GeminiReportTemporarilyUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     if ai_report is None:
         raise HTTPException(status_code=502, detail="AI report generation failed")
 

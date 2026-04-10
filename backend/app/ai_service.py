@@ -28,6 +28,10 @@ class ClientWorkplanAIReport(BaseModel):
     closing_note: str
 
 
+class GeminiReportTemporarilyUnavailableError(RuntimeError):
+    pass
+
+
 _client: Optional["genai.Client"] = None
 _gemini_import_error: Optional[Exception] = None
 
@@ -52,6 +56,20 @@ def _get_client() -> Optional["genai.Client"]:
 
 def is_gemini_report_enabled() -> bool:
     return bool(settings.GEMINI_API_KEY and settings.GEMINI_REPORT_MODEL)
+
+
+def _is_temporary_gemini_unavailable(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return any(
+        token in message
+        for token in (
+            "503",
+            "unavailable",
+            "high demand",
+            "temporarily",
+            "try again later",
+        )
+    )
 
 
 def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIReport]:
@@ -111,6 +129,10 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
         except Exception as exc:
             last_error = exc
             logger.exception("Gemini workplan report request failed for %s: %s", model_name, exc)
+            if _is_temporary_gemini_unavailable(exc):
+                raise GeminiReportTemporarilyUnavailableError(
+                    "Gemini is temporarily busy right now. Please try again in a moment."
+                ) from exc
             continue
 
         parsed = getattr(response, "parsed", None)
