@@ -93,6 +93,21 @@ function getReportKindLabel(kind) {
   return "Start of Quarter";
 }
 
+async function loadLogoAsBase64() {
+  try {
+    const response = await fetch("/logo.png");
+    const blob = await response.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 function fmtReportDate(dateValue) {
   if (!dateValue) return "";
   return new Date(dateValue).toLocaleDateString("en-KE", {
@@ -342,6 +357,120 @@ function buildWorkplanReportMarkup(report, fallbackClientName = "") {
       ${ai.closing_note ? `<p class="report-preview-closing">${escapeHtml(ai.closing_note)}</p>` : ""}
     </section>
   `;
+}
+
+async function buildWorkplanReportPdfWithLogo(report, fallbackClientName = "") {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const marginX = 14;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const contentWidth = pageWidth - marginX * 2;
+  const ai = report?.ai_report || {};
+  const title = ai.title || report?.title || "Client Workplan Report";
+  const clientName = report?.client?.name || fallbackClientName || "";
+
+  const ensureSpace = (y, needed = 16) => {
+    if (y + needed > pageHeight - 16) {
+      doc.addPage();
+      return 16;
+    }
+    return y;
+  };
+
+  const logoBase64 = await loadLogoAsBase64();
+  let y = 16;
+  if (logoBase64) {
+    const imgProps = doc.getImageProperties(logoBase64);
+    const imgWidth = 48;
+    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
+    const imageX = (pageWidth - imgWidth) / 2;
+    doc.addImage(logoBase64, "PNG", imageX, 10, imgWidth, imgHeight);
+    y = 10 + imgHeight + 8;
+  } else {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor(20, 28, 56);
+    doc.text(clientName || "Client", pageWidth / 2, 18, { align: "center" });
+    y = 28;
+  }
+
+  doc.setTextColor(17, 24, 39);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  y = addPdfWrappedText(doc, title, marginX, y, contentWidth, 8);
+  y += 2;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(75, 85, 99);
+  y = addPdfWrappedText(doc, `Generated on ${new Date(report?.generated_at || Date.now()).toLocaleString()}`, marginX, y, contentWidth, 5);
+  y += 4;
+
+  const openingSummary = ai.opening_summary || ai.executive_summary || report?.overview || "";
+  if (openingSummary) {
+    y = ensureSpace(y, 20);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(31, 41, 55);
+    doc.text("Overview", marginX, y);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(17, 24, 39);
+    y = addPdfWrappedText(doc, openingSummary, marginX, y, contentWidth, 5.5);
+    y += 2;
+  }
+
+  const sections = Array.isArray(ai.sections) ? ai.sections : [];
+  if (sections.length) {
+    sections.forEach((section) => {
+      y = ensureSpace(y, 24);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(31, 41, 55);
+      doc.text(section.heading || "Section", marginX, y);
+      y += 6;
+
+      const paragraphs = Array.isArray(section.paragraphs) ? section.paragraphs : [];
+      paragraphs.forEach((paragraph) => {
+        y = ensureSpace(y, 14);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        doc.setTextColor(17, 24, 39);
+        y = addPdfWrappedText(doc, paragraph, marginX, y, contentWidth, 5.5);
+        y += 1.5;
+      });
+
+      const bullets = Array.isArray(section.bullets) ? section.bullets : [];
+      if (bullets.length) {
+        y = ensureSpace(y, bullets.length * 8 + 8);
+        doc.setFontSize(11);
+        bullets.forEach((bullet) => {
+          const bulletLines = doc.splitTextToSize(`• ${bullet}`, contentWidth - 4);
+          doc.text(bulletLines, marginX + 2, y);
+          y += bulletLines.length * 5.2;
+        });
+        y += 2;
+      }
+      y += 4;
+    });
+  }
+
+  if (ai.closing_note) {
+    y = ensureSpace(y, 18);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(31, 41, 55);
+    doc.text("Closing Note", marginX, y);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(17, 24, 39);
+    y = addPdfWrappedText(doc, ai.closing_note, marginX, y, contentWidth, 5.5);
+  }
+
+  addPdfPageNumber(doc);
+  return doc;
 }
 
 function canEditRow(current, row) {
@@ -1065,7 +1194,16 @@ export default function ClientTaskManagerPage() {
 
   function handlePrintCurrentPreview() {
     if (!reportPreview) return;
-    printWorkplanReport(reportPreview, selectedClient?.name || "");
+    buildWorkplanReportPdfWithLogo(reportPreview, selectedClient?.name || "")
+      .then((doc) => {
+        const fileName = `${(reportPreview.ai_report?.title || reportPreview.title || "Client Workplan Report").replace(/[\\/:*?"<>|]+/g, "-")}.pdf`;
+        doc.save(fileName);
+      })
+      .catch((e) => {
+        const msg = String(e.message || e);
+        setErr(msg);
+        showToast(msg, "error");
+      });
   }
 
   if (busy && !current) {
