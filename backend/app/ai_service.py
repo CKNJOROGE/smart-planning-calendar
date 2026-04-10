@@ -97,15 +97,17 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
         logger.exception("Gemini workplan report request failed: %s", exc)
         return None
 
+    parsed = getattr(response, "parsed", None)
+    if parsed is not None:
+        try:
+            parsed_payload = parsed.model_dump() if hasattr(parsed, "model_dump") else parsed
+            return ClientWorkplanAIReport.model_validate(parsed_payload)
+        except ValidationError:
+            logger.exception("Gemini parsed report failed validation")
+            return None
+
     raw_text = getattr(response, "text", "") or ""
     if not raw_text:
-        parsed = getattr(response, "parsed", None)
-        if parsed is not None:
-            try:
-                return ClientWorkplanAIReport.model_validate(parsed.model_dump() if hasattr(parsed, "model_dump") else parsed)
-            except ValidationError:
-                logger.exception("Gemini parsed report failed validation")
-                return None
         logger.error("Gemini workplan report returned no text output")
         return None
 
