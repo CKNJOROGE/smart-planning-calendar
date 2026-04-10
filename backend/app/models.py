@@ -196,6 +196,24 @@ class ClientTask(Base):
     user = relationship("User", back_populates="client_tasks", foreign_keys=[user_id])
 
 
+class ClientTaskReport(Base):
+    __tablename__ = "client_task_reports"
+
+    id = Column(Integer, primary_key=True)
+    client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=False, index=True)
+    generated_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    year = Column(Integer, nullable=False, index=True)
+    quarter = Column(Integer, nullable=False, index=True)
+    report_kind = Column(String(20), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    overview = Column(Text, nullable=False)
+    report_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    client = relationship("ClientAccount", foreign_keys=[client_id])
+    generated_by = relationship("User", foreign_keys=[generated_by_id])
+
+
 class ProbationRecord(Base):
     __tablename__ = "probation_records"
 

@@ -407,6 +407,65 @@ class ClientTaskOut(BaseModel):
         from_attributes = True
 
 
+class ClientTaskReportSubtaskOut(BaseModel):
+    subtask: str
+    completion_date: Optional[date] = None
+    completed: bool
+    completed_at: Optional[datetime] = None
+
+
+class ClientTaskReportGroupOut(BaseModel):
+    task_group_id: str
+    task: str
+    total_subtasks: int
+    completed_subtasks: int
+    pending_subtasks: int
+    status: str
+    subtasks: List[ClientTaskReportSubtaskOut]
+
+
+class ClientTaskReportTotalsOut(BaseModel):
+    total_groups: int
+    total_subtasks: int
+    completed_subtasks: int
+    pending_subtasks: int
+    completion_percent: float
+
+
+class ClientTaskReportAIOut(BaseModel):
+    model: str
+    executive_summary: str
+    completed_highlights: List[str] = []
+    pending_focus: List[str] = []
+    recommended_next_steps: List[str] = []
+
+
+class ClientTaskReportOut(BaseModel):
+    client: ClientAccountOut
+    year: int
+    quarter: int
+    report_kind: str
+    generated_at: datetime
+    title: str
+    overview: str
+    totals: ClientTaskReportTotalsOut
+    groups: List[ClientTaskReportGroupOut]
+    ai_report: Optional[ClientTaskReportAIOut] = None
+
+
+class ClientTaskReportHistoryOut(BaseModel):
+    id: int
+    client_id: int
+    client_name: str
+    generated_by_id: int
+    generated_by_name: str
+    year: int
+    quarter: int
+    report_kind: str
+    title: str
+    created_at: datetime
+
+
 class ProbationRecordCreate(BaseModel):
     client_id: int
     employee_name: str

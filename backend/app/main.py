@@ -30,6 +30,7 @@ from .models import (
     Designation,
     ClientAccount,
     ClientTask,
+    ClientTaskReport,
     ProbationRecord,
     DailyActivity,
     CashReimbursementRequest,
@@ -83,6 +84,12 @@ from .schemas import (
     ClientTaskCreate,
     ClientTaskUpdate,
     ClientTaskOut,
+    ClientTaskReportSubtaskOut,
+    ClientTaskReportGroupOut,
+    ClientTaskReportTotalsOut,
+    ClientTaskReportAIOut,
+    ClientTaskReportOut,
+    ClientTaskReportHistoryOut,
     ProbationRecordCreate,
     ProbationRecordUpdate,
     ProbationRecordOut,
@@ -151,6 +158,7 @@ from .email_service import (
     password_reset_delivery_ready,
     password_reset_delivery_configuration_errors,
 )
+from .ai_service import build_client_workplan_ai_report
 
 logger = logging.getLogger(__name__)
 
@@ -2761,6 +2769,266 @@ def list_client_tasks(
     for r in rows:
         _ = r.user
     return rows
+
+
+def _build_client_task_workplan_report(
+    db: Session,
+    client: ClientAccount,
+    year: int,
+    quarter: int,
+    report_kind: str,
+) -> ClientTaskReportOut:
+    rows = (
+        db.query(ClientTask)
+        .filter(
+            ClientTask.client_id == client.id,
+            ClientTask.year == year,
+            ClientTask.quarter == quarter,
+        )
+        .order_by(
+            ClientTask.task_group_id.asc(),
+            ClientTask.completion_date.asc().nulls_last(),
+            ClientTask.id.asc(),
+        )
+        .all()
+    )
+    for row in rows:
+        _ = row.user
+
+    grouped_rows: dict[str, dict[str, object]] = {}
+    for row in rows:
+        group = grouped_rows.setdefault(
+            row.task_group_id,
+            {
+                "task_group_id": row.task_group_id,
+                "task": row.task,
+                "subtasks": [],
+            },
+        )
+        group["task"] = row.task
+        group["subtasks"].append(
+            ClientTaskReportSubtaskOut(
+                subtask=row.subtask,
+                completion_date=row.completion_date,
+                completed=bool(row.completed),
+                completed_at=row.completed_at,
+            )
+        )
+
+    groups: list[ClientTaskReportGroupOut] = []
+    total_subtasks = 0
+    completed_subtasks = 0
+    for group in grouped_rows.values():
+        subtasks = group["subtasks"]
+        total = len(subtasks)
+        completed = sum(1 for item in subtasks if item.completed)
+        pending = total - completed
+        total_subtasks += total
+        completed_subtasks += completed
+        if total == 0:
+            status = "pending"
+        elif completed == total:
+            status = "completed"
+        elif completed > 0:
+            status = "in_progress"
+        else:
+            status = "pending"
+        groups.append(
+            ClientTaskReportGroupOut(
+                task_group_id=str(group["task_group_id"]),
+                task=str(group["task"]),
+                total_subtasks=total,
+                completed_subtasks=completed,
+                pending_subtasks=pending,
+                status=status,
+                subtasks=subtasks,
+            )
+        )
+
+    groups.sort(key=lambda item: (item.task_group_id.lower(), item.task.lower()))
+    pending_subtasks = max(0, total_subtasks - completed_subtasks)
+    completion_percent = round((completed_subtasks / total_subtasks * 100) if total_subtasks else 0.0, 1)
+
+    if report_kind == "end":
+        title = f"Quarter End Workplan Report - {client.name} - {year} Q{quarter}"
+        overview = (
+            f"This report summarizes the client workplan for {client.name} for {year} Q{quarter}, "
+            f"showing what has been completed and what remains pending."
+        )
+    else:
+        title = f"Quarter Start Workplan Report - {client.name} - {year} Q{quarter}"
+        overview = (
+            f"This report outlines the client workplan for {client.name} for {year} Q{quarter}, "
+            f"showing the planned tasks and subtasks for the quarter."
+        )
+
+    return ClientTaskReportOut(
+        client=client,
+        year=year,
+        quarter=quarter,
+        report_kind=report_kind,
+        generated_at=datetime.utcnow(),
+        title=title,
+        overview=overview,
+        totals=ClientTaskReportTotalsOut(
+            total_groups=len(groups),
+            total_subtasks=total_subtasks,
+            completed_subtasks=completed_subtasks,
+            pending_subtasks=pending_subtasks,
+            completion_percent=completion_percent,
+        ),
+        groups=groups,
+        ai_report=None,
+    )
+
+
+def _persist_client_task_workplan_report(
+    db: Session,
+    report: ClientTaskReportOut,
+    generated_by_id: int,
+) -> ClientTaskReport:
+    payload = report.model_dump(mode="json")
+    row = ClientTaskReport(
+        client_id=report.client.id,
+        generated_by_id=generated_by_id,
+        year=report.year,
+        quarter=report.quarter,
+        report_kind=report.report_kind,
+        title=report.title,
+        overview=report.overview,
+        report_json=json.dumps(payload),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def _row_to_client_task_report(row: ClientTaskReport) -> ClientTaskReportOut:
+    payload = json.loads(row.report_json or "{}")
+    return ClientTaskReportOut.model_validate(payload)
+
+
+def _row_to_client_task_report_history(row: ClientTaskReport) -> ClientTaskReportHistoryOut:
+    client_name = row.client.name if row.client else f"Client #{row.client_id}"
+    generated_by_name = row.generated_by.name if row.generated_by else f"User #{row.generated_by_id}"
+    return ClientTaskReportHistoryOut(
+        id=row.id,
+        client_id=row.client_id,
+        client_name=client_name,
+        generated_by_id=row.generated_by_id,
+        generated_by_name=generated_by_name,
+        year=row.year,
+        quarter=row.quarter,
+        report_kind=row.report_kind,
+        title=row.title,
+        created_at=row.created_at,
+    )
+
+
+@app.get("/task-manager/reports/workplan", response_model=ClientTaskReportOut)
+def get_client_task_workplan_report(
+    client_id: int,
+    year: int,
+    quarter: int,
+    report_kind: str = Query(default="start"),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    if quarter not in {1, 2, 3, 4}:
+        raise HTTPException(status_code=400, detail="quarter must be between 1 and 4")
+    normalized_kind = (report_kind or "").strip().lower()
+    if normalized_kind not in {"start", "end"}:
+        raise HTTPException(status_code=400, detail="report_kind must be start or end")
+
+    client = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+    report = _build_client_task_workplan_report(db, client, year, quarter, normalized_kind)
+    ai_payload = {
+        "client": {
+            "id": report.client.id,
+            "name": report.client.name,
+        },
+        "year": report.year,
+        "quarter": report.quarter,
+        "report_kind": report.report_kind,
+        "totals": {
+            "total_groups": report.totals.total_groups,
+            "total_subtasks": report.totals.total_subtasks,
+            "completed_subtasks": report.totals.completed_subtasks,
+            "pending_subtasks": report.totals.pending_subtasks,
+            "completion_percent": report.totals.completion_percent,
+        },
+        "groups": [
+            {
+                "task_group_id": group.task_group_id,
+                "task": group.task,
+                "status": group.status,
+                "total_subtasks": group.total_subtasks,
+                "completed_subtasks": group.completed_subtasks,
+                "pending_subtasks": group.pending_subtasks,
+                "subtasks": [
+                    {
+                        "subtask": subtask.subtask,
+                        "completed": subtask.completed,
+                        "completed_at": subtask.completed_at,
+                    }
+                    for subtask in group.subtasks
+                ],
+            }
+            for group in report.groups
+        ],
+    }
+    ai_report = build_client_workplan_ai_report(ai_payload)
+    if ai_report is not None:
+        report.ai_report = ClientTaskReportAIOut(**ai_report.model_dump())
+    _persist_client_task_workplan_report(db, report, current.id)
+    return report
+
+
+@app.get("/task-manager/reports/workplan/history", response_model=List[ClientTaskReportHistoryOut])
+def list_client_task_workplan_report_history(
+    client_id: Optional[int] = None,
+    year: Optional[int] = None,
+    quarter: Optional[int] = None,
+    report_kind: Optional[str] = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    q = db.query(ClientTaskReport)
+    if client_id is not None:
+        q = q.filter(ClientTaskReport.client_id == client_id)
+    if year is not None:
+        q = q.filter(ClientTaskReport.year == year)
+    if quarter is not None:
+        q = q.filter(ClientTaskReport.quarter == quarter)
+    if report_kind is not None and (report_kind or "").strip():
+        q = q.filter(ClientTaskReport.report_kind == report_kind.strip().lower())
+    rows = (
+        q.order_by(ClientTaskReport.created_at.desc(), ClientTaskReport.id.desc())
+        .limit(limit)
+        .all()
+    )
+    for row in rows:
+        _ = row.client
+        _ = row.generated_by
+    return [_row_to_client_task_report_history(row) for row in rows]
+
+
+@app.get("/task-manager/reports/workplan/{report_id}", response_model=ClientTaskReportOut)
+def get_saved_client_task_workplan_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    row = db.query(ClientTaskReport).filter(ClientTaskReport.id == report_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Report not found")
+    _ = row.client
+    _ = row.generated_by
+    return _row_to_client_task_report(row)
 
 
 @app.post("/task-manager/tasks", response_model=List[ClientTaskOut])

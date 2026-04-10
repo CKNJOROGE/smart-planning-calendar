@@ -3,6 +3,9 @@ import {
   me,
   listTaskYears,
   listTaskClients,
+  getClientWorkplanReport,
+  listClientWorkplanReportHistory,
+  getSavedClientWorkplanReport,
   createTaskClient,
   deleteTaskClient,
   listClientTasks,
@@ -111,6 +114,8 @@ export default function ClientTaskManagerPage() {
   const [probationEditingRows, setProbationEditingRows] = useState({});
   const [probationBusy, setProbationBusy] = useState(false);
   const [exportPeriodScope, setExportPeriodScope] = useState("quarter");
+  const [reportKind, setReportKind] = useState("start");
+  const [reportHistory, setReportHistory] = useState([]);
 
   const isEditMode = mode === "edit";
   const canManageClients = ["admin", "ceo"].includes(String(current?.role || "").toLowerCase());
@@ -216,6 +221,27 @@ export default function ClientTaskManagerPage() {
       }
     })();
   }, [selectedClientId]);
+
+  useEffect(() => {
+    if (!selectedClientId || !selectedYear || !selectedQuarter) {
+      setReportHistory([]);
+      return;
+    }
+    (async () => {
+      try {
+        const rows = await listClientWorkplanReportHistory({
+          clientId: Number(selectedClientId),
+          year: Number(selectedYear),
+          quarter: Number(selectedQuarter),
+          reportKind,
+          limit: 10,
+        });
+        setReportHistory(rows || []);
+      } catch {
+        setReportHistory([]);
+      }
+    })();
+  }, [selectedClientId, selectedYear, selectedQuarter, reportKind]);
 
   useEffect(() => {
     if (!isEditMode) setEditingRows({});
@@ -655,6 +681,195 @@ export default function ClientTaskManagerPage() {
     }
   }
 
+  function openWorkplanReportWindow(report, fallbackClientName = "") {
+    if (!report) return;
+
+    const statusColor = (status) => {
+      if (status === "completed") return "#166534";
+      if (status === "in_progress") return "#b45309";
+      return "#b91c1c";
+    };
+
+    const bodyHtml = `
+      <section style="margin:0 0 18px 0;">
+        <div style="font-size:12px;color:#6b7280;margin-bottom:8px;">
+          Client: ${escapeHtml(report.client?.name || fallbackClientName)}<br/>
+          Period: ${escapeHtml(String(report.year))} Q${escapeHtml(String(report.quarter))}<br/>
+          Report type: ${escapeHtml(report.report_kind === "end" ? "End of Quarter" : "Start of Quarter")}
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 18px 0;">
+          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f8fafc;">
+            <div style="font-size:12px;color:#6b7280;">Workplan groups</div>
+            <div style="font-size:24px;font-weight:800;">${escapeHtml(String(report.totals.total_groups))}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f8fafc;">
+            <div style="font-size:12px;color:#6b7280;">Subtasks</div>
+            <div style="font-size:24px;font-weight:800;">${escapeHtml(String(report.totals.total_subtasks))}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f8fafc;">
+            <div style="font-size:12px;color:#6b7280;">Completed</div>
+            <div style="font-size:24px;font-weight:800;color:#166534;">${escapeHtml(String(report.totals.completed_subtasks))}</div>
+          </div>
+          <div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#f8fafc;">
+            <div style="font-size:12px;color:#6b7280;">Completion</div>
+            <div style="font-size:24px;font-weight:800;color:#1d4ed8;">${escapeHtml(String(report.totals.completion_percent))}%</div>
+          </div>
+        </div>
+        <p style="margin:0 0 18px 0;line-height:1.6;color:#111827;">${escapeHtml(report.overview)}</p>
+        ${
+          report.ai_report
+            ? `
+              <div style="border:1px solid #dbeafe;border-radius:12px;padding:14px;margin:0 0 18px 0;background:#eff6ff;">
+                <div style="font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#1d4ed8;margin-bottom:8px;">
+                  AI Narrative
+                </div>
+                <div style="font-weight:700;margin-bottom:10px;line-height:1.6;color:#0f172a;">
+                  ${escapeHtml(report.ai_report.executive_summary)}
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">
+                  <div>
+                    <div style="font-size:12px;font-weight:800;margin-bottom:6px;color:#166534;">Completed Highlights</div>
+                    <ul style="margin:0;padding-left:18px;">
+                      ${(report.ai_report.completed_highlights || [])
+                        .map((item) => `<li style="margin:0 0 4px 0;">${escapeHtml(item)}</li>`)
+                        .join("")}
+                    </ul>
+                  </div>
+                  <div>
+                    <div style="font-size:12px;font-weight:800;margin-bottom:6px;color:#b45309;">Pending Focus</div>
+                    <ul style="margin:0;padding-left:18px;">
+                      ${(report.ai_report.pending_focus || [])
+                        .map((item) => `<li style="margin:0 0 4px 0;">${escapeHtml(item)}</li>`)
+                        .join("")}
+                    </ul>
+                  </div>
+                  <div>
+                    <div style="font-size:12px;font-weight:800;margin-bottom:6px;color:#1d4ed8;">Next Steps</div>
+                    <ul style="margin:0;padding-left:18px;">
+                      ${(report.ai_report.recommended_next_steps || [])
+                        .map((item) => `<li style="margin:0 0 4px 0;">${escapeHtml(item)}</li>`)
+                        .join("")}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            `
+            : ""
+        }
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:#f8fafc;">
+              <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Task</th>
+              <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Status</th>
+              <th style="text-align:left;padding:10px;border-bottom:1px solid #e5e7eb;">Subtasks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${report.groups
+              .map(
+                (group) => `
+                  <tr>
+                    <td style="padding:10px;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                      <div style="font-weight:800;margin-bottom:4px;">${escapeHtml(group.task)}</div>
+                      <div style="font-size:12px;color:#6b7280;">${escapeHtml(group.task_group_id)}</div>
+                    </td>
+                    <td style="padding:10px;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                      <span style="font-weight:800;color:${statusColor(group.status)};">${escapeHtml(group.status.replaceAll("_", " "))}</span><br/>
+                      <span style="font-size:12px;color:#6b7280;">${escapeHtml(String(group.completed_subtasks))} completed / ${escapeHtml(String(group.total_subtasks))} total</span>
+                    </td>
+                    <td style="padding:10px;border-bottom:1px solid #e5e7eb;vertical-align:top;">
+                      <ul style="margin:0;padding-left:18px;">
+                        ${group.subtasks
+                          .map(
+                            (subtask) => `
+                              <li style="margin:0 0 6px 0;">
+                                ${escapeHtml(subtask.subtask)}
+                                <span style="margin-left:8px;font-weight:700;color:${subtask.completed ? "#166534" : "#b45309"};">
+                                  ${subtask.completed ? "Done" : "Pending"}
+                                </span>
+                              </li>`
+                          )
+                          .join("")}
+                      </ul>
+                    </td>
+                  </tr>`
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </section>`;
+
+    const popup = window.open("", "_blank");
+    if (!popup) {
+      showToast("Popup blocked. Allow popups to open the report.", "error");
+      return;
+    }
+
+    popup.document.open();
+    popup.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${escapeHtml(report.title)}</title>
+        </head>
+        <body style="font-family:Arial,sans-serif;padding:24px;color:#111827;">
+          <h1 style="margin:0 0 8px 0;font-size:22px;">${escapeHtml(report.title)}</h1>
+          <div style="margin:0 0 16px 0;font-size:12px;color:#6b7280;">
+            Generated on ${escapeHtml(new Date(report.generated_at).toLocaleString())}
+          </div>
+          ${bodyHtml}
+        </body>
+      </html>
+    `);
+    popup.document.close();
+    let printed = false;
+    const triggerPrint = () => {
+      if (printed || popup.closed) return;
+      printed = true;
+      popup.focus();
+      setTimeout(() => {
+        if (!popup.closed) popup.print();
+      }, 150);
+    };
+    popup.onload = triggerPrint;
+    setTimeout(triggerPrint, 400);
+  }
+
+  async function handleGenerateWorkplanReport() {
+    try {
+      const chosenClient = clients.find((c) => c.id === Number(selectedClientId));
+      if (!chosenClient) {
+        showToast("No client selected for report generation", "error");
+        return;
+      }
+
+      const report = await getClientWorkplanReport({
+        clientId: Number(chosenClient.id),
+        year: Number(selectedYear),
+        quarter: Number(selectedQuarter),
+        reportKind,
+      });
+      openWorkplanReportWindow(report, chosenClient.name);
+      showToast("Preparing client report...", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function handleOpenSavedReport(reportId) {
+    try {
+      const report = await getSavedClientWorkplanReport(reportId);
+      openWorkplanReportWindow(report, selectedClient?.name || "");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
   if (busy && !current) {
     return (
       <div className="page-wrap client-task-page">
@@ -960,8 +1175,63 @@ export default function ClientTaskManagerPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>6) Client Workplan Report</div>
+        <div className="muted" style={{ marginBottom: 12 }}>
+          Generate a client-specific quarter report from the workplan only. This is the first step toward AI-assisted reporting.
+        </div>
+        <div className="row">
+          <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
+            <label>Report type</label>
+            <select value={reportKind} onChange={(e) => setReportKind(e.target.value)}>
+              <option value="start">Quarter start report</option>
+              <option value="end">Quarter end report</option>
+            </select>
+          </div>
+          <div style={{ alignSelf: "end" }}>
+            <button type="button" className="btn btn-primary" onClick={handleGenerateWorkplanReport} disabled={!selectedClientId}>
+              Generate Report
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div style={{ fontWeight: 800, marginBottom: 8 }}>7) Saved Report History</div>
+        <div className="muted" style={{ marginBottom: 10 }}>
+          Recent generated reports for this client, quarter and report type.
+        </div>
+        {!reportHistory.length ? (
+          <div className="muted">No saved reports yet.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 8 }}>
+            {reportHistory.map((row) => (
+              <div
+                key={row.id}
+                className="card"
+                style={{ padding: 12, borderRadius: 12, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}
+              >
+                <div>
+                  <div style={{ fontWeight: 800 }}>{row.title}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {row.client_name} · {row.year} Q{row.quarter} · {row.report_kind === "end" ? "End report" : "Start report"} ·{" "}
+                    {new Date(row.created_at).toLocaleString()}
+                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    Generated by {row.generated_by_name}
+                  </div>
+                </div>
+                <button type="button" className="btn" onClick={() => handleOpenSavedReport(row.id)}>
+                  Open
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 800, marginBottom: 8 }}>
-          6) Workplan {selectedClient ? `- ${selectedClient.name}` : ""}
+          8) Workplan {selectedClient ? `- ${selectedClient.name}` : ""}
         </div>
 
         {isEditMode && (

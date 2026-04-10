@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:5173"
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 60
 
+    # Optional OpenAI-powered report narration
+    OPENAI_API_KEY: str = ""
+    OPENAI_REPORT_MODEL: str = "gpt-4.1-mini"
+    OPENAI_REPORT_MAX_OUTPUT_TOKENS: int = 1200
+
     def list_from_csv(self, value: str) -> list[str]:
         return [x.strip() for x in (value or "").split(",") if x.strip()]
 

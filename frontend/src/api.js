@@ -469,6 +469,31 @@ export function listClientTasks({ year, clientId, quarter }) {
   return request(`/task-manager/tasks?${qs.toString()}`);
 }
 
+export function getClientWorkplanReport({ clientId, year, quarter, reportKind = "start" }) {
+  const qs = new URLSearchParams({
+    client_id: String(clientId),
+    year: String(year),
+    quarter: String(quarter),
+    report_kind: reportKind,
+  });
+  return request(`/task-manager/reports/workplan?${qs.toString()}`);
+}
+
+export function listClientWorkplanReportHistory({ clientId = null, year = null, quarter = null, reportKind = null, limit = 20 } = {}) {
+  const qs = new URLSearchParams();
+  if (clientId != null) qs.set("client_id", String(clientId));
+  if (year != null) qs.set("year", String(year));
+  if (quarter != null) qs.set("quarter", String(quarter));
+  if (reportKind) qs.set("report_kind", reportKind);
+  if (limit != null) qs.set("limit", String(limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/task-manager/reports/workplan/history${suffix}`);
+}
+
+export function getSavedClientWorkplanReport(reportId) {
+  return request(`/task-manager/reports/workplan/${reportId}`);
+}
+
 export function createClientTask(payload) {
   return request("/task-manager/tasks", { method: "POST", body: payload });
 }
