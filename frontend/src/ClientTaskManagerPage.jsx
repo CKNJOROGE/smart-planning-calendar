@@ -87,6 +87,12 @@ function getReportStatusColor(status) {
   return "#b91c1c";
 }
 
+function getReportKindLabel(kind) {
+  if (kind === "end") return "End of Quarter";
+  if (kind === "monthly") return "Monthly Progress";
+  return "Start of Quarter";
+}
+
 function fmtReportDate(dateValue) {
   if (!dateValue) return "";
   return new Date(dateValue).toLocaleDateString("en-KE", {
@@ -124,7 +130,7 @@ function buildWorkplanReportPdf(report, fallbackClientName = "") {
   const title = ai.title || report?.title || "Client Workplan Report";
   const clientName = report?.client?.name || fallbackClientName || "";
   const periodLabel = `${report?.year || ""} Q${report?.quarter || ""}`.trim();
-  const reportTypeLabel = report?.report_kind === "end" ? "End of Quarter" : "Start of Quarter";
+  const reportTypeLabel = getReportKindLabel(report?.report_kind);
 
   const ensureSpace = (y, needed = 16) => {
     if (y + needed > pageHeight - 16) {
@@ -261,7 +267,7 @@ function buildWorkplanReportMarkup(report, fallbackClientName = "") {
     ai.executive_summary ||
     report.overview ||
     "";
-  const reportTypeLabel = report.report_kind === "end" ? "End of Quarter" : "Start of Quarter";
+  const reportTypeLabel = getReportKindLabel(report.report_kind);
   const legacyHighlights = Array.isArray(ai.completed_highlights) ? ai.completed_highlights : [];
   const legacyPending = Array.isArray(ai.pending_focus) ? ai.pending_focus : [];
   const legacyNextSteps = Array.isArray(ai.recommended_next_steps) ? ai.recommended_next_steps : [];
@@ -1373,6 +1379,7 @@ export default function ClientTaskManagerPage() {
             <label>Report type</label>
             <select value={reportKind} onChange={(e) => setReportKind(e.target.value)}>
               <option value="start">Quarter start report</option>
+              <option value="monthly">Monthly progress report</option>
               <option value="end">Quarter end report</option>
             </select>
           </div>
@@ -1398,7 +1405,7 @@ export default function ClientTaskManagerPage() {
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 800, marginBottom: 8 }}>7) Saved AI Report History</div>
+      <div style={{ fontWeight: 800, marginBottom: 8 }}>7) Saved AI Report History</div>
         <div className="muted" style={{ marginBottom: 10 }}>
           Recent AI-generated reports for this client, quarter and report type.
         </div>
@@ -1415,7 +1422,7 @@ export default function ClientTaskManagerPage() {
                 <div>
                   <div style={{ fontWeight: 800 }}>{row.title}</div>
                   <div className="muted" style={{ fontSize: 12 }}>
-                    {row.client_name} - {row.year} Q{row.quarter} - {row.report_kind === "end" ? "End report" : "Start report"} -{" "}
+                    {row.client_name} - {row.year} Q{row.quarter} - {getReportKindLabel(row.report_kind)} -{" "}
                     {new Date(row.created_at).toLocaleString()}
                   </div>
                   <div style={{ marginTop: 6 }}>

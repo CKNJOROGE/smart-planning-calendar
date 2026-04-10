@@ -2856,6 +2856,12 @@ def _build_client_task_workplan_report(
             f"This report summarizes the client workplan for {client.name} for {year} Q{quarter}, "
             f"showing what has been completed and what remains pending."
         )
+    elif report_kind == "monthly":
+        title = f"Monthly Progress Report - {client.name} - {year} Q{quarter}"
+        overview = (
+            f"This report captures monthly progress for {client.name} within {year} Q{quarter}, "
+            f"showing progress so far, items in progress, and what remains to be done."
+        )
     else:
         title = f"Quarter Start Workplan Report - {client.name} - {year} Q{quarter}"
         overview = (
@@ -2939,8 +2945,8 @@ def get_client_task_workplan_report(
     if quarter not in {1, 2, 3, 4}:
         raise HTTPException(status_code=400, detail="quarter must be between 1 and 4")
     normalized_kind = (report_kind or "").strip().lower()
-    if normalized_kind not in {"start", "end"}:
-        raise HTTPException(status_code=400, detail="report_kind must be start or end")
+    if normalized_kind not in {"start", "monthly", "end"}:
+        raise HTTPException(status_code=400, detail="report_kind must be start, monthly, or end")
 
     client = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
     if not client:

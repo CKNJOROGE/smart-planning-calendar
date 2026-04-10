@@ -83,6 +83,11 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
             "You are writing a complete end-of-quarter client workplan report. "
             "Turn the supplied workplan data into a polished client-facing report that reads like a finished document."
         )
+    elif report_kind == "monthly":
+        instruction = (
+            "You are writing a monthly client progress report. "
+            "Turn the supplied workplan data into a polished client-facing progress update that focuses on progress so far, completed work, items still in progress, and next priorities."
+        )
     else:
         instruction = (
             "You are writing a complete start-of-quarter client workplan report. "
@@ -99,6 +104,7 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
         "Each section should have a heading, 1 to 2 short paragraphs, and bullet points only where they add value.\n"
         "If there are no completed items, say that clearly.\n"
         "If the report is for the start of a quarter, focus on the planned work and priorities.\n"
+        "If the report is a monthly progress update, focus on what has been achieved so far, what is currently in progress, and what should happen next.\n"
         "If the report is for the end of a quarter, focus on completed work, notable outcomes, and what remains pending."
     )
 
