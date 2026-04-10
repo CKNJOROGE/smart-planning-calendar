@@ -381,17 +381,40 @@ async function buildWorkplanReportPdfWithLogo(report, fallbackClientName = "") {
   let y = 16;
   if (logoBase64) {
     const imgProps = doc.getImageProperties(logoBase64);
-    const imgWidth = 48;
+    const imgWidth = 36;
     const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
-    const imageX = (pageWidth - imgWidth) / 2;
-    doc.addImage(logoBase64, "PNG", imageX, 10, imgWidth, imgHeight);
-    y = 10 + imgHeight + 8;
+    doc.setFillColor(20, 28, 56);
+    doc.rect(0, 0, pageWidth, 28, "F");
+    doc.addImage(logoBase64, "PNG", marginX, 10, imgWidth, imgHeight);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(clientName || "Client", pageWidth - marginX, 12, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(
+      periodLabel ? `${periodLabel} · ${reportTypeLabel}` : reportTypeLabel,
+      pageWidth - marginX,
+      20,
+      { align: "right" }
+    );
+    y = 38;
   } else {
+    doc.setFillColor(20, 28, 56);
+    doc.rect(0, 0, pageWidth, 28, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.setTextColor(20, 28, 56);
-    doc.text(clientName || "Client", pageWidth / 2, 18, { align: "center" });
-    y = 28;
+    doc.setTextColor(255, 255, 255);
+    doc.text(clientName || "Client", pageWidth - marginX, 12, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(
+      periodLabel ? `${periodLabel} · ${reportTypeLabel}` : reportTypeLabel,
+      pageWidth - marginX,
+      20,
+      { align: "right" }
+    );
+    y = 38;
   }
 
   doc.setTextColor(17, 24, 39);
