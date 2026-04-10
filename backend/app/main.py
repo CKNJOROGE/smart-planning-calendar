@@ -2933,7 +2933,7 @@ def get_client_task_workplan_report(
     quarter: int,
     report_kind: str = Query(default="start"),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    current: User = Depends(get_current_user),
 ):
     if quarter not in {1, 2, 3, 4}:
         raise HTTPException(status_code=400, detail="quarter must be between 1 and 4")

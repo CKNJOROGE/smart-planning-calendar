@@ -1176,9 +1176,6 @@ export default function ClientTaskManagerPage() {
 
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 800, marginBottom: 8 }}>6) Client Workplan Report</div>
-        <div className="muted" style={{ marginBottom: 12 }}>
-          Generate a client-specific quarter report from the workplan only. This is the first step toward AI-assisted reporting.
-        </div>
         <div className="row">
           <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
             <label>Report type</label>
