@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 import {
   me,
   listTaskYears,
@@ -83,6 +85,170 @@ function getReportStatusColor(status) {
   if (status === "completed") return "#166534";
   if (status === "in_progress") return "#b45309";
   return "#b91c1c";
+}
+
+function fmtReportDate(dateValue) {
+  if (!dateValue) return "";
+  return new Date(dateValue).toLocaleDateString("en-KE", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function addPdfPageNumber(doc) {
+  const pageCount = doc.internal.getNumberOfPages();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  doc.setFontSize(9);
+  doc.setTextColor(107, 114, 128);
+  for (let i = 1; i <= pageCount; i += 1) {
+    doc.setPage(i);
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - 18, pageHeight - 10, { align: "right" });
+  }
+}
+
+function addPdfWrappedText(doc, text, x, y, maxWidth, lineHeight = 6) {
+  const lines = doc.splitTextToSize(String(text || ""), maxWidth);
+  doc.text(lines, x, y);
+  return y + lines.length * lineHeight;
+}
+
+function buildWorkplanReportPdf(report, fallbackClientName = "") {
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const marginX = 14;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const contentWidth = pageWidth - marginX * 2;
+  const ai = report?.ai_report || {};
+  const title = ai.title || report?.title || "Client Workplan Report";
+  const clientName = report?.client?.name || fallbackClientName || "";
+  const periodLabel = `${report?.year || ""} Q${report?.quarter || ""}`.trim();
+  const reportTypeLabel = report?.report_kind === "end" ? "End of Quarter" : "Start of Quarter";
+
+  const ensureSpace = (y, needed = 16) => {
+    if (y + needed > pageHeight - 16) {
+      doc.addPage();
+      return 16;
+    }
+    return y;
+  };
+
+  let y = 16;
+  doc.setFillColor(20, 28, 56);
+  doc.rect(0, 0, pageWidth, 28, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("AI Generated Report", marginX, 13);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "normal");
+  doc.text(clientName || "Client", pageWidth - marginX, 13, { align: "right" });
+  doc.text(periodLabel ? `${periodLabel} · ${reportTypeLabel}` : reportTypeLabel, pageWidth - marginX, 20, { align: "right" });
+
+  y = 38;
+  doc.setTextColor(17, 24, 39);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(20);
+  y = addPdfWrappedText(doc, title, marginX, y, contentWidth, 8);
+  y += 2;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(75, 85, 99);
+  y = addPdfWrappedText(doc, `Generated on ${new Date(report?.generated_at || Date.now()).toLocaleString()}`, marginX, y, contentWidth, 5);
+  y += 4;
+
+  const openingSummary = ai.opening_summary || ai.executive_summary || report?.overview || "";
+  if (openingSummary) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(31, 41, 55);
+    y = ensureSpace(y, 20);
+    doc.text("Overview", marginX, y);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(17, 24, 39);
+    y = addPdfWrappedText(doc, openingSummary, marginX, y, contentWidth, 5.5);
+    y += 2;
+  }
+
+  const sections = Array.isArray(ai.sections) ? ai.sections : [];
+  if (sections.length) {
+    sections.forEach((section) => {
+      y = ensureSpace(y, 24);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(31, 41, 55);
+      doc.text(section.heading || "Section", marginX, y);
+      y += 6;
+
+      const paragraphs = Array.isArray(section.paragraphs) ? section.paragraphs : [];
+      paragraphs.forEach((paragraph) => {
+        y = ensureSpace(y, 14);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        doc.setTextColor(17, 24, 39);
+        y = addPdfWrappedText(doc, paragraph, marginX, y, contentWidth, 5.5);
+        y += 1.5;
+      });
+
+      const bullets = Array.isArray(section.bullets) ? section.bullets : [];
+      if (bullets.length) {
+        y = ensureSpace(y, bullets.length * 8 + 8);
+        doc.setFontSize(11);
+        bullets.forEach((bullet) => {
+          const bulletLines = doc.splitTextToSize(`• ${bullet}`, contentWidth - 4);
+          doc.text(bulletLines, marginX + 2, y);
+          y += bulletLines.length * 5.2;
+        });
+        y += 2;
+      }
+
+      y += 4;
+    });
+  } else {
+    const legacySections = [
+      { title: "Completed Highlights", items: ai.completed_highlights || [] },
+      { title: "Pending Focus", items: ai.pending_focus || [] },
+      { title: "Next Steps", items: ai.recommended_next_steps || [] },
+    ].filter((section) => section.items.length);
+
+    legacySections.forEach((section) => {
+      y = ensureSpace(y, 16);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(31, 41, 55);
+      doc.text(section.title, marginX, y);
+      y += 6;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(17, 24, 39);
+      section.items.forEach((item) => {
+        const lines = doc.splitTextToSize(`• ${item}`, contentWidth - 4);
+        doc.text(lines, marginX + 2, y);
+        y += lines.length * 5.2;
+      });
+      y += 4;
+    });
+  }
+
+  if (ai.closing_note) {
+    y = ensureSpace(y, 18);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(31, 41, 55);
+    doc.text("Closing Note", marginX, y);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(17, 24, 39);
+    y = addPdfWrappedText(doc, ai.closing_note, marginX, y, contentWidth, 5.5);
+  }
+
+  addPdfPageNumber(doc);
+  return doc;
 }
 
 function buildWorkplanReportMarkup(report, fallbackClientName = "") {
@@ -812,61 +978,9 @@ export default function ClientTaskManagerPage() {
 
   function printWorkplanReport(report, fallbackClientName = "") {
     if (!report) return;
-    const bodyHtml = buildWorkplanReportMarkup(report, fallbackClientName);
-    const popup = window.open("", "_blank");
-    if (!popup) {
-      showToast("Popup blocked. Allow popups to print the report.", "error");
-      return;
-    }
-
-    popup.document.open();
-    popup.document.write(`
-      <!doctype html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>${escapeHtml(report.title)}</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 28px; color: #111827; background: #ffffff; }
-            .report-preview-body { margin: 0; }
-            .report-preview-kicker { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; font-size: 12px; color: #6b7280; margin-bottom: 12px; }
-            .report-preview-ai-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-            .report-preview-report-title { margin: 0 0 10px 0; font-size: 24px; line-height: 1.2; }
-            .report-preview-summary { margin: 0 0 18px 0; line-height: 1.7; color: #111827; font-size: 14px; }
-            .report-preview-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
-            .report-preview-section-title { margin: 0 0 8px 0; font-size: 16px; line-height: 1.35; }
-            .report-preview-mini-title { margin: 14px 0 6px 0; font-size: 13px; font-weight: 800; color: #374151; text-transform: uppercase; letter-spacing: .03em; }
-            .report-preview-paragraph { margin: 0 0 10px 0; line-height: 1.7; font-size: 14px; }
-            .report-preview-bullets { margin: 8px 0 0 0; padding-left: 18px; }
-            .report-preview-bullets li { margin: 0 0 6px 0; line-height: 1.6; }
-            .report-preview-bullets--success li::marker { color: #166534; }
-            .report-preview-bullets--warn li::marker { color: #b45309; }
-            .report-preview-bullets--accent li::marker { color: #1d4ed8; }
-            .report-preview-closing { margin: 20px 0 0 0; font-weight: 700; line-height: 1.7; font-size: 14px; }
-          </style>
-        </head>
-        <body>
-          <h1 style="margin:0 0 8px 0;font-size:22px;">${escapeHtml(report.ai_report?.title || report.title)}</h1>
-          <div style="margin:0 0 16px 0;font-size:12px;color:#6b7280;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-            <span>AI-generated report</span>
-            <span>Generated on ${escapeHtml(new Date(report.generated_at).toLocaleString())}</span>
-          </div>
-          ${bodyHtml}
-        </body>
-      </html>
-    `);
-    popup.document.close();
-    let printed = false;
-    const triggerPrint = () => {
-      if (printed || popup.closed) return;
-      printed = true;
-      popup.focus();
-      setTimeout(() => {
-        if (!popup.closed) popup.print();
-      }, 150);
-    };
-    popup.onload = triggerPrint;
-    setTimeout(triggerPrint, 400);
+    const doc = buildWorkplanReportPdf(report, fallbackClientName);
+    const fileName = `${(report.ai_report?.title || report.title || "Client Workplan Report").replace(/[\\/:*?"<>|]+/g, "-")}.pdf`;
+    doc.save(fileName);
   }
 
   async function handleGenerateWorkplanReport() {
@@ -1534,7 +1648,7 @@ export default function ClientTaskManagerPage() {
                 Back
               </button>
               <button type="button" className="btn btn-primary" onClick={handlePrintCurrentPreview}>
-                Print / Save PDF
+                Download PDF
               </button>
             </div>
           </div>
