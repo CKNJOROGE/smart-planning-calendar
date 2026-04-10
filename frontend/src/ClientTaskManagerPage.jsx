@@ -116,6 +116,7 @@ export default function ClientTaskManagerPage() {
   const [exportPeriodScope, setExportPeriodScope] = useState("quarter");
   const [reportKind, setReportKind] = useState("start");
   const [reportHistory, setReportHistory] = useState([]);
+  const [reportGenerating, setReportGenerating] = useState(false);
 
   const isEditMode = mode === "edit";
   const canManageClients = ["admin", "ceo"].includes(String(current?.role || "").toLowerCase());
@@ -837,6 +838,7 @@ export default function ClientTaskManagerPage() {
   }
 
   async function handleGenerateWorkplanReport() {
+    setReportGenerating(true);
     try {
       const chosenClient = clients.find((c) => c.id === Number(selectedClientId));
       if (!chosenClient) {
@@ -856,6 +858,8 @@ export default function ClientTaskManagerPage() {
       const msg = String(e.message || e);
       setErr(msg);
       showToast(msg, "error");
+    } finally {
+      setReportGenerating(false);
     }
   }
 
@@ -1185,11 +1189,21 @@ export default function ClientTaskManagerPage() {
             </select>
           </div>
           <div style={{ alignSelf: "end" }}>
-            <button type="button" className="btn btn-primary" onClick={handleGenerateWorkplanReport} disabled={!selectedClientId}>
-              Generate Report
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleGenerateWorkplanReport}
+              disabled={!selectedClientId || reportGenerating}
+            >
+              {reportGenerating ? "Generating..." : "Generate Report"}
             </button>
           </div>
         </div>
+        {reportGenerating && (
+          <div style={{ marginTop: 12 }}>
+            <LoadingState label="Generating client report..." compact />
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
