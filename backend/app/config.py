@@ -51,8 +51,8 @@ class Settings(BaseSettings):
 
     # Optional OpenAI-powered report narration
     OPENAI_API_KEY: str = ""
-    OPENAI_REPORT_MODEL: str = "gpt-4.1-mini"
-    OPENAI_REPORT_MAX_OUTPUT_TOKENS: int = 1200
+    OPENAI_REPORT_MODEL: str = "gpt-4o-mini"
+    OPENAI_REPORT_MAX_OUTPUT_TOKENS: int = 2500
 
     def list_from_csv(self, value: str) -> list[str]:
         return [x.strip() for x in (value or "").split(",") if x.strip()]

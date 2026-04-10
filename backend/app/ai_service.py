@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Optional
 
 from pydantic import BaseModel, ValidationError
 
 from .config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class ClientWorkplanAISection(BaseModel):
@@ -131,15 +135,33 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
             },
             max_output_tokens=settings.OPENAI_REPORT_MAX_OUTPUT_TOKENS,
         )
-    except Exception:
+    except Exception as exc:
+        logger.exception("OpenAI workplan report request failed: %s", exc)
+        return None
+
+    response_error = getattr(response, "error", None)
+    if response_error:
+        logger.error("OpenAI workplan report returned an error object: %s", response_error)
         return None
 
     raw_text = getattr(response, "output_text", "") or ""
     if not raw_text:
+        output_items = getattr(response, "output", None) or []
+        chunks: list[str] = []
+        for item in output_items:
+            content = getattr(item, "content", None) or []
+            for content_item in content:
+                text = getattr(content_item, "text", None)
+                if text:
+                    chunks.append(str(text))
+        raw_text = "".join(chunks).strip()
+    if not raw_text:
+        logger.error("OpenAI workplan report returned no text output")
         return None
 
     try:
         data = json.loads(raw_text)
         return ClientWorkplanAIReport.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
+        logger.exception("Failed to parse OpenAI workplan report response")
         return None
