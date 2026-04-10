@@ -3041,6 +3041,20 @@ def get_saved_client_task_workplan_report(
     return _row_to_client_task_report(row)
 
 
+@app.delete("/task-manager/reports/workplan/{report_id}")
+def delete_saved_client_task_workplan_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    row = db.query(ClientTaskReport).filter(ClientTaskReport.id == report_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Report not found")
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
+
+
 @app.post("/task-manager/tasks", response_model=List[ClientTaskOut])
 def create_client_task(
     payload: ClientTaskCreate,

@@ -494,6 +494,20 @@ export function getSavedClientWorkplanReport(reportId) {
   return request(`/task-manager/reports/workplan/${reportId}`);
 }
 
+export async function deleteSavedClientWorkplanReport(reportId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/task-manager/reports/workplan/${reportId}`, {
+    method: "DELETE",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(extractErrorMessage(res.status, res.statusText, text));
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
 export function createClientTask(payload) {
   return request("/task-manager/tasks", { method: "POST", body: payload });
 }
