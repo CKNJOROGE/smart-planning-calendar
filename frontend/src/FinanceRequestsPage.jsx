@@ -1313,170 +1313,220 @@ export default function FinanceRequestsPage() {
               {canReview && (
                 <div className="card">
           <div style={{ fontWeight: 900, marginBottom: 8 }}>Pending Approvals (CEO / Finance)</div>
-          <div style={{ width: "100%", overflowX: "auto" }}>
-            <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#f8fafc" }}>
-                  <th style={{ textAlign: "left", padding: 10 }}>Requester</th>
-                  <th style={{ textAlign: "left", padding: 10 }}>Period</th>
-                  <th style={{ textAlign: "left", padding: 10 }}>Total</th>
-                  <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPendingRequests.map((r) => (
-                  <React.Fragment key={r.id}>
-                    <tr style={{ borderTop: "1px solid #eef2f7" }}>
-                      <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
-                      <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
-                      <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
-                      <td style={{ padding: 10 }}>
+          {!filteredPendingRequests.length ? (
+            <div className="muted" style={{ padding: "10px 0 2px" }}>No pending reimbursement requests.</div>
+          ) : (
+            <div className="reimbursement-request-stack">
+              {filteredPendingRequests.map((r) => (
+                <section key={r.id} className="reimbursement-request-card reimbursement-request-card--pending">
+                  <div className="reimbursement-request-card__accent" />
+                  <div className="reimbursement-request-card__header">
+                    <div>
+                      <div className="reimbursement-request-card__title">{r.user?.name || `User #${r.user_id}`}</div>
+                      <div className="muted">Reimbursement request #{r.id}</div>
+                    </div>
+                    <div className="reimbursement-request-card__meta">
+                      <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission, r.items?.length || 0)}</span>
+                      <div className="reimbursement-request-card__meta-line">{r.period_start} to {r.period_end}</div>
+                      <div className="reimbursement-request-card__meta-line">{fmtCurrency(r.total_amount)}</div>
+                    </div>
+                  </div>
+
+                  <div className="reimbursement-request-card__body">
+                    <div className="reimbursement-request-request-grid">
+                      <div>
+                        <div className="reimbursement-request-card__label">Approvals</div>
+                        <div className="reimbursement-request-card__subtext">
+                          CEO: <strong>{decisionLabel(r.ceo_decision)}</strong> | Finance: <strong>{decisionLabel(r.finance_decision)}</strong>
+                        </div>
+                        <div className="muted" style={{ marginTop: 6 }}>
+                          {remainingApprovers(r).length > 0 ? `Remaining: ${remainingApprovers(r).join(", ")}` : "All approvals completed."}
+                        </div>
+                      </div>
+                      <div className="reimbursement-request-card__actions">
                         {((reviewerSlot === "ceo" && !r.ceo_decision) || (reviewerSlot === "finance" && !r.finance_decision)) ? (
-                          <div style={{ display: "flex", gap: 8 }}>
+                          <>
                             <button className="btn btn-primary" onClick={() => takeDecision(r.id, true)}>Approve</button>
                             <button className="btn btn-danger" onClick={() => takeDecision(r.id, false)}>Reject</button>
                             {canDownloadRecords && (
                               <button className="btn" type="button" onClick={() => downloadRecord("cash_reimbursement", r)}>Download Record</button>
                             )}
-                          </div>
+                          </>
                         ) : (
                           <span className="muted">
                             {reviewerSlot === "ceo" ? `CEO already ${decisionLabel(r.ceo_decision).toLowerCase()}.` : ""}
                             {reviewerSlot === "finance" ? `Finance already ${decisionLabel(r.finance_decision).toLowerCase()}.` : ""}
                           </span>
                         )}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td colSpan={4} style={{ padding: "0 10px 10px 10px" }}>
-                        <div style={{ border: "1px solid #eef2f7", borderRadius: 8, overflow: "hidden" }}>
-                          <div style={{ padding: 10, background: "#f8fafc", fontWeight: 700 }}>
-                            Submitted Items
-                          </div>
-                          <div style={{ padding: "6px 10px", borderTop: "1px solid #eef2f7", borderBottom: "1px solid #eef2f7", background: "#fcfcfd" }}>
-                            <span style={{ marginRight: 12 }}>CEO: <strong>{decisionLabel(r.ceo_decision)}</strong></span>
-                            <span style={{ marginRight: 12 }}>Finance: <strong>{decisionLabel(r.finance_decision)}</strong></span>
-                            {remainingApprovers(r).length > 0 ? (
-                              <span className="muted">Remaining: {remainingApprovers(r).join(", ")}</span>
-                            ) : (
-                              <span className="muted">All approvals completed.</span>
-                            )}
-                          </div>
-                          <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                            <thead>
-                              <tr style={{ background: "#ffffff" }}>
-                                <th style={{ textAlign: "left", padding: 10 }}>Date</th>
-                                <th style={{ textAlign: "left", padding: 10 }}>Description</th>
-                                <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
-                                <th style={{ textAlign: "left", padding: 10 }}>Row Status</th>
-                                <th style={{ textAlign: "left", padding: 10 }}>Row Review</th>
+                      </div>
+                    </div>
+
+                    <div className="reimbursement-request-items">
+                      <div className="reimbursement-request-items__header">Submitted Items</div>
+                      <div className="reimbursement-request-items__state">
+                        <span>CEO: <strong>{decisionLabel(r.ceo_decision)}</strong></span>
+                        <span>Finance: <strong>{decisionLabel(r.finance_decision)}</strong></span>
+                        {remainingApprovers(r).length > 0 ? (
+                          <span className="muted">Remaining: {remainingApprovers(r).join(", ")}</span>
+                        ) : (
+                          <span className="muted">All approvals completed.</span>
+                        )}
+                      </div>
+                      <div className="reimbursement-request-items__table-wrap">
+                        <table className="table reimbursement-items-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign: "left", padding: 10 }}>Date</th>
+                              <th style={{ textAlign: "left", padding: 10 }}>Description</th>
+                              <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                              <th style={{ textAlign: "left", padding: 10 }}>Row Status</th>
+                              <th style={{ textAlign: "left", padding: 10 }}>Row Review</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(r.items || []).map((item) => (
+                              <tr key={item.id}>
+                                <td style={{ padding: 10 }}>{item.item_date}</td>
+                                <td style={{ padding: 10 }}>{item.description}</td>
+                                <td style={{ padding: 10 }}>{fmtCurrency(item.amount)}</td>
+                                <td style={{ padding: 10 }}>
+                                  <span className={`dashboard-status-badge ${(item.review_status || "").toLowerCase() === "rejected" ? "dashboard-status-danger" : "dashboard-status-ok"}`}>
+                                    {reimbursementItemStatusLabel(item.review_status)}
+                                  </span>
+                                </td>
+                                <td style={{ padding: 10 }}>
+                                  {item.review_comment ? (
+                                    <div style={{ marginBottom: 6 }}>{item.review_comment}</div>
+                                  ) : (
+                                    <div className="muted" style={{ marginBottom: 6 }}>No row-specific comment.</div>
+                                  )}
+                                  {((reviewerSlot === "ceo" && !r.ceo_decision) || (reviewerSlot === "finance" && !r.finance_decision)) ? (
+                                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                      {(item.review_status || "").toLowerCase() === "rejected" ? (
+                                        <button className="btn" type="button" onClick={() => takeItemDecision(r.id, item.id, true)}>
+                                          Restore Row
+                                        </button>
+                                      ) : (
+                                        <button className="btn btn-danger" type="button" onClick={() => takeItemDecision(r.id, item.id, false)}>
+                                          Reject Row
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="muted">Row review is locked after your request decision.</div>
+                                  )}
+                                </td>
                               </tr>
-                            </thead>
-                            <tbody>
-                              {(r.items || []).map((item) => (
-                                <tr key={item.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                                  <td style={{ padding: 10 }}>{item.item_date}</td>
-                                  <td style={{ padding: 10 }}>{item.description}</td>
-                                  <td style={{ padding: 10 }}>{fmtCurrency(item.amount)}</td>
-                                  <td style={{ padding: 10 }}>
-                                    <span className={`dashboard-status-badge ${(item.review_status || "").toLowerCase() === "rejected" ? "dashboard-status-danger" : "dashboard-status-ok"}`}>
-                                      {reimbursementItemStatusLabel(item.review_status)}
-                                    </span>
-                                  </td>
-                                  <td style={{ padding: 10 }}>
-                                    {item.review_comment ? (
-                                      <div style={{ marginBottom: 6 }}>{item.review_comment}</div>
-                                    ) : (
-                                      <div className="muted" style={{ marginBottom: 6 }}>No row-specific comment.</div>
-                                    )}
-                                    {((reviewerSlot === "ceo" && !r.ceo_decision) || (reviewerSlot === "finance" && !r.finance_decision)) ? (
-                                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                        {(item.review_status || "").toLowerCase() === "rejected" ? (
-                                          <button className="btn" type="button" onClick={() => takeItemDecision(r.id, item.id, true)}>
-                                            Restore Row
-                                          </button>
-                                        ) : (
-                                          <button className="btn btn-danger" type="button" onClick={() => takeItemDecision(r.id, item.id, false)}>
-                                            Reject Row
-                                          </button>
-                                        )}
-                                      </div>
-                                    ) : (
-                                      <div className="muted">Row review is locked after your request decision.</div>
-                                    )}
-                                  </td>
-                                </tr>
-                              ))}
-                              {!r.items?.length && (
-                                <tr>
-                                  <td colSpan={5} style={{ padding: 10 }} className="muted">No submitted items.</td>
-                                </tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </td>
-                    </tr>
-                  </React.Fragment>
-                ))}
-                {!filteredPendingRequests.length && (
-                  <tr><td colSpan={4} style={{ padding: 14 }} className="muted">No pending reimbursement requests.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                            ))}
+                            {!r.items?.length && (
+                              <tr>
+                                <td colSpan={5} style={{ padding: 10 }} className="muted">No submitted items.</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              ))}
+            </div>
+          )}
                 </div>
               )}
 
               {canReview && (
                 <div className="card" style={{ marginTop: 12 }}>
                   <div style={{ fontWeight: 900, marginBottom: 8 }}>Approved Reimbursements Record</div>
-                  <div style={{ width: "100%", overflowX: "auto" }}>
-                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: "#f8fafc" }}>
-                          <th style={{ textAlign: "left", padding: 10 }}>Requested by</th>
-                          <th style={{ textAlign: "left", padding: 10 }}>Period</th>
-                          <th style={{ textAlign: "left", padding: 10 }}>Total</th>
-                          <th style={{ textAlign: "left", padding: 10 }}>Status</th>
-                          <th style={{ textAlign: "left", padding: 10 }}>Payout</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredApprovedRequests.map((r) => (
-                          <tr key={`approved_${r.id}`} style={{ borderTop: "1px solid #eef2f7" }}>
-                            <td style={{ padding: 10 }}>{r.user?.name || `User #${r.user_id}`}</td>
-                            <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
-                            <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
-                            <td style={{ padding: 10 }}>
+                  {!filteredApprovedRequests.length ? (
+                    <div className="muted" style={{ padding: "10px 0 2px" }}>No approved reimbursements yet.</div>
+                  ) : (
+                    <div className="reimbursement-request-stack">
+                      {filteredApprovedRequests.map((r) => (
+                        <section key={`approved_${r.id}`} className="reimbursement-request-card reimbursement-request-card--approved">
+                          <div className="reimbursement-request-card__accent" />
+                          <div className="reimbursement-request-card__header">
+                            <div>
+                              <div className="reimbursement-request-card__title">{r.user?.name || `User #${r.user_id}`}</div>
+                              <div className="muted">Reimbursement request #{r.id}</div>
+                            </div>
+                            <div className="reimbursement-request-card__meta">
                               <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission, r.items?.length || 0)}</span>
-                            </td>
-                            <td style={{ padding: 10 }}>
-                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                              <div className="reimbursement-request-card__meta-line">{r.period_start} to {r.period_end}</div>
+                              <div className="reimbursement-request-card__meta-line">{fmtCurrency(r.total_amount)}</div>
+                            </div>
+                          </div>
+                          <div className="reimbursement-request-card__body">
+                            <div className="reimbursement-request-request-grid">
+                              <div>
+                                <div className="reimbursement-request-card__label">Payout</div>
+                                <div className="reimbursement-request-card__subtext">
+                                  {String(current?.role || "").toLowerCase() === "ceo" && r.status === "pending_reimbursement" ? (
+                                    "Ready for final payout marking."
+                                  ) : r.status === "amount_reimbursed" ? (
+                                    `Paid on ${r.reimbursed_at ? new Date(r.reimbursed_at).toLocaleString() : "-"}`
+                                  ) : (
+                                    "Pending CEO reimbursement."
+                                  )}
+                                </div>
+                              </div>
+                              <div className="reimbursement-request-card__actions">
                                 {String(current?.role || "").toLowerCase() === "ceo" && r.status === "pending_reimbursement" ? (
                                   <button className="btn btn-primary" type="button" onClick={() => markReimbursed(r.id)}>
                                     Mark Reimbursed
                                   </button>
-                                ) : r.status === "amount_reimbursed" ? (
-                                  <span className="muted">Paid on {r.reimbursed_at ? new Date(r.reimbursed_at).toLocaleString() : "-"}</span>
-                                ) : (
-                                  <span className="muted">Pending CEO reimbursement</span>
-                                )}
+                                ) : null}
                                 {canDownloadRecords && (
                                   <button className="btn" type="button" onClick={() => downloadRecord("cash_reimbursement", r)}>
                                     Download Record
                                   </button>
                                 )}
                               </div>
-                            </td>
-                          </tr>
-                        ))}
-                        {!filteredApprovedRequests.length && (
-                          <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No approved reimbursements yet.</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                            </div>
+                            <div className="reimbursement-request-items">
+                              <div className="reimbursement-request-items__header">Submitted Items</div>
+                              <div className="reimbursement-request-items__state">
+                                <span>CEO: <strong>{decisionLabel(r.ceo_decision)}</strong></span>
+                                <span>Finance: <strong>{decisionLabel(r.finance_decision)}</strong></span>
+                                <span className="muted">{remainingApprovers(r).length > 0 ? `Remaining: ${remainingApprovers(r).join(", ")}` : "All approvals completed."}</span>
+                              </div>
+                              <div className="reimbursement-request-items__table-wrap">
+                                <table className="table reimbursement-items-table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ textAlign: "left", padding: 10 }}>Date</th>
+                                      <th style={{ textAlign: "left", padding: 10 }}>Description</th>
+                                      <th style={{ textAlign: "left", padding: 10 }}>Amount</th>
+                                      <th style={{ textAlign: "left", padding: 10 }}>Row Status</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(r.items || []).map((item) => (
+                                      <tr key={item.id}>
+                                        <td style={{ padding: 10 }}>{item.item_date}</td>
+                                        <td style={{ padding: 10 }}>{item.description}</td>
+                                        <td style={{ padding: 10 }}>{fmtCurrency(item.amount)}</td>
+                                        <td style={{ padding: 10 }}>
+                                          <span className={`dashboard-status-badge ${(item.review_status || "").toLowerCase() === "rejected" ? "dashboard-status-danger" : "dashboard-status-ok"}`}>
+                                            {reimbursementItemStatusLabel(item.review_status)}
+                                          </span>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    {!r.items?.length && (
+                                      <tr>
+                                        <td colSpan={4} style={{ padding: 10 }} className="muted">No submitted items.</td>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        </section>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </>
