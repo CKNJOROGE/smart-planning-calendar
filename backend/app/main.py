@@ -1566,9 +1566,8 @@ def _reimbursement_can_submit(
 ) -> bool:
     if already_submitted_for_period:
         return False
-    # Allow the period only once its due date has arrived.
-    # Older missed periods remain available for late submission.
-    return today >= target_period_end
+    active_start, active_end = _reimbursement_submission_period_for(today)
+    return target_period_start == active_start and target_period_end == active_end
 
 
 def _reimbursement_submit_message_for_period(
@@ -1580,24 +1579,21 @@ def _reimbursement_submit_message_for_period(
 ) -> str:
     if already_submitted_for_period:
         return "You already submitted this period's reimbursement."
-    current_end = _reimbursement_due_date_for(today)
-    if target_period_end == current_end:
+    active_start, active_end = _reimbursement_submission_period_for(today)
+    if target_period_start == active_start and target_period_end == active_end:
         return _reimbursement_due_message(today, can_submit)
-    if target_period_end < current_end:
-        if can_submit:
-            return "Late submission is open for this past period."
+    if target_period_end < active_end:
         return "Late submission for this period is not available."
     return "You can only submit current due period or past missed periods."
 
 
-def _generate_past_reimbursement_periods(current_end: date, today: date) -> set[tuple[date, date]]:
-    periods: set[tuple[date, date]] = set()
-    for month in range(1, current_end.month + 1):
-        for day in ([15, 30] if month != 2 else [28]):
-            due_date = date(current_end.year, month, day)
-            if due_date >= date(current_end.year, 1, 16) and due_date < current_end and due_date <= today:
-                periods.add(_reimbursement_period_from_due_date(due_date))
-    return periods
+def _reimbursement_submission_period_for(today: date) -> tuple[date, date]:
+    current_start, current_end = _reimbursement_period_for(today)
+    if today == current_end:
+        return current_start, current_end
+
+    previous_due_date = _previous_reimbursement_due_date(current_end)
+    return _reimbursement_period_from_due_date(previous_due_date)
 
 
 def _parse_todo_entries(raw_text: Optional[str]) -> list[str]:
@@ -3436,6 +3432,7 @@ def list_cash_reimbursement_periods(
 ):
     today = date.today()
     current_start, current_end = _reimbursement_period_for(today)
+    active_start, active_end = _reimbursement_submission_period_for(today)
 
     draft_rows = (
         db.query(CashReimbursementDraft.period_start, CashReimbursementDraft.period_end)
@@ -3453,10 +3450,9 @@ def list_cash_reimbursement_periods(
     }
     draft_periods = {(row.period_start, row.period_end) for row in draft_rows}
     periods: set[tuple[date, date]] = {(current_start, current_end)}
+    periods.add((active_start, active_end))
     periods.update(draft_periods)
     periods.update((row.period_start, row.period_end) for row in request_rows)
-
-    periods.update(_generate_past_reimbursement_periods(current_end, today))
 
     out: list[CashReimbursementPeriodOut] = []
     for p_start, p_end in sorted(periods, key=lambda x: (x[0], x[1]), reverse=True):
