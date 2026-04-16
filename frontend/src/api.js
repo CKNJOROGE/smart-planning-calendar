@@ -647,6 +647,13 @@ export function listMyCashReimbursements() {
   return request("/finance/reimbursements/my");
 }
 
+export function reopenPendingCashReimbursement(requestId) {
+  return request(`/finance/reimbursements/${requestId}/reopen`, {
+    method: "POST",
+    body: {},
+  });
+}
+
 export function listPendingCashReimbursements() {
   return request("/finance/reimbursements/pending");
 }

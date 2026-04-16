@@ -6,6 +6,7 @@ import {
   saveCashReimbursementDraft,
   submitCashReimbursement,
   listMyCashReimbursements,
+  reopenPendingCashReimbursement,
   listPendingCashReimbursements,
   listApprovedCashReimbursements,
   decideCashReimbursement,
@@ -518,6 +519,20 @@ export default function FinanceRequestsPage() {
       setManualItems([emptyManual()]);
       await loadData();
       showToast(hasAnyItems ? "Cash reimbursement submitted for approval" : "Nothing to submit submitted for approval", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
+  async function reopenMyReimbursementRequest(request) {
+    setErr("");
+    if (!request?.id) return;
+    try {
+      await reopenPendingCashReimbursement(request.id);
+      await loadData();
+      showToast("Submission reopened for editing", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
@@ -1265,7 +1280,7 @@ export default function FinanceRequestsPage() {
       </div>
 
       {canApplyReimbursement && (
-        <div className="card" style={{ marginBottom: 12 }}>
+      <div className="card" style={{ marginBottom: 12 }}>
           <div style={{ fontWeight: 900, marginBottom: 8 }}>My Reimbursement Requests</div>
           <div style={{ width: "100%", overflowX: "auto" }}>
             <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1275,6 +1290,7 @@ export default function FinanceRequestsPage() {
                   <th style={{ textAlign: "left", padding: 10 }}>Total</th>
                   <th style={{ textAlign: "left", padding: 10 }}>Status</th>
                   <th style={{ textAlign: "left", padding: 10 }}>Comments</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1299,10 +1315,19 @@ export default function FinanceRequestsPage() {
                         </div>
                       )}
                     </td>
+                    <td style={{ padding: 10 }}>
+                      {r.status === "pending_approval" && !r.ceo_decision && !r.finance_decision ? (
+                        <button className="btn" type="button" onClick={() => reopenMyReimbursementRequest(r)}>
+                          Edit Submission
+                        </button>
+                      ) : (
+                        <span className="muted">-</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {!filteredMyRequests.length && (
-                  <tr><td colSpan={4} style={{ padding: 14 }} className="muted">No submissions yet.</td></tr>
+                  <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No submissions yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -2033,7 +2058,7 @@ export default function FinanceRequestsPage() {
                                 if (!window.confirm("Are you sure you want to withdraw this salary advance request? This action cannot be undone.")) return;
                                 try {
                                   await withdrawSalaryAdvanceRequest(r.id);
-                                  loadAll();
+                                  await loadData();
                                 } catch (e) {
                                   alert("Failed to withdraw: " + (e.message || e));
                                 }

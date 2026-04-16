@@ -1691,6 +1691,20 @@ def _parse_manual_reimbursement_items(raw_json: str) -> list[CashReimbursementDr
     return out
 
 
+def _manual_items_from_reimbursement_request(req: CashReimbursementRequest) -> list[dict]:
+    manual_items: list[dict] = []
+    for item in req.items or []:
+        if item.client_id is not None:
+            continue
+        manual_items.append({
+            "item_date": item.item_date.isoformat() if item.item_date else None,
+            "description": item.description or "",
+            "amount": float(item.amount or 0),
+            "source_event_id": item.source_event_id,
+        })
+    return manual_items
+
+
 async def _upload_profile_document(
     request: Request,
     db: Session,
@@ -3855,6 +3869,53 @@ def submit_cash_reimbursement(
     _ = req.user
     _ = req.items
     return req
+
+
+@app.post("/finance/reimbursements/{request_id}/reopen", response_model=CashReimbursementDraftOut)
+def reopen_pending_cash_reimbursement(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    req = _load_reimbursement_request(db, request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail="Reimbursement request not found")
+    if req.user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if req.status != "pending_approval" or req.ceo_decision is not None or req.finance_decision is not None:
+        raise HTTPException(status_code=400, detail="Only untouched pending reimbursements can be edited")
+
+    manual_items = _manual_items_from_reimbursement_request(req)
+    period_start = req.period_start
+    period_end = req.period_end
+
+    draft = (
+        db.query(CashReimbursementDraft)
+        .filter(
+            CashReimbursementDraft.user_id == current.id,
+            CashReimbursementDraft.period_start == period_start,
+            CashReimbursementDraft.period_end == period_end,
+        )
+        .first()
+    )
+    if draft:
+        draft.manual_items_json = json.dumps(manual_items)
+        draft.updated_at = datetime.utcnow()
+    else:
+        draft = CashReimbursementDraft(
+            user_id=current.id,
+            period_start=period_start,
+            period_end=period_end,
+            manual_items_json=json.dumps(manual_items),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(draft)
+
+    db.delete(req)
+    db.commit()
+
+    return get_cash_reimbursement_draft(period_start=period_start, period_end=period_end, db=db, current=current)
 
 
 @app.post("/finance/reimbursements/{request_id}/decision", response_model=CashReimbursementRequestOut)
