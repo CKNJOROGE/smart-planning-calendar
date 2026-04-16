@@ -1618,13 +1618,21 @@ def _sync_client_visit_todos(db: Session, e: Event) -> None:
 
     visit_day = e.start_ts.date()
     now = datetime.utcnow()
+
+    client_name = None
+    if e.client:
+        client_name = e.client.name
+    elif e.one_time_client_name:
+        client_name = e.one_time_client_name
+
     for line in entries:
+        activity_text = f"{line} - Client: {client_name}" if client_name else line
         db.add(
             DailyActivity(
                 user_id=e.user_id,
                 post_group_id=group_id,
                 activity_date=visit_day,
-                activity=line,
+                activity=activity_text,
                 completed=False,
                 completed_at=None,
                 created_at=now,
