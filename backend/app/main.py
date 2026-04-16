@@ -3427,8 +3427,12 @@ def _generate_past_reimbursement_periods(current_end: date, today: date) -> set[
             due_date = date(current_end.year, month, day)
             if due_date >= date(current_end.year, 1, 16) and due_date < current_end and due_date <= today:
                 if day == 15:
-                    prev_month = month - 1 or 12
-                    prev_year = current_end.year - 1 if month == 1 else current_end.year
+                    if month == 1:
+                        prev_month = 12
+                        prev_year = current_end.year - 1
+                    else:
+                        prev_month = month - 1
+                        prev_year = current_end.year
                     start = date(prev_year, prev_month, 16)
                 elif month == 2:
                     start = date(due_date.year, 2, 16)
