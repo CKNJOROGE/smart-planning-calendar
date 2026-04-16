@@ -3420,28 +3420,6 @@ def get_cash_reimbursement_draft(
 
 
 @app.get("/finance/reimbursements/periods", response_model=List[CashReimbursementPeriodOut])
-def _generate_past_reimbursement_periods(current_end: date, today: date) -> set[tuple[date, date]]:
-    periods: set[tuple[date, date]] = set()
-    for month in range(1, current_end.month + 1):
-        for day in ([15, 30] if month != 2 else [28]):
-            due_date = date(current_end.year, month, day)
-            if due_date >= date(current_end.year, 1, 16) and due_date < current_end and due_date <= today:
-                if day == 15:
-                    if month == 1:
-                        prev_month = 12
-                        prev_year = current_end.year - 1
-                    else:
-                        prev_month = month - 1
-                        prev_year = current_end.year
-                    start = date(prev_year, prev_month, 16)
-                elif month == 2:
-                    start = date(due_date.year, 2, 16)
-                else:
-                    start = date(due_date.year, month, 16)
-                periods.add((start, due_date))
-    return periods
-
-
 def list_cash_reimbursement_periods(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
