@@ -1590,6 +1590,16 @@ def _reimbursement_submit_message_for_period(
     return "You can only submit current due period or past missed periods."
 
 
+def _generate_past_reimbursement_periods(current_end: date, today: date) -> set[tuple[date, date]]:
+    periods: set[tuple[date, date]] = set()
+    for month in range(1, current_end.month + 1):
+        for day in ([15, 30] if month != 2 else [28]):
+            due_date = date(current_end.year, month, day)
+            if due_date >= date(current_end.year, 1, 16) and due_date < current_end and due_date <= today:
+                periods.add(_reimbursement_period_from_due_date(due_date))
+    return periods
+
+
 def _parse_todo_entries(raw_text: Optional[str]) -> list[str]:
     normalized = str(raw_text or "").replace("\r\n", "\n")
     entries = [(line or "").strip() for line in normalized.split("\n")]

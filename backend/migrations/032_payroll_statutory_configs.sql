@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS payroll_statutory_configs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   effective_from DATE NOT NULL UNIQUE,
   effective_to DATE,
   active BOOLEAN NOT NULL DEFAULT 1,

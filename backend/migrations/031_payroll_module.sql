@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS payroll_profiles (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
   payroll_number VARCHAR(120),
   kra_pin VARCHAR(120),
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS payroll_profiles (
 CREATE INDEX IF NOT EXISTS ix_payroll_profiles_user_id ON payroll_profiles(user_id);
 
 CREATE TABLE IF NOT EXISTS payroll_runs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id SERIAL PRIMARY KEY,
   employee_id INTEGER NOT NULL REFERENCES users(id),
   payroll_month DATE NOT NULL,
   pay_date DATE,
