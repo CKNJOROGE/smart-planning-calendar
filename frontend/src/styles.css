@@ -2348,6 +2348,10 @@ textarea{ resize: vertical; min-height: 90px; }
   background: rgba(250, 245, 255, 0.9);
 }
 
+.dashboard-workplan-subtask.is-disabled {
+  opacity: 0.62;
+}
+
 .dashboard-workplan-subtask input {
   margin-top: 3px;
 }
@@ -2364,6 +2368,10 @@ textarea{ resize: vertical; min-height: 90px; }
   margin-top: 2px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.dashboard-workplan-subtask-warning {
+  color: #b45309;
 }
 
 .dashboard-workplan-summary {
@@ -2404,6 +2412,24 @@ textarea{ resize: vertical; min-height: 90px; }
   font-size: 12px;
   line-height: 1.5;
   color: var(--text);
+}
+
+.dashboard-carryover-item-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.dashboard-carryover-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.dashboard-carryover-continue-btn {
+  width: fit-content;
+  padding-inline: 12px;
 }
 
 .dashboard-layout {
@@ -3457,10 +3483,22 @@ textarea{ resize: vertical; min-height: 90px; }
   background: rgba(8, 47, 73, 0.62);
 }
 
+[data-theme="dark"] .dashboard-workplan-subtask.is-disabled {
+  opacity: 0.48;
+}
+
+[data-theme="dark"] .dashboard-workplan-subtask-warning {
+  color: #fdba74;
+}
+
 [data-theme="dark"] .dashboard-quarter-btn.is-active {
   box-shadow:
     0 0 0 2px rgba(56, 189, 248, 0.16),
     7px 9px 16px rgba(2, 6, 23, 0.28);
+}
+
+[data-theme="dark"] .dashboard-carryover-continue-btn {
+  color: var(--text);
 }
 
 [data-theme="dark"] .dashboard-table thead th {

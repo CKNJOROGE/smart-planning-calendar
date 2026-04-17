@@ -573,14 +573,38 @@ export function listDashboardOverview() {
 }
 
 export function createTodayActivity(activity, clientId = null) {
-  const activityText = typeof activity === "string" ? activity : String(activity?.activity || "");
-  const payload = { activity: activityText };
-  if (clientId != null && Number.isFinite(Number(clientId))) {
-    payload.client_id = Number(clientId);
+  let payload = { activity: "", client_id: null, items: [] };
+
+  if (Array.isArray(activity)) {
+    payload.items = activity.map((item) => ({
+      activity: String(item?.activity || ""),
+      client_id: item?.client_id != null && Number.isFinite(Number(item.client_id)) ? Number(item.client_id) : null,
+      source_client_task_id:
+        item?.source_client_task_id != null && Number.isFinite(Number(item.source_client_task_id))
+          ? Number(item.source_client_task_id)
+          : null,
+    }));
+    if (clientId != null && Number.isFinite(Number(clientId))) {
+      payload.client_id = Number(clientId);
+    }
+  } else {
+    const activityText = typeof activity === "string" ? activity : String(activity?.activity || "");
+    payload.activity = activityText;
+    if (clientId != null && Number.isFinite(Number(clientId))) {
+      payload.client_id = Number(clientId);
+    }
   }
+
   return request("/dashboard/activities/today", {
     method: "POST",
     body: payload,
+  });
+}
+
+export function continueTodayActivity(activityId) {
+  return request(`/dashboard/activities/${activityId}/continue`, {
+    method: "POST",
+    body: {},
   });
 }
 

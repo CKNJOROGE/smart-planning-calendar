@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime, date
 from typing import Any, List, Optional
 
@@ -515,8 +515,15 @@ class ProbationRecordOut(BaseModel):
 # Dashboard
 # -------------------------
 class DailyActivityCreate(BaseModel):
+    activity: Optional[str] = None
+    client_id: Optional[int] = None
+    items: List["DailyActivityCreateItem"] = Field(default_factory=list)
+
+
+class DailyActivityCreateItem(BaseModel):
     activity: str
     client_id: Optional[int] = None
+    source_client_task_id: Optional[int] = None
 
 
 class DailyActivityUpdate(BaseModel):
@@ -528,7 +535,10 @@ class DailyActivityOut(BaseModel):
     user_id: int
     client_id: Optional[int] = None
     client_name: Optional[str] = None
+    source_client_task_id: Optional[int] = None
     post_group_id: Optional[str] = None
+    continued_from_activity_id: Optional[int] = None
+    continued_to_activity_id: Optional[int] = None
     activity_date: date
     activity: str
     completed: bool

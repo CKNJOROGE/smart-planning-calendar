@@ -95,6 +95,7 @@ from .schemas import (
     ProbationRecordUpdate,
     ProbationRecordOut,
     DailyActivityCreate,
+    DailyActivityCreateItem,
     DailyActivityUpdate,
     DailyActivityOut,
     TaskReminderOut,
@@ -5765,6 +5766,7 @@ def get_dashboard_overview(
         .filter(
             DailyActivity.activity_date < today,
             DailyActivity.completed.is_(False),
+            DailyActivity.continued_to_activity_id.is_(None),
         )
         .order_by(
             DailyActivity.activity_date.desc(),
@@ -5783,6 +5785,7 @@ def get_dashboard_overview(
         .filter(
             DailyActivity.activity_date < today,
             DailyActivity.completed.is_(False),
+            DailyActivity.continued_to_activity_id.is_(None),
         )
         .count()
     )
@@ -5908,31 +5911,78 @@ def create_todays_activity(
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
-    raw_text = (payload.activity or "").replace("\r\n", "\n")
-    entries = [(line or "").strip() for line in raw_text.split("\n")]
-    entries = [line for line in entries if line]
-    if not entries:
-        raise HTTPException(status_code=400, detail="at least one activity is required")
-    if len(entries) > 50:
-        raise HTTPException(status_code=400, detail="maximum 50 activities per post")
-    for line in entries:
-        if len(line) > 1000:
-            raise HTTPException(status_code=400, detail="each activity must be <= 1000 characters")
-    client_id: Optional[int] = payload.client_id
-    if client_id is not None:
-        exists = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
-        if not exists:
-            raise HTTPException(status_code=400, detail="Selected client does not exist")
+    today = date.today()
+    raw_items = payload.items or []
+    normalized_items: list[dict] = []
+
+    if raw_items:
+        if len(raw_items) > 50:
+            raise HTTPException(status_code=400, detail="maximum 50 activities per post")
+        for item in raw_items:
+            line = (item.activity or "").strip()
+            if not line:
+                raise HTTPException(status_code=400, detail="each activity must have text")
+            if len(line) > 1000:
+                raise HTTPException(status_code=400, detail="each activity must be <= 1000 characters")
+            client_id = item.client_id if item.client_id is not None else payload.client_id
+            if client_id is not None:
+                exists = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
+                if not exists:
+                    raise HTTPException(status_code=400, detail="Selected client does not exist")
+            normalized_items.append({
+                "activity": line,
+                "client_id": client_id,
+                "source_client_task_id": item.source_client_task_id,
+            })
+    else:
+        raw_text = (payload.activity or "").replace("\r\n", "\n")
+        entries = [(line or "").strip() for line in raw_text.split("\n")]
+        entries = [line for line in entries if line]
+        if not entries:
+            raise HTTPException(status_code=400, detail="at least one activity is required")
+        if len(entries) > 50:
+            raise HTTPException(status_code=400, detail="maximum 50 activities per post")
+        for line in entries:
+            if len(line) > 1000:
+                raise HTTPException(status_code=400, detail="each activity must be <= 1000 characters")
+        client_id: Optional[int] = payload.client_id
+        if client_id is not None:
+            exists = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
+            if not exists:
+                raise HTTPException(status_code=400, detail="Selected client does not exist")
+        normalized_items = [{
+            "activity": line,
+            "client_id": client_id,
+            "source_client_task_id": None,
+        } for line in entries]
+
+    source_task_ids = [item["source_client_task_id"] for item in normalized_items if item.get("source_client_task_id") is not None]
+    if source_task_ids:
+        existing_open = (
+            db.query(DailyActivity)
+            .filter(
+                DailyActivity.source_client_task_id.in_([int(x) for x in source_task_ids]),
+                DailyActivity.completed.is_(False),
+                DailyActivity.continued_to_activity_id.is_(None),
+            )
+            .all()
+        )
+        if existing_open:
+            raise HTTPException(
+                status_code=400,
+                detail="One or more selected tasks are already carried over. Continue them from the carried over list instead.",
+            )
 
     created: list[DailyActivity] = []
     group_id = uuid4().hex
-    for line in entries:
+    for item in normalized_items:
         row = DailyActivity(
             user_id=current.id,
-            client_id=client_id,
+            client_id=item["client_id"],
+            source_client_task_id=item["source_client_task_id"],
             post_group_id=group_id,
-            activity_date=date.today(),
-            activity=line,
+            activity_date=today,
+            activity=item["activity"],
             completed=False,
             completed_at=None,
         )
@@ -5945,6 +5995,46 @@ def create_todays_activity(
         _ = row.user
         _ = row.client
     return created
+
+
+@app.post("/dashboard/activities/{activity_id}/continue", response_model=DailyActivityOut)
+def continue_todays_activity(
+    activity_id: int,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    source = db.query(DailyActivity).filter(DailyActivity.id == activity_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    if not _is_admin_like(current.role) and source.user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if source.completed:
+        raise HTTPException(status_code=400, detail="Completed activities do not need continuation")
+    if source.continued_to_activity_id is not None:
+        raise HTTPException(status_code=400, detail="This activity has already been continued")
+
+    if source.activity_date >= date.today():
+        raise HTTPException(status_code=400, detail="Only carried over activities can be continued")
+
+    new_row = DailyActivity(
+        user_id=source.user_id,
+        client_id=source.client_id,
+        source_client_task_id=source.source_client_task_id,
+        post_group_id=uuid4().hex,
+        continued_from_activity_id=source.id,
+        activity_date=date.today(),
+        activity=source.activity,
+        completed=False,
+        completed_at=None,
+    )
+    db.add(new_row)
+    db.flush()
+    source.continued_to_activity_id = new_row.id
+    db.commit()
+    db.refresh(new_row)
+    _ = new_row.user
+    _ = new_row.client
+    return new_row
 
 
 @app.patch("/dashboard/activities/{activity_id}", response_model=DailyActivityOut)
