@@ -51,6 +51,15 @@ function fmtCurrency(v) {
   return Number(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function fmtAmountSummary(requested, approved) {
+  const requestedValue = Number(requested || 0);
+  const approvedValue = approved == null ? null : Number(approved);
+  if (approvedValue == null || Number.isNaN(approvedValue) || approvedValue === requestedValue) {
+    return fmtCurrency(requestedValue);
+  }
+  return `${fmtCurrency(requestedValue)} requested / ${fmtCurrency(approvedValue)} approved`;
+}
+
 function statusPillClass(status) {
   const s = (status || "").toLowerCase();
   if (s === "amount_reimbursed") return "dashboard-status-ok";
@@ -86,7 +95,10 @@ function decisionLabel(decision) {
 }
 
 function reimbursementItemStatusLabel(status) {
-  return (status || "").toLowerCase() === "rejected" ? "Rejected" : "Included";
+  const s = (status || "").toLowerCase();
+  if (s === "approved") return "Approved";
+  if (s === "rejected") return "Rejected";
+  return "Pending";
 }
 
 function toSearchText(...parts) {
@@ -142,12 +154,16 @@ function buildReimbursementRecordText(r) {
   const itemLines = (r.items || []).map((item, idx) => (
     `${idx + 1}. ${item.item_date} | ${item.description} | ${fmtCurrency(item.amount)} | ${reimbursementItemStatusLabel(item.review_status)}${item.review_comment ? ` | Comment: ${item.review_comment}` : ""}`
   ));
+  const approvedTotal = (r.items || [])
+    .filter((item) => String(item.review_status || "").toLowerCase() === "approved")
+    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
   return [
     "Finance Record",
     `Module: Cash Reimbursement`,
     `Requester: ${r.user?.name || `User #${r.user_id}`}`,
     `Period: ${r.period_start} to ${r.period_end}`,
     `Total: ${fmtCurrency(r.total_amount)}`,
+    `Approved Total: ${fmtCurrency(approvedTotal)}`,
     `Status: ${statusLabel(r.status, !!r.is_late_submission, (r.items || []).length)}`,
     `Submitted: ${fmtDateTime(r.submitted_at)}`,
     `CEO Decision: ${decisionLabel(r.ceo_decision)}`,
@@ -167,7 +183,8 @@ function buildCashRequisitionRecordText(r) {
     `Module: Cash Requisition`,
     `Requester: ${r.user?.name || `User #${r.user_id}`}`,
     `Purpose: ${r.purpose}`,
-    `Amount: ${fmtCurrency(r.amount)}`,
+    `Requested Amount: ${fmtCurrency(r.amount)}`,
+    `Approved Amount: ${r.approved_amount != null ? fmtCurrency(r.approved_amount) : "-"}`,
     `Needed By: ${r.needed_by || "-"}`,
     `Status: ${requisitionStatusLabel(r.status)}`,
     `Submitted: ${fmtDateTime(r.submitted_at)}`,
@@ -187,7 +204,8 @@ function buildAuthorityRecordText(r) {
     `Module: Authority To Incur`,
     `Requester: ${r.user?.name || `User #${r.user_id}`}`,
     `Title: ${r.title}`,
-    `Amount: ${fmtCurrency(r.amount)}`,
+    `Requested Amount: ${fmtCurrency(r.amount)}`,
+    `Approved Amount: ${r.approved_amount != null ? fmtCurrency(r.approved_amount) : "-"}`,
     `Payee: ${r.payee || "-"}`,
     `Needed By: ${r.needed_by || "-"}`,
     `Status: ${authorityStatusLabel(r.status)}`,
@@ -208,7 +226,8 @@ function buildSalaryAdvanceRecordText(r) {
     `Module: Salary Advance`,
     `Requester: ${r.user?.name || `User #${r.user_id}`}`,
     `Reason: ${r.reason}`,
-    `Amount: ${fmtCurrency(r.amount)}`,
+    `Requested Amount: ${fmtCurrency(r.amount)}`,
+    `Approved Amount: ${r.approved_amount != null ? fmtCurrency(r.approved_amount) : "-"}`,
     `Repayment Months: ${r.repayment_months}`,
     `Deduction Start: ${r.deduction_start_date || "-"}`,
     `Status: ${salaryAdvanceStatusLabel(r.status)}`,
@@ -296,6 +315,7 @@ export default function FinanceRequestsPage() {
   const [myRequisitions, setMyRequisitions] = useState([]);
   const [pendingRequisitions, setPendingRequisitions] = useState([]);
   const [approvedRequisitions, setApprovedRequisitions] = useState([]);
+  const [approvalDialog, setApprovalDialog] = useState(null);
   const [atiForm, setAtiForm] = useState({
     amount: "",
     title: "",
@@ -596,7 +616,7 @@ export default function FinanceRequestsPage() {
     try {
       await decideCashReimbursementItem(requestId, itemId, approve, comment);
       await loadData();
-      showToast(approve ? "Reimbursement row restored" : "Reimbursement row rejected", "success");
+      showToast(approve ? "Reimbursement row approved" : "Reimbursement row rejected", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
@@ -668,6 +688,15 @@ export default function FinanceRequestsPage() {
   }
 
   async function takeRequisitionDecision(requestId, approve) {
+    if (approve) {
+      const req = pendingRequisitions.find((row) => row.id === requestId);
+      if (!req) {
+        setErr("Cash requisition request not found.");
+        return;
+      }
+      openAmountApprovalDialog("cash_requisition", requestId, req.amount, "Cash Requisition Approval");
+      return;
+    }
     const comment = approve ? "" : (prompt("Reason for rejection (required):") || "").trim();
     if (!approve && !comment) {
       setErr("Rejection comment is required.");
@@ -862,6 +891,56 @@ export default function FinanceRequestsPage() {
     );
   }
 
+  function openAmountApprovalDialog(kind, requestId, requestedAmount, title) {
+    setErr("");
+    setApprovalDialog({
+      kind,
+      requestId,
+      requestedAmount: Number(requestedAmount || 0),
+      title,
+      mode: "full",
+      partialAmount: String(requestedAmount || ""),
+    });
+  }
+
+  async function confirmAmountApprovalDialog() {
+    if (!approvalDialog) return;
+    const requestedAmount = Number(approvalDialog.requestedAmount || 0);
+    const approvedAmount = approvalDialog.mode === "full"
+      ? requestedAmount
+      : Number(approvalDialog.partialAmount || 0);
+
+    if (!(approvedAmount > 0)) {
+      setErr("Approved amount must be greater than 0.");
+      return;
+    }
+    if (approvedAmount > requestedAmount) {
+      setErr("Approved amount cannot exceed requested amount.");
+      return;
+    }
+
+    try {
+      if (approvalDialog.kind === "cash_requisition") {
+        await decideCashRequisition(approvalDialog.requestId, true, "", approvedAmount);
+        showToast(approvedAmount === requestedAmount ? "Requisition approved for the full amount" : "Requisition approved for a partial amount", "success");
+      } else if (approvalDialog.kind === "authority_to_incur") {
+        await decideAuthorityToIncurRequest(approvalDialog.requestId, true, "", approvedAmount);
+        showToast(approvedAmount === requestedAmount ? "Authority request approved for the full amount" : "Authority request approved for a partial amount", "success");
+      } else if (approvalDialog.kind === "salary_advance") {
+        await decideSalaryAdvanceRequest(approvalDialog.requestId, true, "", approvedAmount);
+        showToast(approvedAmount === requestedAmount ? "Salary advance approved for the full amount" : "Salary advance approved for a partial amount", "success");
+      } else {
+        throw new Error("Unknown approval request type");
+      }
+      setApprovalDialog(null);
+      await loadData();
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
+  }
+
   async function submitAuthorityToIncur() {
     setErr("");
     const amount = Number(atiForm.amount || 0);
@@ -901,6 +980,15 @@ export default function FinanceRequestsPage() {
   }
 
   async function takeAuthorityDecision(requestId, approve) {
+    if (approve) {
+      const req = pendingAtiRequests.find((row) => row.id === requestId);
+      if (!req) {
+        setErr("Authority to incur request not found.");
+        return;
+      }
+      openAmountApprovalDialog("authority_to_incur", requestId, req.amount, "Authority To Incur Approval");
+      return;
+    }
     const comment = approve ? "" : (prompt("Reason for rejection (required):") || "").trim();
     if (!approve && !comment) {
       setErr("Rejection comment is required.");
@@ -971,27 +1059,22 @@ export default function FinanceRequestsPage() {
   }
 
   async function takeSalaryAdvanceDecision(requestId, approve, requestedAmount) {
-    let approvedAmount = null;
+    if (approve) {
+      const req = pendingSalaryAdvances.find((row) => row.id === requestId);
+      if (!req) {
+        setErr("Salary advance request not found.");
+        return;
+      }
+      openAmountApprovalDialog("salary_advance", requestId, req.amount, "Salary Advance Approval");
+      return;
+    }
     const comment = approve ? "" : (prompt("Reason for rejection (required):") || "").trim();
     if (!approve && !comment) {
       setErr("Rejection comment is required.");
       return;
     }
-    if (approve) {
-      const input = prompt(`Enter approved amount (requested: ${requestedAmount}):`, requestedAmount);
-      if (input === null) return;
-      approvedAmount = parseFloat(input);
-      if (isNaN(approvedAmount) || approvedAmount < 0) {
-        setErr("Please enter a valid amount.");
-        return;
-      }
-      if (approvedAmount > requestedAmount) {
-        setErr("Approved amount cannot exceed requested amount.");
-        return;
-      }
-    }
     try {
-      await decideSalaryAdvanceRequest(requestId, approve, comment, approvedAmount);
+      await decideSalaryAdvanceRequest(requestId, approve, comment);
       await loadData();
       showToast(approve ? "Salary advance approved" : "Salary advance rejected", "success");
     } catch (e) {
@@ -1033,6 +1116,23 @@ export default function FinanceRequestsPage() {
     if (!r?.ceo_decision) remaining.push("CEO");
     if (!r?.finance_decision) remaining.push("Finance");
     return remaining;
+  }
+
+  function reimbursementReviewSummary(r) {
+    const items = r?.items || [];
+    const summary = {
+      approved: 0,
+      rejected: 0,
+      pending: 0,
+      total: items.length,
+    };
+    items.forEach((item) => {
+      const status = String(item.review_status || "").toLowerCase();
+      if (status === "approved") summary.approved += 1;
+      else if (status === "rejected") summary.rejected += 1;
+      else summary.pending += 1;
+    });
+    return summary;
   }
 
   async function saveAllClientPrices() {
@@ -1297,18 +1397,21 @@ export default function FinanceRequestsPage() {
                 {filteredMyRequests.map((r) => (
                   <tr key={r.id} style={{ borderTop: "1px solid #eef2f7" }}>
                     <td style={{ padding: 10 }}>{r.period_start} to {r.period_end}</td>
-                    <td style={{ padding: 10 }}>{fmtCurrency(r.total_amount)}</td>
+                    <td style={{ padding: 10 }}>Approved subtotal: {fmtCurrency(r.total_amount)}</td>
                             <td style={{ padding: 10 }}>
                               <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission, r.items?.length || 0)}</span>
                             </td>
                     <td style={{ padding: 10 }}>
-                      <div>CEO: {decisionLabel(r.ceo_decision)}</div>
-                      <div>Finance: {decisionLabel(r.finance_decision)}</div>
-                      {remainingApprovers(r).length > 0 ? (
-                        <div className="muted">Remaining: {remainingApprovers(r).join(", ")}</div>
-                      ) : (
-                        <div className="muted">All approvals completed.</div>
-                      )}
+                      {(() => {
+                        const summary = reimbursementReviewSummary(r);
+                        return (
+                          <>
+                            <div>Approved rows: {summary.approved}</div>
+                            <div>Rejected rows: {summary.rejected}</div>
+                            <div className="muted">Pending rows: {summary.pending}</div>
+                          </>
+                        );
+                      })()}
                       {(r.ceo_comment || r.finance_comment) && (
                         <div style={{ marginTop: 4 }}>
                           {r.ceo_comment ? `CEO comment: ${r.ceo_comment}` : ""}{r.ceo_comment && r.finance_comment ? " | " : ""}{r.finance_comment ? `Finance comment: ${r.finance_comment}` : ""}
@@ -1316,7 +1419,7 @@ export default function FinanceRequestsPage() {
                       )}
                     </td>
                     <td style={{ padding: 10 }}>
-                      {r.status === "pending_approval" && !r.ceo_decision && !r.finance_decision ? (
+                      {r.status === "pending_approval" && !r.ceo_decision && !r.finance_decision && (r.items || []).every((item) => String(item.review_status || "").toLowerCase() === "pending") ? (
                         <button className="btn" type="button" onClick={() => reopenMyReimbursementRequest(r)}>
                           Edit Submission
                         </button>
@@ -1338,11 +1441,16 @@ export default function FinanceRequestsPage() {
               {canReview && (
                 <div className="card">
           <div style={{ fontWeight: 900, marginBottom: 8 }}>Pending Approvals (CEO / Finance)</div>
+          <div className="muted" style={{ marginBottom: 10 }}>
+            Approve or reject each reimbursement row individually. The request will move on automatically once all rows are resolved.
+          </div>
           {!filteredPendingRequests.length ? (
             <div className="muted" style={{ padding: "10px 0 2px" }}>No pending reimbursement requests.</div>
           ) : (
             <div className="reimbursement-request-stack">
-              {filteredPendingRequests.map((r) => (
+              {filteredPendingRequests.map((r) => {
+                const summary = reimbursementReviewSummary(r);
+                return (
                 <section key={r.id} className="reimbursement-request-card reimbursement-request-card--pending">
                   <div className="reimbursement-request-card__accent" />
                   <div className="reimbursement-request-card__header">
@@ -1353,35 +1461,24 @@ export default function FinanceRequestsPage() {
                     <div className="reimbursement-request-card__meta">
                       <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{statusLabel(r.status, !!r.is_late_submission, r.items?.length || 0)}</span>
                       <div className="reimbursement-request-card__meta-line">{r.period_start} to {r.period_end}</div>
-                      <div className="reimbursement-request-card__meta-line">{fmtCurrency(r.total_amount)}</div>
+                      <div className="reimbursement-request-card__meta-line">Approved subtotal: {fmtCurrency(r.total_amount)}</div>
                     </div>
                   </div>
 
                   <div className="reimbursement-request-card__body">
                     <div className="reimbursement-request-request-grid">
                       <div>
-                        <div className="reimbursement-request-card__label">Approvals</div>
+                        <div className="reimbursement-request-card__label">Item Review</div>
                         <div className="reimbursement-request-card__subtext">
-                          CEO: <strong>{decisionLabel(r.ceo_decision)}</strong> | Finance: <strong>{decisionLabel(r.finance_decision)}</strong>
+                          Approved: <strong>{summary.approved}</strong> | Rejected: <strong>{summary.rejected}</strong> | Pending: <strong>{summary.pending}</strong>
                         </div>
                         <div className="muted" style={{ marginTop: 6 }}>
-                          {remainingApprovers(r).length > 0 ? `Remaining: ${remainingApprovers(r).join(", ")}` : "All approvals completed."}
+                          Final reimbursement amount is the sum of approved rows.
                         </div>
                       </div>
                       <div className="reimbursement-request-card__actions">
-                        {((reviewerSlot === "ceo" && !r.ceo_decision) || (reviewerSlot === "finance" && !r.finance_decision)) ? (
-                          <>
-                            <button className="btn btn-primary" onClick={() => takeDecision(r.id, true)}>Approve</button>
-                            <button className="btn btn-danger" onClick={() => takeDecision(r.id, false)}>Reject</button>
-                            {canDownloadRecords && (
-                              <button className="btn" type="button" onClick={() => downloadRecord("cash_reimbursement", r)}>Download Record</button>
-                            )}
-                          </>
-                        ) : (
-                          <span className="muted">
-                            {reviewerSlot === "ceo" ? `CEO already ${decisionLabel(r.ceo_decision).toLowerCase()}.` : ""}
-                            {reviewerSlot === "finance" ? `Finance already ${decisionLabel(r.finance_decision).toLowerCase()}.` : ""}
-                          </span>
+                        {canDownloadRecords && (
+                          <button className="btn" type="button" onClick={() => downloadRecord("cash_reimbursement", r)}>Download Record</button>
                         )}
                       </div>
                     </div>
@@ -1389,13 +1486,8 @@ export default function FinanceRequestsPage() {
                     <div className="reimbursement-request-items">
                       <div className="reimbursement-request-items__header">Submitted Items</div>
                       <div className="reimbursement-request-items__state">
-                        <span>CEO: <strong>{decisionLabel(r.ceo_decision)}</strong></span>
-                        <span>Finance: <strong>{decisionLabel(r.finance_decision)}</strong></span>
-                        {remainingApprovers(r).length > 0 ? (
-                          <span className="muted">Remaining: {remainingApprovers(r).join(", ")}</span>
-                        ) : (
-                          <span className="muted">All approvals completed.</span>
-                        )}
+                        <span>Approved subtotal: <strong>{fmtCurrency(r.total_amount)}</strong></span>
+                        <span className="muted">{summary.pending > 0 ? `${summary.pending} row(s) still pending review` : "All rows reviewed."}</span>
                       </div>
                       <div className="reimbursement-request-items__table-wrap">
                         <table className="table reimbursement-items-table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1409,13 +1501,15 @@ export default function FinanceRequestsPage() {
                             </tr>
                           </thead>
                           <tbody>
-                            {(r.items || []).map((item) => (
+                            {(r.items || []).map((item) => {
+                              const status = String(item.review_status || "").toLowerCase();
+                              return (
                               <tr key={item.id}>
                                 <td style={{ padding: 10 }}>{item.item_date}</td>
                                 <td style={{ padding: 10 }}>{item.description}</td>
                                 <td style={{ padding: 10 }}>{fmtCurrency(item.amount)}</td>
                                 <td style={{ padding: 10 }}>
-                                  <span className={`dashboard-status-badge ${(item.review_status || "").toLowerCase() === "rejected" ? "dashboard-status-danger" : "dashboard-status-ok"}`}>
+                                  <span className={`dashboard-status-badge ${status === "rejected" ? "dashboard-status-danger" : status === "approved" ? "dashboard-status-ok" : "dashboard-status-warn"}`}>
                                     {reimbursementItemStatusLabel(item.review_status)}
                                   </span>
                                 </td>
@@ -1425,24 +1519,34 @@ export default function FinanceRequestsPage() {
                                   ) : (
                                     <div className="muted" style={{ marginBottom: 6 }}>No row-specific comment.</div>
                                   )}
-                                  {((reviewerSlot === "ceo" && !r.ceo_decision) || (reviewerSlot === "finance" && !r.finance_decision)) ? (
+                                  {summary.pending > 0 ? (
                                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                      {(item.review_status || "").toLowerCase() === "rejected" ? (
-                                        <button className="btn" type="button" onClick={() => takeItemDecision(r.id, item.id, true)}>
-                                          Restore Row
-                                        </button>
-                                      ) : (
+                                      {status === "approved" ? (
                                         <button className="btn btn-danger" type="button" onClick={() => takeItemDecision(r.id, item.id, false)}>
                                           Reject Row
                                         </button>
+                                      ) : status === "rejected" ? (
+                                        <button className="btn" type="button" onClick={() => takeItemDecision(r.id, item.id, true)}>
+                                          Approve Row
+                                        </button>
+                                      ) : (
+                                        <>
+                                          <button className="btn btn-primary" type="button" onClick={() => takeItemDecision(r.id, item.id, true)}>
+                                            Approve Row
+                                          </button>
+                                          <button className="btn btn-danger" type="button" onClick={() => takeItemDecision(r.id, item.id, false)}>
+                                            Reject Row
+                                          </button>
+                                        </>
                                       )}
                                     </div>
                                   ) : (
-                                    <div className="muted">Row review is locked after your request decision.</div>
+                                    <div className="muted">Row review is locked after finalization.</div>
                                   )}
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                             {!r.items?.length && (
                               <tr>
                                 <td colSpan={5} style={{ padding: 10 }} className="muted">No submitted items.</td>
@@ -1454,7 +1558,8 @@ export default function FinanceRequestsPage() {
                     </div>
                   </div>
                 </section>
-              ))}
+                );
+              })}
             </div>
           )}
                 </div>
@@ -1485,13 +1590,13 @@ export default function FinanceRequestsPage() {
                             <div className="reimbursement-request-request-grid">
                               <div>
                                 <div className="reimbursement-request-card__label">Payout</div>
-                                <div className="reimbursement-request-card__subtext">
+                              <div className="reimbursement-request-card__subtext">
                                   {String(current?.role || "").toLowerCase() === "ceo" && r.status === "pending_reimbursement" ? (
                                     "Ready for final payout marking."
                                   ) : r.status === "amount_reimbursed" ? (
                                     `Paid on ${r.reimbursed_at ? new Date(r.reimbursed_at).toLocaleString() : "-"}`
                                   ) : (
-                                    "Pending CEO reimbursement."
+                                    "Awaiting final payout."
                                   )}
                                 </div>
                               </div>
@@ -1511,9 +1616,8 @@ export default function FinanceRequestsPage() {
                             <div className="reimbursement-request-items">
                               <div className="reimbursement-request-items__header">Submitted Items</div>
                               <div className="reimbursement-request-items__state">
-                                <span>CEO: <strong>{decisionLabel(r.ceo_decision)}</strong></span>
-                                <span>Finance: <strong>{decisionLabel(r.finance_decision)}</strong></span>
-                                <span className="muted">{remainingApprovers(r).length > 0 ? `Remaining: ${remainingApprovers(r).join(", ")}` : "All approvals completed."}</span>
+                                <span>Approved subtotal: <strong>{fmtCurrency(r.total_amount)}</strong></span>
+                                <span className="muted">{reimbursementReviewSummary(r).pending > 0 ? `${reimbursementReviewSummary(r).pending} row(s) still pending review` : "All rows reviewed."}</span>
                               </div>
                               <div className="reimbursement-request-items__table-wrap">
                                 <table className="table reimbursement-items-table" style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1532,7 +1636,7 @@ export default function FinanceRequestsPage() {
                                         <td style={{ padding: 10 }}>{item.description}</td>
                                         <td style={{ padding: 10 }}>{fmtCurrency(item.amount)}</td>
                                         <td style={{ padding: 10 }}>
-                                          <span className={`dashboard-status-badge ${(item.review_status || "").toLowerCase() === "rejected" ? "dashboard-status-danger" : "dashboard-status-ok"}`}>
+                                          <span className={`dashboard-status-badge ${(item.review_status || "").toLowerCase() === "rejected" ? "dashboard-status-danger" : (item.review_status || "").toLowerCase() === "approved" ? "dashboard-status-ok" : "dashboard-status-warn"}`}>
                                             {reimbursementItemStatusLabel(item.review_status)}
                                           </span>
                                         </td>
@@ -1628,7 +1732,7 @@ export default function FinanceRequestsPage() {
                         <div style={{ fontWeight: 700 }}>{r.purpose}</div>
                         {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
                       </td>
-                      <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                      <td style={{ padding: 10 }}>{fmtAmountSummary(r.amount, r.approved_amount)}</td>
                       <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
                       <td style={{ padding: 10 }}>
                         <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{requisitionStatusLabel(r.status)}</span>
@@ -1672,7 +1776,7 @@ export default function FinanceRequestsPage() {
                           <div style={{ fontWeight: 700 }}>{r.purpose}</div>
                           {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
                         </td>
-                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>{fmtAmountSummary(r.amount, r.approved_amount)}</td>
                         <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
                         <td style={{ padding: 10 }}>
                           {canCurrentRoleDecideRequisition(r) ? (
@@ -1720,7 +1824,7 @@ export default function FinanceRequestsPage() {
                           <div style={{ fontWeight: 700 }}>{r.purpose}</div>
                           {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
                         </td>
-                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>{fmtAmountSummary(r.amount, r.approved_amount)}</td>
                         <td style={{ padding: 10 }}>
                           <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{requisitionStatusLabel(r.status)}</span>
                         </td>
@@ -1832,7 +1936,7 @@ export default function FinanceRequestsPage() {
                         {r.payee && <div className="muted" style={{ fontSize: 12 }}>Payee: {r.payee}</div>}
                         {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
                       </td>
-                      <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                      <td style={{ padding: 10 }}>{fmtAmountSummary(r.amount, r.approved_amount)}</td>
                       <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
                       <td style={{ padding: 10 }}>
                         <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{authorityStatusLabel(r.status)}</span>
@@ -1877,7 +1981,7 @@ export default function FinanceRequestsPage() {
                           {r.payee && <div className="muted" style={{ fontSize: 12 }}>Payee: {r.payee}</div>}
                           {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
                         </td>
-                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>{fmtAmountSummary(r.amount, r.approved_amount)}</td>
                         <td style={{ padding: 10 }}>{r.needed_by || "-"}</td>
                         <td style={{ padding: 10 }}>
                           {canCurrentRoleDecideAuthority(r) ? (
@@ -1925,7 +2029,7 @@ export default function FinanceRequestsPage() {
                           <div style={{ fontWeight: 700 }}>{r.title}</div>
                           {r.payee && <div className="muted" style={{ fontSize: 12 }}>Payee: {r.payee}</div>}
                         </td>
-                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>{fmtAmountSummary(r.amount, r.approved_amount)}</td>
                         <td style={{ padding: 10 }}>
                           <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{authorityStatusLabel(r.status)}</span>
                         </td>
@@ -2034,7 +2138,7 @@ export default function FinanceRequestsPage() {
                           <div style={{ fontWeight: 700 }}>{r.reason}</div>
                           {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
                         </td>
-                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>{fmtAmountSummary(r.amount, r.approved_amount)}</td>
                         <td style={{ padding: 10 }}>
                           {r.repayment_months} month(s)
                           {r.deduction_start_date ? `, start ${r.deduction_start_date}` : ""}
@@ -2101,7 +2205,7 @@ export default function FinanceRequestsPage() {
                           <div style={{ fontWeight: 700 }}>{r.reason}</div>
                           {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
                         </td>
-                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>{fmtAmountSummary(r.amount, r.approved_amount)}</td>
                         <td style={{ padding: 10 }}>
                           {r.repayment_months} month(s)
                           {r.deduction_start_date ? `, start ${r.deduction_start_date}` : ""}
@@ -2152,7 +2256,7 @@ export default function FinanceRequestsPage() {
                           <div style={{ fontWeight: 700 }}>{r.reason}</div>
                           {r.details && <div className="muted" style={{ fontSize: 12 }}>{r.details}</div>}
                         </td>
-                        <td style={{ padding: 10 }}>{fmtCurrency(r.amount)}</td>
+                        <td style={{ padding: 10 }}>{fmtAmountSummary(r.amount, r.approved_amount)}</td>
                         <td style={{ padding: 10 }}>
                           <span className={`dashboard-status-badge ${statusPillClass(r.status)}`}>{salaryAdvanceStatusLabel(r.status)}</span>
                         </td>
@@ -2193,6 +2297,75 @@ export default function FinanceRequestsPage() {
             </div>
           )}
         </>
+      )}
+      {approvalDialog && (
+        <div className="modal-overlay" role="presentation" onClick={() => setApprovalDialog(null)}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="finance-approval-dialog-title" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title" id="finance-approval-dialog-title">{approvalDialog.title}</h3>
+              <button className="btn" type="button" onClick={() => setApprovalDialog(null)}>Close</button>
+            </div>
+            <div style={{ paddingTop: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>
+                Requested amount: {fmtCurrency(approvalDialog.requestedAmount)}
+              </div>
+              <div className="muted" style={{ marginBottom: 12 }}>
+                Choose whether to approve the full amount or a reduced amount.
+              </div>
+              <div style={{ display: "grid", gap: 10 }}>
+                <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: 12, border: "1px solid #e5e7eb", borderRadius: 12, cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="approval-mode"
+                    checked={approvalDialog.mode === "full"}
+                    onChange={() => setApprovalDialog((prev) => (prev ? { ...prev, mode: "full" } : prev))}
+                    style={{ marginTop: 3 }}
+                  />
+                  <span>
+                    <span style={{ fontWeight: 800 }}>Approve full amount</span>
+                    <span className="muted" style={{ display: "block", marginTop: 4 }}>
+                      Approve the full requested amount of {fmtCurrency(approvalDialog.requestedAmount)}.
+                    </span>
+                  </span>
+                </label>
+                <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: 12, border: "1px solid #e5e7eb", borderRadius: 12, cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="approval-mode"
+                    checked={approvalDialog.mode === "partial"}
+                    onChange={() => setApprovalDialog((prev) => (prev ? { ...prev, mode: "partial" } : prev))}
+                    style={{ marginTop: 3 }}
+                  />
+                  <span>
+                    <span style={{ fontWeight: 800 }}>Approve partial amount</span>
+                    <span className="muted" style={{ display: "block", marginTop: 4 }}>
+                      Enter the reduced amount you want to approve.
+                    </span>
+                  </span>
+                </label>
+                {approvalDialog.mode === "partial" && (
+                  <div className="field" style={{ marginTop: 2 }}>
+                    <label>Approved amount</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={approvalDialog.partialAmount}
+                      onChange={(e) => setApprovalDialog((prev) => (prev ? { ...prev, partialAmount: e.target.value } : prev))}
+                      placeholder={String(approvalDialog.requestedAmount || "")}
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="modal-actions">
+                <button className="btn" type="button" onClick={() => setApprovalDialog(null)}>Cancel</button>
+                <button className="btn btn-primary" type="button" onClick={confirmAmountApprovalDialog}>
+                  Approve
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
         </div>
       </div>

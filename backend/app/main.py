@@ -273,6 +273,14 @@ def _run_startup_migrations():
         except Exception:
             pass
         try:
+            conn.execute(text("ALTER TABLE cash_requisition_requests ADD COLUMN IF NOT EXISTS approved_amount NUMERIC(12, 2)"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE authority_to_incur_requests ADD COLUMN IF NOT EXISTS approved_amount NUMERIC(12, 2)"))
+        except Exception:
+            pass
+        try:
             conn.execute(text("ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS employee_confirmed BOOLEAN DEFAULT FALSE"))
         except Exception:
             pass
@@ -493,6 +501,17 @@ def _is_admin_like(role: Optional[str]) -> bool:
 
 def _is_finance_reviewer(role: Optional[str]) -> bool:
     return (role or "").strip().lower() in {"finance", "admin", "ceo"}
+
+
+def _resolve_partial_approved_amount(requested_amount: Decimal, incoming_amount: Optional[float], existing_amount: Optional[Decimal]) -> Decimal:
+    resolved = requested_amount if incoming_amount is None else Decimal(str(incoming_amount))
+    if resolved < 0:
+        raise HTTPException(status_code=400, detail="approved_amount cannot be negative")
+    if resolved > requested_amount:
+        raise HTTPException(status_code=400, detail="approved_amount cannot exceed requested amount")
+    if existing_amount is not None and existing_amount < resolved:
+        return existing_amount
+    return resolved
 
 
 def _normalize_theme(raw_theme: Optional[str]) -> Optional[str]:
@@ -2474,6 +2493,8 @@ def run_migration(
 ):
     migrations = {
         "add_approved_amount": "ALTER TABLE salary_advance_requests ADD COLUMN IF NOT EXISTS approved_amount NUMERIC(12, 2);",
+        "add_cash_requisition_approved_amount": "ALTER TABLE cash_requisition_requests ADD COLUMN IF NOT EXISTS approved_amount NUMERIC(12, 2);",
+        "add_authority_to_incur_approved_amount": "ALTER TABLE authority_to_incur_requests ADD COLUMN IF NOT EXISTS approved_amount NUMERIC(12, 2);",
         "add_user_employment_type": "ALTER TABLE users ADD COLUMN IF NOT EXISTS employment_type VARCHAR(20) DEFAULT 'employee';",
         "add_user_theme_preference": "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(20);",
     }
@@ -3591,10 +3612,28 @@ def _load_reimbursement_request(db: Session, request_id: int) -> Optional[CashRe
 def _reimbursement_effective_total(req: CashReimbursementRequest) -> Decimal:
     total = Decimal("0")
     for item in req.items or []:
-        if (item.review_status or "").strip().lower() == "rejected":
+        if (item.review_status or "").strip().lower() != "approved":
             continue
         total += Decimal(str(item.amount or 0))
     return total
+
+
+def _reimbursement_refresh_status(req: CashReimbursementRequest) -> None:
+    items = list(req.items or [])
+    if not items:
+        req.total_amount = Decimal("0")
+        req.status = "rejected"
+        return
+
+    pending_items = [item for item in items if (item.review_status or "").strip().lower() == "pending"]
+    req.total_amount = _reimbursement_effective_total(req)
+
+    if pending_items:
+        req.status = "pending_approval"
+    elif req.total_amount > 0:
+        req.status = "pending_reimbursement"
+    else:
+        req.status = "rejected"
 
 
 @app.get("/finance/reimbursements/my", response_model=List[CashReimbursementRequestOut])
@@ -3884,6 +3923,8 @@ def reopen_pending_cash_reimbursement(
         raise HTTPException(status_code=403, detail="Not allowed")
     if req.status != "pending_approval" or req.ceo_decision is not None or req.finance_decision is not None:
         raise HTTPException(status_code=400, detail="Only untouched pending reimbursements can be edited")
+    if any((item.review_status or "").strip().lower() != "pending" for item in req.items or []):
+        raise HTTPException(status_code=400, detail="Only untouched pending reimbursements can be edited")
 
     manual_items = _manual_items_from_reimbursement_request(req)
     period_start = req.period_start
@@ -3932,14 +3973,11 @@ def decide_cash_reimbursement(
         raise HTTPException(status_code=400, detail="Request already finalized")
     if req.status == "pending_reimbursement":
         raise HTTPException(status_code=400, detail="Request is already approved and awaiting reimbursement")
-    req.total_amount = _reimbursement_effective_total(req)
 
     decision = "approved" if payload.approve else "rejected"
     comment = (payload.comment or "").strip()
     if not payload.approve and not comment:
         raise HTTPException(status_code=400, detail="Comment is required when denying")
-    if payload.approve and req.total_amount < 0:
-        raise HTTPException(status_code=400, detail="Reimbursement amount cannot be negative.")
 
     role = (current.role or "").strip().lower()
     now = datetime.utcnow()
@@ -3954,12 +3992,7 @@ def decide_cash_reimbursement(
     else:
         raise HTTPException(status_code=403, detail="Not allowed")
 
-    if req.ceo_decision == "rejected" or req.finance_decision == "rejected":
-        req.status = "rejected"
-    elif req.ceo_decision == "approved":
-        req.status = "pending_reimbursement"
-    else:
-        req.status = "pending_approval"
+    _reimbursement_refresh_status(req)
 
     db.commit()
     db.refresh(req)
@@ -3998,11 +4031,11 @@ def decide_cash_reimbursement_item(
     if not payload.approve and not comment:
         raise HTTPException(status_code=400, detail="Comment is required when rejecting a reimbursement row")
 
-    item.review_status = "pending" if payload.approve else "rejected"
+    item.review_status = "approved" if payload.approve else "rejected"
     item.review_comment = None if payload.approve else comment
     item.reviewed_by_id = current.id
     item.reviewed_at = datetime.utcnow()
-    req.total_amount = _reimbursement_effective_total(req)
+    _reimbursement_refresh_status(req)
     db.commit()
     db.refresh(req)
     _ = req.user
@@ -4155,8 +4188,15 @@ def decide_cash_requisition(
     now = datetime.utcnow()
     decision = "approved" if payload.approve else "rejected"
     comment = (payload.comment or "").strip()
+    approved_amount = payload.approved_amount
     if decision == "rejected" and not comment:
         raise HTTPException(status_code=400, detail="comment is required when rejecting")
+    if decision == "approved":
+        req.approved_amount = _resolve_partial_approved_amount(
+            Decimal(str(req.amount)),
+            approved_amount,
+            req.approved_amount,
+        )
 
     if role == "finance":
         if req.status != "pending_finance_review":
@@ -4336,8 +4376,15 @@ def decide_authority_to_incur_request(
     now = datetime.utcnow()
     decision = "approved" if payload.approve else "rejected"
     comment = (payload.comment or "").strip()
+    approved_amount = payload.approved_amount
     if decision == "rejected" and not comment:
         raise HTTPException(status_code=400, detail="comment is required when rejecting")
+    if decision == "approved":
+        req.approved_amount = _resolve_partial_approved_amount(
+            Decimal(str(req.amount)),
+            approved_amount,
+            req.approved_amount,
+        )
 
     if role == "finance":
         if req.status not in {"pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"}:
@@ -4530,12 +4577,14 @@ def decide_salary_advance_request(
     decision = "approved" if payload.approve else "rejected"
     comment = (payload.comment or "").strip()
     approved_amount = payload.approved_amount
-    if approved_amount is not None and approved_amount < 0:
-        raise HTTPException(status_code=400, detail="approved_amount cannot be negative")
     if decision == "rejected" and not comment:
         raise HTTPException(status_code=400, detail="comment is required when rejecting")
-    if decision == "approved" and approved_amount is not None and approved_amount > float(req.amount):
-        raise HTTPException(status_code=400, detail="approved_amount cannot exceed requested amount")
+    if decision == "approved":
+        req.approved_amount = _resolve_partial_approved_amount(
+            Decimal(str(req.amount)),
+            approved_amount,
+            req.approved_amount,
+        )
 
     if role == "finance":
         if req.status not in {"pending_parallel_approval", "pending_ceo_approval", "pending_finance_review"}:
@@ -4546,8 +4595,6 @@ def decide_salary_advance_request(
         req.finance_comment = comment or None
         req.finance_decided_at = now
         req.finance_decided_by_id = current.id
-        if approved_amount is not None:
-            req.approved_amount = Decimal(str(approved_amount))
         if decision == "rejected":
             req.status = "rejected"
         elif req.ceo_decision == "approved":
@@ -4563,8 +4610,6 @@ def decide_salary_advance_request(
         req.ceo_comment = comment or None
         req.ceo_decided_at = now
         req.ceo_decided_by_id = current.id
-        if approved_amount is not None:
-            req.approved_amount = Decimal(str(approved_amount))
         if decision == "rejected":
             req.status = "rejected"
         else:

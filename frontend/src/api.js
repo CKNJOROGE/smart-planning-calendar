@@ -703,10 +703,10 @@ export function listApprovedCashRequisitions() {
   return request("/finance/requisitions/approved");
 }
 
-export function decideCashRequisition(requestId, approve, comment) {
+export function decideCashRequisition(requestId, approve, comment, approvedAmount = null) {
   return request(`/finance/requisitions/${requestId}/decision`, {
     method: "POST",
-    body: { approve: !!approve, comment: comment || null },
+    body: { approve: !!approve, comment: comment || null, approved_amount: approvedAmount },
   });
 }
 
@@ -733,10 +733,10 @@ export function listApprovedAuthorityToIncurRequests() {
   return request("/finance/authority-to-incur/approved");
 }
 
-export function decideAuthorityToIncurRequest(requestId, approve, comment) {
+export function decideAuthorityToIncurRequest(requestId, approve, comment, approvedAmount = null) {
   return request(`/finance/authority-to-incur/${requestId}/decision`, {
     method: "POST",
-    body: { approve: !!approve, comment: comment || null },
+    body: { approve: !!approve, comment: comment || null, approved_amount: approvedAmount },
   });
 }
 

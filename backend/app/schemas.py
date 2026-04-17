@@ -727,6 +727,7 @@ class CashRequisitionCreateIn(BaseModel):
 class CashRequisitionDecisionIn(BaseModel):
     approve: bool
     comment: Optional[str] = None
+    approved_amount: Optional[float] = None
 
 
 class CashRequisitionDisburseIn(BaseModel):
@@ -737,6 +738,7 @@ class CashRequisitionRequestOut(BaseModel):
     id: int
     user_id: int
     amount: float
+    approved_amount: Optional[float] = None
     purpose: str
     details: Optional[str] = None
     needed_by: Optional[date] = None
@@ -771,6 +773,7 @@ class AuthorityToIncurCreateIn(BaseModel):
 class AuthorityToIncurDecisionIn(BaseModel):
     approve: bool
     comment: Optional[str] = None
+    approved_amount: Optional[float] = None
 
 
 class AuthorityToIncurIncurIn(BaseModel):
@@ -781,6 +784,7 @@ class AuthorityToIncurRequestOut(BaseModel):
     id: int
     user_id: int
     amount: float
+    approved_amount: Optional[float] = None
     title: str
     payee: Optional[str] = None
     details: Optional[str] = None
