@@ -2249,6 +2249,163 @@ textarea{ resize: vertical; min-height: 90px; }
   min-height: 170px;
 }
 
+.dashboard-workplan-form {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboard-workplan-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.dashboard-workplan-field {
+  margin-bottom: 0;
+}
+
+.dashboard-quarter-switch {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboard-quarter-btn {
+  min-width: 0;
+  padding-inline: 10px;
+}
+
+.dashboard-quarter-btn.is-active {
+  border-color: rgba(100, 2, 119, 0.5) !important;
+  box-shadow:
+    0 0 0 2px rgba(100, 2, 119, 0.12),
+    7px 9px 16px rgba(100, 2, 119, 0.16);
+}
+
+.dashboard-workplan-body {
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(247, 250, 255, 0.84));
+  padding: 12px;
+}
+
+.dashboard-workplan-groups {
+  display: grid;
+  gap: 12px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.dashboard-workplan-group {
+  padding: 12px;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(244, 248, 255, 0.76));
+}
+
+.dashboard-workplan-group-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.dashboard-workplan-group-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.dashboard-workplan-group-toggle input {
+  margin-top: 4px;
+}
+
+.dashboard-workplan-group-title {
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.dashboard-workplan-subtasks {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-workplan-subtask {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.72);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.dashboard-workplan-subtask.is-selected {
+  border-color: rgba(100, 2, 119, 0.3);
+  background: rgba(250, 245, 255, 0.9);
+}
+
+.dashboard-workplan-subtask input {
+  margin-top: 3px;
+}
+
+.dashboard-workplan-subtask-copy {
+  min-width: 0;
+}
+
+.dashboard-workplan-subtask-title {
+  font-weight: 700;
+}
+
+.dashboard-workplan-subtask-meta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dashboard-workplan-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 255, 0.82));
+}
+
+.dashboard-workplan-summary-label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.dashboard-workplan-summary-value {
+  font-weight: 900;
+  margin-top: 4px;
+}
+
+.dashboard-workplan-preview {
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.74);
+  padding: 12px 14px;
+}
+
+.dashboard-workplan-preview-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
 .dashboard-layout {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
@@ -3256,6 +3413,54 @@ textarea{ resize: vertical; min-height: 90px; }
   box-shadow:
     6px 6px 12px rgba(2, 6, 23, 0.45),
     -4px -4px 8px rgba(30, 41, 59, 0.52);
+}
+
+[data-theme="dark"] .dashboard-workplan-body,
+[data-theme="dark"] .dashboard-workplan-group,
+[data-theme="dark"] .dashboard-workplan-summary,
+[data-theme="dark"] .dashboard-workplan-preview {
+  border-color: rgba(71, 85, 105, 0.84);
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(17, 24, 39, 0.82));
+}
+
+[data-theme="dark"] .dashboard-workplan-toolbar .field label,
+[data-theme="dark"] .dashboard-workplan-group-title,
+[data-theme="dark"] .dashboard-workplan-summary-value,
+[data-theme="dark"] .dashboard-workplan-preview-text {
+  color: var(--text);
+}
+
+[data-theme="dark"] .dashboard-quarter-btn {
+  color: var(--text);
+}
+
+[data-theme="dark"] .dashboard-quarter-btn:not(.is-active) {
+  border-color: rgba(71, 85, 105, 0.78) !important;
+}
+
+[data-theme="dark"] .dashboard-workplan-field select {
+  background: rgba(15, 23, 42, 0.82) !important;
+  color: var(--text) !important;
+}
+
+[data-theme="dark"] .dashboard-workplan-group-toggle {
+  color: var(--text);
+}
+
+[data-theme="dark"] .dashboard-workplan-subtask {
+  border-color: rgba(71, 85, 105, 0.8);
+  background: rgba(15, 23, 42, 0.74);
+}
+
+[data-theme="dark"] .dashboard-workplan-subtask.is-selected {
+  border-color: rgba(56, 189, 248, 0.42);
+  background: rgba(8, 47, 73, 0.62);
+}
+
+[data-theme="dark"] .dashboard-quarter-btn.is-active {
+  box-shadow:
+    0 0 0 2px rgba(56, 189, 248, 0.16),
+    7px 9px 16px rgba(2, 6, 23, 0.28);
 }
 
 [data-theme="dark"] .dashboard-table thead th {

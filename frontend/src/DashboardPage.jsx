@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { createTodayActivity, listDashboardOverview, listTaskClients, listTodoHistory, me, updateTodayActivity } from "./api";
+import { createTodayActivity, listDashboardOverview, listClientTasks, listTaskClients, listTaskYears, listTodoHistory, me, updateTodayActivity } from "./api";
 import { useToast } from "./ToastProvider";
 import LoadingState from "./LoadingState";
 
@@ -96,17 +96,47 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function currentQuarterFromDate(value = new Date()) {
+  return Math.floor(value.getMonth() / 3) + 1;
+}
+
+function groupClientTasks(items) {
+  const groups = new Map();
+  for (const item of items || []) {
+    const key = item.task_group_id || `legacy_${item.id}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        task: item.task || "",
+        rows: [],
+      });
+    }
+    groups.get(key).task = item.task || groups.get(key).task;
+    groups.get(key).rows.push(item);
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    rows: [...group.rows].sort((a, b) => Number(a.id) - Number(b.id)),
+  }));
+}
+
 export default function DashboardPage() {
   const { showToast } = useToast();
   const [currentUser, setCurrentUser] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [newActivity, setNewActivity] = useState("");
   const [togglingIds, setTogglingIds] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyRows, setHistoryRows] = useState([]);
+  const [taskYears, setTaskYears] = useState([]);
   const [clients, setClients] = useState([]);
-  const [selectedClientId, setSelectedClientId] = useState("");
+  const [selectedWorkplanYear, setSelectedWorkplanYear] = useState(new Date().getFullYear());
+  const [selectedWorkplanClientId, setSelectedWorkplanClientId] = useState("");
+  const [selectedWorkplanQuarter, setSelectedWorkplanQuarter] = useState(currentQuarterFromDate());
+  const [workplanRows, setWorkplanRows] = useState([]);
+  const [selectedWorkplanRowIds, setSelectedWorkplanRowIds] = useState([]);
+  const [workplanLoading, setWorkplanLoading] = useState(false);
   const [historyFilters, setHistoryFilters] = useState({ user_query: "", start_date: "", end_date: "", client_id: "" });
   const [historyDraft, setHistoryDraft] = useState({ user_query: "", start_date: "", end_date: "", client_id: "" });
   const [overview, setOverview] = useState({
@@ -131,6 +161,43 @@ export default function DashboardPage() {
     !!overview.reimbursement_can_submit && !!reimbursementPeriodEnd && reimbursementPeriodEnd >= todayKey;
   const reimbursementIsLate =
     !!overview.reimbursement_can_submit && !overview.reimbursement_submit_due_today && !reimbursementIsOpenCurrentPeriod;
+
+  const selectedWorkplanClient = useMemo(
+    () => clients.find((c) => c.id === Number(selectedWorkplanClientId)) || null,
+    [clients, selectedWorkplanClientId]
+  );
+
+  const groupedWorkplanTasks = useMemo(
+    () => groupClientTasks(workplanRows).map((group) => {
+      const selectedRowIds = new Set(selectedWorkplanRowIds.map((id) => Number(id)));
+      const selectedRows = group.rows.filter((row) => selectedRowIds.has(Number(row.id)));
+      return {
+        ...group,
+        selectedRows,
+        selectedCount: selectedRows.length,
+      };
+    }),
+    [workplanRows, selectedWorkplanRowIds]
+  );
+
+  const selectedWorkplanRows = useMemo(
+    () => groupedWorkplanTasks.flatMap((group) => group.selectedRows),
+    [groupedWorkplanTasks]
+  );
+
+  const selectedWorkplanText = useMemo(() => {
+    if (!selectedWorkplanClient || !selectedWorkplanRows.length) return "";
+    const lines = [`${selectedWorkplanClient.name} - ${selectedWorkplanYear} Q${selectedWorkplanQuarter}`];
+    groupedWorkplanTasks.forEach((group) => {
+      if (!group.selectedRows.length) return;
+      lines.push(`Task: ${group.task}`);
+      group.selectedRows.forEach((row) => {
+        const datePart = row.completion_date ? ` (${formatDate(row.completion_date)})` : "";
+        lines.push(`- ${row.subtask}${datePart}`);
+      });
+    });
+    return lines.join("\n");
+  }, [groupedWorkplanTasks, selectedWorkplanClient, selectedWorkplanQuarter, selectedWorkplanRows.length, selectedWorkplanYear]);
 
   const groupedTodayPosts = useMemo(
     () => groupActivitiesByUserDay(overview.todays_activities)
@@ -300,6 +367,23 @@ export default function DashboardPage() {
       try {
         const u = await me();
         setCurrentUser(u);
+        const [years, rows] = await Promise.all([
+          listTaskYears(),
+          listTaskClients(),
+        ]);
+        const normalizedYears = Array.isArray(years) && years.length ? years.map((y) => Number(y)).filter((y) => Number.isFinite(y)) : [new Date().getFullYear()];
+        if (!normalizedYears.includes(new Date().getFullYear())) {
+          normalizedYears.unshift(new Date().getFullYear());
+        }
+        setTaskYears(Array.from(new Set(normalizedYears)).sort((a, b) => b - a));
+        setClients(rows || []);
+        if ((rows || []).length) {
+          setSelectedWorkplanClientId((prev) => {
+            if (prev && (rows || []).some((c) => Number(c.id) === Number(prev))) return prev;
+            return String(rows[0].id);
+          });
+        }
+        setSelectedWorkplanYear((prev) => (normalizedYears.includes(Number(prev)) ? Number(prev) : normalizedYears[0]));
       } catch (e) {
         setErr(String(e.message || e));
       }
@@ -311,32 +395,88 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (!selectedWorkplanYear || !selectedWorkplanClientId || !selectedWorkplanQuarter) {
+      setWorkplanRows([]);
+      setSelectedWorkplanRowIds([]);
+      return;
+    }
+    let cancelled = false;
     (async () => {
+      setWorkplanLoading(true);
       try {
-        const rows = await listTaskClients();
-        setClients(rows || []);
-      } catch {
-        setClients([]);
+        const rows = await listClientTasks({
+          year: Number(selectedWorkplanYear),
+          clientId: Number(selectedWorkplanClientId),
+          quarter: Number(selectedWorkplanQuarter),
+        });
+        if (!cancelled) {
+          setWorkplanRows(rows || []);
+          setSelectedWorkplanRowIds([]);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setWorkplanRows([]);
+          setSelectedWorkplanRowIds([]);
+          setErr(String(e.message || e));
+        }
+      } finally {
+        if (!cancelled) setWorkplanLoading(false);
       }
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedWorkplanYear, selectedWorkplanClientId, selectedWorkplanQuarter]);
 
   useEffect(() => {
     loadHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role, historyFilters.user_query, historyFilters.start_date, historyFilters.end_date, historyFilters.client_id]);
 
-  async function handlePostActivity(e) {
+  function toggleWorkplanRow(rowId, checked) {
+    const id = Number(rowId);
+    setSelectedWorkplanRowIds((prev) => {
+      const existing = new Set(prev.map((value) => Number(value)));
+      if (checked) existing.add(id);
+      else existing.delete(id);
+      return Array.from(existing);
+    });
+  }
+
+  function toggleWorkplanGroup(group, checked) {
+    const ids = (group?.rows || []).map((row) => Number(row.id));
+    setSelectedWorkplanRowIds((prev) => {
+      const existing = new Set(prev.map((value) => Number(value)));
+      ids.forEach((id) => {
+        if (checked) existing.add(id);
+        else existing.delete(id);
+      });
+      return Array.from(existing);
+    });
+  }
+
+  function clearWorkplanSelection() {
+    setSelectedWorkplanRowIds([]);
+  }
+
+  async function handlePostWorkplanActivity(e) {
     e.preventDefault();
-    const text = (newActivity || "").trim();
+    if (!selectedWorkplanClientId) {
+      setErr("Please choose a client.");
+      return;
+    }
+    if (!selectedWorkplanRows.length) {
+      setErr("Please select at least one task or subtask.");
+      return;
+    }
+    const text = selectedWorkplanText.trim();
     if (!text) {
-      setErr("Please enter at least one to-do item.");
+      setErr("Please select at least one task or subtask.");
       return;
     }
     try {
-      await createTodayActivity(text, selectedClientId ? Number(selectedClientId) : null);
-      setNewActivity("");
-      setSelectedClientId("");
+      await createTodayActivity(text, Number(selectedWorkplanClientId));
+      clearWorkplanSelection();
       await loadOverview();
       showToast("To-do list posted", "success");
     } catch (e2) {
@@ -462,27 +602,143 @@ export default function DashboardPage() {
         <div className="dashboard-panel-head">
           <div className="dashboard-panel-title">Post Today&apos;s To-Do List</div>
         </div>
-        <form onSubmit={handlePostActivity}>
-          <div className="field">
-            <label>Client</label>
-            <select value={selectedClientId} onChange={(e) => setSelectedClientId(e.target.value)}>
-              <option value="">No client</option>
-              {clients.map((c) => (
-                <option key={c.id} value={String(c.id)}>{c.name}</option>
-              ))}
-            </select>
+        <form onSubmit={handlePostWorkplanActivity} className="dashboard-workplan-form">
+          <div className="dashboard-workplan-toolbar">
+            <div className="field dashboard-workplan-field">
+              <label>Year</label>
+              <select
+                value={selectedWorkplanYear}
+                onChange={(e) => {
+                  setSelectedWorkplanYear(Number(e.target.value));
+                  setSelectedWorkplanRowIds([]);
+                }}
+              >
+                {taskYears.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field dashboard-workplan-field">
+              <label>Client</label>
+              <select
+                value={selectedWorkplanClientId}
+                onChange={(e) => {
+                  setSelectedWorkplanClientId(e.target.value);
+                  setSelectedWorkplanRowIds([]);
+                }}
+              >
+                <option value="">Select client</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={String(c.id)}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field dashboard-workplan-field">
+              <label>Quarter</label>
+              <div className="dashboard-quarter-switch" role="group" aria-label="Quarter selector">
+                {[
+                  { value: 1, label: "Q1" },
+                  { value: 2, label: "Q2" },
+                  { value: 3, label: "Q3" },
+                  { value: 4, label: "Q4" },
+                ].map((quarter) => (
+                  <button
+                    key={quarter.value}
+                    type="button"
+                    className={`btn dashboard-quarter-btn${Number(selectedWorkplanQuarter) === quarter.value ? " is-active" : ""}`}
+                    onClick={() => {
+                      setSelectedWorkplanQuarter(quarter.value);
+                      setSelectedWorkplanRowIds([]);
+                    }}
+                  >
+                    {quarter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="field">
-            <textarea
-              value={newActivity}
-              onChange={(e) => setNewActivity(e.target.value)}
-              placeholder="Write one to-do item per line..."
-              maxLength={1000}
-              className="dashboard-activity-input"
-            />
-            <div className="helper">{newActivity.length}/1000</div>
+
+          <div className="dashboard-workplan-body">
+            {!selectedWorkplanClientId ? (
+              <div className="muted">Choose a client to load their tasks and subtasks.</div>
+            ) : workplanLoading ? (
+              <LoadingState label="Loading client tasks..." compact />
+            ) : !groupedWorkplanTasks.length ? (
+              <div className="muted">No tasks found for this client, year and quarter yet.</div>
+            ) : (
+              <div className="dashboard-workplan-groups">
+                {groupedWorkplanTasks.map((group) => {
+                  const allSelected = group.rows.length > 0 && group.selectedCount === group.rows.length;
+                  const someSelected = group.selectedCount > 0 && group.selectedCount < group.rows.length;
+                  return (
+                    <section key={group.key} className="dashboard-workplan-group card">
+                      <div className="dashboard-workplan-group-head">
+                        <label className="dashboard-workplan-group-toggle">
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            ref={(input) => {
+                              if (input) input.indeterminate = someSelected;
+                            }}
+                            onChange={(e) => toggleWorkplanGroup(group, e.target.checked)}
+                          />
+                          <span className="dashboard-workplan-group-title">{group.task || "Untitled task"}</span>
+                        </label>
+                        <span className="pill">{group.rows.length} subtask{group.rows.length === 1 ? "" : "s"}</span>
+                      </div>
+                      <div className="dashboard-workplan-subtasks">
+                        {group.rows.map((row) => {
+                          const checked = selectedWorkplanRowIds.includes(Number(row.id));
+                          return (
+                            <label key={row.id} className={`dashboard-workplan-subtask${checked ? " is-selected" : ""}`}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => toggleWorkplanRow(row.id, e.target.checked)}
+                              />
+                              <div className="dashboard-workplan-subtask-copy">
+                                <div className="dashboard-workplan-subtask-title">{row.subtask}</div>
+                                <div className="dashboard-workplan-subtask-meta">
+                                  {row.completion_date ? `Due ${formatDate(row.completion_date)}` : "No due date"}
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          <button className="btn btn-primary" type="submit">Post To-Do List</button>
+
+          <div className="dashboard-workplan-summary">
+            <div>
+              <div className="dashboard-workplan-summary-label">Selected for today</div>
+              <div className="dashboard-workplan-summary-value">
+                {selectedWorkplanClient ? `${selectedWorkplanClient.name} - ${selectedWorkplanYear} Q${selectedWorkplanQuarter}` : "Nothing selected"}
+              </div>
+              <div className="muted">
+                {selectedWorkplanRows.length ? `${selectedWorkplanRows.length} subtask${selectedWorkplanRows.length === 1 ? "" : "s"} selected` : "Pick at least one task or subtask."}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button type="button" className="btn" onClick={clearWorkplanSelection} disabled={!selectedWorkplanRows.length}>
+                Clear
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={!selectedWorkplanRows.length || workplanLoading}>
+                Post Today's To-Do List
+              </button>
+            </div>
+          </div>
+
+          {selectedWorkplanRows.length ? (
+            <div className="dashboard-workplan-preview">
+              <div className="dashboard-workplan-summary-label" style={{ marginBottom: 8 }}>Preview</div>
+              <pre className="dashboard-workplan-preview-text">{selectedWorkplanText}</pre>
+            </div>
+          ) : null}
         </form>
       </div>
 
