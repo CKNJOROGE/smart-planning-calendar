@@ -523,6 +523,10 @@ export function updateClientTask(taskId, payload) {
   return request(`/task-manager/tasks/${taskId}`, { method: "PATCH", body: payload });
 }
 
+export function appendClientTaskSubtask(taskId, payload) {
+  return request(`/task-manager/tasks/${taskId}/subtasks`, { method: "POST", body: payload });
+}
+
 export async function deleteClientTask(taskId) {
   const token = getToken();
   const res = await fetch(`${API_BASE}/task-manager/tasks/${taskId}`, {

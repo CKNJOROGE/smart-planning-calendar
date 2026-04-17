@@ -82,6 +82,7 @@ from .schemas import (
     ClientAccountUpdate,
     ClientAccountOut,
     ClientTaskCreate,
+    ClientTaskSubtaskIn,
     ClientTaskUpdate,
     ClientTaskOut,
     ClientTaskReportSubtaskOut,
@@ -3231,6 +3232,42 @@ def update_client_task(
     db.refresh(t)
     _ = t.user
     return t
+
+
+@app.post("/task-manager/tasks/{task_id}/subtasks", response_model=ClientTaskOut)
+def add_client_task_subtask(
+    task_id: int,
+    payload: ClientTaskSubtaskIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    t = db.query(ClientTask).filter(ClientTask.id == task_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if current.role not in {"admin", "ceo", "supervisor"} and t.user_id != current.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    subtask_text = (payload.subtask or "").strip()
+    if not subtask_text:
+        raise HTTPException(status_code=400, detail="subtask cannot be empty")
+
+    created = ClientTask(
+        client_id=t.client_id,
+        user_id=t.user_id,
+        task_group_id=t.task_group_id,
+        year=t.year,
+        quarter=t.quarter,
+        task=t.task,
+        subtask=subtask_text,
+        completion_date=payload.completion_date,
+        completed=False,
+        completed_at=None,
+    )
+    db.add(created)
+    db.commit()
+    db.refresh(created)
+    _ = created.user
+    return created
 
 
 @app.delete("/task-manager/tasks/{task_id}")

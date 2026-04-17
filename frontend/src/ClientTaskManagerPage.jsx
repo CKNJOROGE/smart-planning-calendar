@@ -15,6 +15,7 @@ import {
   listClientTasks,
   createClientTask,
   updateClientTask,
+  appendClientTaskSubtask,
   deleteClientTask,
   listProbationRecords,
   createProbationRecord,
@@ -526,6 +527,7 @@ export default function ClientTaskManagerPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [subtaskRows, setSubtaskRows] = useState([emptySubtask()]);
   const [editingRows, setEditingRows] = useState({});
+  const [addingSubtask, setAddingSubtask] = useState(null);
   const [probationRecords, setProbationRecords] = useState([]);
   const [probationDraft, setProbationDraft] = useState({
     employee_name: "",
@@ -682,6 +684,10 @@ export default function ClientTaskManagerPage() {
   useEffect(() => {
     if (!isEditMode) setEditingRows({});
   }, [isEditMode]);
+
+  useEffect(() => {
+    setAddingSubtask(null);
+  }, [isEditMode, selectedYear, selectedClientId, selectedQuarter]);
 
   async function refreshTasks() {
     if (!selectedYear || !selectedClientId || !selectedQuarter) return;
@@ -970,6 +976,49 @@ export default function ClientTaskManagerPage() {
       ...prev,
       [rowId]: { ...(prev[rowId] || {}), ...patch },
     }));
+  }
+
+  function startAddSubtask(group) {
+    if (!isEditMode || !group?.rows?.length) return;
+    const anchorRow = group.rows[0];
+    setAddingSubtask({
+      taskId: anchorRow.id,
+      groupKey: group.key,
+      subtask: "",
+      completion_date: "",
+    });
+  }
+
+  function cancelAddSubtask() {
+    setAddingSubtask(null);
+  }
+
+  function patchAddSubtask(patch) {
+    setAddingSubtask((prev) => (prev ? { ...prev, ...patch } : prev));
+  }
+
+  async function saveAddedSubtask(group) {
+    if (!isEditMode || !group?.rows?.length || !addingSubtask) return;
+    const anchorRow = group.rows[0];
+    if (Number(addingSubtask.taskId) !== Number(anchorRow.id)) return;
+    const subtaskText = (addingSubtask.subtask || "").trim();
+    if (!subtaskText) {
+      setErr("Subtask cannot be empty.");
+      return;
+    }
+    try {
+      await appendClientTaskSubtask(anchorRow.id, {
+        subtask: subtaskText,
+        completion_date: addingSubtask.completion_date || null,
+      });
+      await refreshTasks();
+      setAddingSubtask(null);
+      showToast("Subtask added", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    }
   }
 
   async function saveEditRow(row) {
@@ -1687,91 +1736,131 @@ export default function ClientTaskManagerPage() {
               </tr>
             </thead>
             <tbody>
-              {groupedTasks.map((group) =>
-                group.rows.map((row, rowIdx) => {
-                  const draft = editingRows[row.id];
-                  const isEditing = isEditMode && !!draft;
-                  const canEditThisRow = canEditRow(current, row);
-                  return (
-                    <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                      {rowIdx === 0 && (
-                        <td style={{ padding: 10, verticalAlign: "top" }} rowSpan={group.rows.length}>
-                          {group.owner}
-                        </td>
-                      )}
-                      {rowIdx === 0 && (
-                        <td style={{ padding: 10, verticalAlign: "top" }} rowSpan={group.rows.length}>
+              {groupedTasks.map((group) => (
+                <React.Fragment key={group.key}>
+                  {group.rows.map((row, rowIdx) => {
+                    const draft = editingRows[row.id];
+                    const isEditing = isEditMode && !!draft;
+                    const canEditThisRow = canEditRow(current, row);
+                    const showAddButton = isEditMode && rowIdx === 0 && !isEditing;
+                    return (
+                      <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                        {rowIdx === 0 && (
+                          <td style={{ padding: 10, verticalAlign: "top" }} rowSpan={group.rows.length}>
+                            {group.owner}
+                          </td>
+                        )}
+                        {rowIdx === 0 && (
+                          <td style={{ padding: 10, verticalAlign: "top" }} rowSpan={group.rows.length}>
+                            {isEditing ? (
+                              <input
+                                value={draft.task}
+                                onChange={(e) => patchEditRow(row.id, { task: e.target.value })}
+                                style={{ width: "100%" }}
+                              />
+                            ) : (
+                              <span style={{ fontWeight: 700 }}>{row.task}</span>
+                            )}
+                          </td>
+                        )}
+                        <td style={{ padding: 10 }}>
                           {isEditing ? (
                             <input
-                              value={draft.task}
-                              onChange={(e) => patchEditRow(row.id, { task: e.target.value })}
+                              value={draft.subtask}
+                              onChange={(e) => patchEditRow(row.id, { subtask: e.target.value })}
                               style={{ width: "100%" }}
                             />
                           ) : (
-                            <span style={{ fontWeight: 700 }}>{row.task}</span>
+                            row.subtask
                           )}
                         </td>
-                      )}
-                      <td style={{ padding: 10 }}>
-                        {isEditing ? (
-                          <input
-                            value={draft.subtask}
-                            onChange={(e) => patchEditRow(row.id, { subtask: e.target.value })}
-                            style={{ width: "100%" }}
-                          />
-                        ) : (
-                          row.subtask
-                        )}
-                      </td>
-                      <td style={{ padding: 10 }}>
-                        {isEditing ? (
-                          <input
-                            type="date"
-                            value={draft.completion_date}
-                            onChange={(e) => patchEditRow(row.id, { completion_date: e.target.value })}
-                          />
-                        ) : (
-                          row.completion_date || "-"
-                        )}
-                      </td>
-                      <td style={{ padding: 10 }}>
-                        <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
-                          <input
-                            type="checkbox"
-                            checked={!!row.completed}
-                            onChange={() => handleToggleCompleted(row)}
-                            disabled={!isEditMode || !canEditThisRow}
-                          />
-                          {row.completed ? "Done" : "Pending"}
-                        </label>
-                      </td>
-                      {isEditMode && (
                         <td style={{ padding: 10 }}>
                           {isEditing ? (
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <button className="btn btn-primary" type="button" onClick={() => saveEditRow(row)}>
-                                Save
-                              </button>
-                              <button className="btn" type="button" onClick={() => cancelEditRow(row.id)}>
-                                Cancel
-                              </button>
-                            </div>
+                            <input
+                              type="date"
+                              value={draft.completion_date}
+                              onChange={(e) => patchEditRow(row.id, { completion_date: e.target.value })}
+                            />
                           ) : (
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <button className="btn" type="button" onClick={() => startEditRow(row)} disabled={!canEditThisRow}>
-                                Edit
-                              </button>
-                              <button className="btn btn-danger" type="button" onClick={() => handleDeleteSubtask(row)} disabled={!canEditThisRow}>
-                                Delete
-                              </button>
-                            </div>
+                            row.completion_date || "-"
                           )}
                         </td>
-                      )}
+                        <td style={{ padding: 10 }}>
+                          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
+                            <input
+                              type="checkbox"
+                              checked={!!row.completed}
+                              onChange={() => handleToggleCompleted(row)}
+                              disabled={!isEditMode || !canEditThisRow}
+                            />
+                            {row.completed ? "Done" : "Pending"}
+                          </label>
+                        </td>
+                        {isEditMode && (
+                          <td style={{ padding: 10 }}>
+                            {isEditing ? (
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button className="btn btn-primary" type="button" onClick={() => saveEditRow(row)}>
+                                  Save
+                                </button>
+                                <button className="btn" type="button" onClick={() => cancelEditRow(row.id)}>
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                                <button className="btn" type="button" onClick={() => startEditRow(row)} disabled={!canEditThisRow}>
+                                  Edit
+                                </button>
+                                <button className="btn btn-danger" type="button" onClick={() => handleDeleteSubtask(row)} disabled={!canEditThisRow}>
+                                  Delete
+                                </button>
+                                {showAddButton && (
+                                  <button className="btn" type="button" onClick={() => startAddSubtask(group)} disabled={!canEditThisRow}>
+                                    + Add subtask
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {isEditMode && addingSubtask?.groupKey === group.key && (
+                    <tr key={`${group.key}-add`} style={{ borderTop: "1px solid #eef2f7", background: "#fbfdff" }}>
+                      <td colSpan={6} style={{ padding: 12 }}>
+                        <div className="row" style={{ marginBottom: 0, alignItems: "end" }}>
+                          <div className="field" style={{ flex: "1 1 340px", marginBottom: 0 }}>
+                            <label>New subtask</label>
+                            <input
+                              value={addingSubtask.subtask}
+                              onChange={(e) => patchAddSubtask({ subtask: e.target.value })}
+                              placeholder="Describe the additional subtask"
+                            />
+                          </div>
+                          <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
+                            <label>Completion date</label>
+                            <input
+                              type="date"
+                              value={addingSubtask.completion_date}
+                              onChange={(e) => patchAddSubtask({ completion_date: e.target.value })}
+                            />
+                          </div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            <button type="button" className="btn btn-primary" onClick={() => saveAddedSubtask(group)}>
+                              Save
+                            </button>
+                            <button type="button" className="btn" onClick={cancelAddSubtask}>
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </td>
                     </tr>
-                  );
-                })
-              )}
+                  )}
+                </React.Fragment>
+              ))}
               {!groupedTasks.length && (
                 <tr>
                   <td colSpan={isEditMode ? 6 : 5} style={{ padding: 14 }} className="muted">
