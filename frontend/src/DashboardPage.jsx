@@ -880,7 +880,7 @@ export default function DashboardPage() {
                                       <div className="muted" style={{ marginTop: 2, fontSize: 12 }}>Client: {item.client_name}</div>
                                     ) : null}
                                   </div>
-                                  {(item.user_id === currentUser?.id || ["admin", "ceo"].includes(currentUser?.role)) && !item.completed ? (
+                                  {item.source_client_task_id != null && (item.user_id === currentUser?.id || ["admin", "ceo"].includes(currentUser?.role)) && !item.completed ? (
                                     <button
                                       type="button"
                                       className="btn dashboard-carryover-continue-btn"

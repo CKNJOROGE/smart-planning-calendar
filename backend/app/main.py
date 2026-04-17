@@ -6021,6 +6021,8 @@ def continue_todays_activity(
         raise HTTPException(status_code=400, detail="Completed activities do not need continuation")
     if source.continued_to_activity_id is not None:
         raise HTTPException(status_code=400, detail="This activity has already been continued")
+    if source.source_client_task_id is None:
+        raise HTTPException(status_code=400, detail="Only task-manager based to-do items can be continued")
 
     if source.activity_date >= date.today():
         raise HTTPException(status_code=400, detail="Only carried over activities can be continued")
