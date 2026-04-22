@@ -28,27 +28,27 @@
   --app-bg-mid:#f5f3ff;
   --app-bg-end:#ecfeff;
   --dashboard-hero-orb:rgba(244, 114, 182, 0.2);
-  --dashboard-hero-start:rgba(255, 255, 255, 0.9);
-  --dashboard-hero-end:rgba(240, 237, 255, 0.88);
-  --dashboard-card-start:rgba(255, 255, 255, 0.84);
-  --dashboard-card-end:rgba(243, 247, 255, 0.8);
+  --dashboard-hero-start:rgba(255, 255, 255, 0.78);
+  --dashboard-hero-end:rgba(240, 237, 255, 0.7);
+  --dashboard-card-start:rgba(255, 255, 255, 0.66);
+  --dashboard-card-end:rgba(243, 247, 255, 0.5);
   --dashboard-date-color:#7c3aed;
   --page-shell-orb-1:rgba(244, 114, 182, 0.18);
   --page-shell-orb-2:rgba(125, 211, 252, 0.18);
   --page-shell-start:#fff7ff;
   --page-shell-mid:#f5f3ff;
   --page-shell-end:#ecfeff;
-  --page-card-border:rgba(255, 255, 255, 0.7);
-  --page-card-start:rgba(255, 255, 255, 0.78);
-  --page-card-end:rgba(243, 247, 255, 0.58);
-  --soft-input-bg:rgba(255, 255, 255, 0.78);
+  --page-card-border:rgba(255, 255, 255, 0.58);
+  --page-card-start:rgba(255, 255, 255, 0.62);
+  --page-card-end:rgba(243, 247, 255, 0.38);
+  --soft-input-bg:rgba(255, 255, 255, 0.68);
   --soft-input-border:rgba(226, 232, 240, 0.88);
-  --soft-btn-start:#ffffff;
-  --soft-btn-end:#eef7ff;
-  --soft-btn-border:rgba(255, 255, 255, 0.85);
-  --table-header-bg:rgba(255, 255, 255, 0.84);
-  --table-row-border:rgba(226, 232, 240, 0.9);
-  --section-surface-bg:rgba(255, 255, 255, 0.8);
+  --soft-btn-start:rgba(255, 255, 255, 0.76);
+  --soft-btn-end:rgba(238, 247, 255, 0.62);
+  --soft-btn-border:rgba(255, 255, 255, 0.68);
+  --table-header-bg:rgba(255, 255, 255, 0.64);
+  --table-row-border:rgba(226, 232, 240, 0.72);
+  --section-surface-bg:rgba(255, 255, 255, 0.62);
   --section-surface-border:rgba(229, 231, 235, 0.88);
   --error-bg:#fef2f2;
   --error-border:#fecaca;
@@ -69,13 +69,13 @@ body {
 
 .topbar{
   display:flex; align-items:flex-start; justify-content:space-between;
-  gap:12px; padding:16px 18px; background:rgba(255, 255, 255, 0.6); border-bottom:1px solid rgba(255, 255, 255, 0.5);
+  gap:12px; padding:16px 18px; background:rgba(255, 255, 255, 0.44); border-bottom:1px solid rgba(255, 255, 255, 0.36);
   backdrop-filter: blur(16px);
 }
 .brand-title{ margin:0; font-size:20px; font-weight:800; letter-spacing:.2px; }
 .brand-sub{ margin-top:4px; color:var(--muted); font-size:13px; }
 .btn{
-  border:1px solid rgba(255, 255, 255, 0.65); background:rgba(255,255,255,0.62);
+  border:1px solid rgba(255, 255, 255, 0.54); background:rgba(255,255,255,0.48);
   padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:600;
   backdrop-filter: blur(10px);
 }
@@ -91,7 +91,7 @@ body {
   padding:14px 18px;
 }
 .card{
-  background:rgba(255,255,255,0.58); border:1px solid rgba(255,255,255,0.72); border-radius:14px;
+  background:rgba(255,255,255,0.42); border:1px solid rgba(255,255,255,0.52); border-radius:14px;
   padding:12px; box-shadow: 0 10px 30px rgba(15,23,42,0.08); backdrop-filter: blur(16px);
 }
 .row{ display:flex; gap:10px; flex-wrap:wrap; }
@@ -99,7 +99,7 @@ body {
 label{ font-size:12px; color:var(--muted); font-weight:700; }
 input, select, textarea{
   border:1px solid rgba(226, 232, 240, 0.9); border-radius:10px;
-  padding:10px 10px; font-size:14px; outline:none; background:rgba(255,255,255,0.76); color:var(--text);
+  padding:10px 10px; font-size:14px; outline:none; background:rgba(255,255,255,0.62); color:var(--text);
   backdrop-filter: blur(8px);
 }
 input:focus, select:focus, textarea:focus{
@@ -115,7 +115,7 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 .pill{
   display:inline-flex; align-items:center; gap:8px;
-  border:1px solid rgba(255,255,255,0.66); background:rgba(255,255,255,0.64); padding:6px 10px; border-radius:999px;
+  border:1px solid rgba(255,255,255,0.5); background:rgba(255,255,255,0.46); padding:6px 10px; border-radius:999px;
   font-size:12px; color:var(--text);
   backdrop-filter: blur(10px);
 }
@@ -163,9 +163,9 @@ textarea{ resize: vertical; min-height: 90px; }
   align-items: center;
   justify-content: center;
   padding: 14px;
-  background: rgba(255, 255, 255, 0.52);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 1;
 }
 
@@ -176,7 +176,7 @@ textarea{ resize: vertical; min-height: 90px; }
   padding: 14px 16px;
   border: 1px solid rgba(100, 1, 119, 0.12);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.72);
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
 }
 
@@ -196,8 +196,26 @@ textarea{ resize: vertical; min-height: 90px; }
 .report-preview-modal-header {
   position: sticky;
   top: 0;
-  background: var(--card);
+  background: rgba(255, 255, 255, 0.7);
   z-index: 1;
+}
+
+[data-theme="dark"] .topbar {
+  background: rgba(15, 23, 42, 0.72);
+  border-bottom-color: rgba(71, 85, 105, 0.54);
+}
+
+[data-theme="dark"] .report-card-overlay {
+  background: rgba(2, 6, 23, 0.34);
+}
+
+[data-theme="dark"] .report-card-overlay-panel {
+  background: rgba(15, 23, 42, 0.78);
+  border-color: rgba(71, 85, 105, 0.48);
+}
+
+[data-theme="dark"] .report-preview-modal-header {
+  background: rgba(15, 23, 42, 0.82);
 }
 
 .report-preview-scroll {
@@ -1524,144 +1542,13 @@ textarea{ resize: vertical; min-height: 90px; }
     inset 1px 1px 0 rgba(255, 255, 255, 0.46);
 }
 
-.profile-page .card {
-  border: 1px solid rgba(255, 255, 255, 0.66);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.5));
-}
+/* Let the shared glass system drive these surfaces instead of per-page shells. */
 
-/* Library / Client Task / Users / Approvals neumorphism (scoped) */
-.library-page,
-.client-task-page,
-.users-page,
-.approvals-page {
-  position: relative;
-  overflow: hidden;
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 10% 12%, rgba(248, 218, 253, 0.52), rgba(248, 218, 253, 0) 35%),
-    radial-gradient(circle at 92% 88%, rgba(187, 212, 14, 0.22), rgba(187, 212, 14, 0) 32%),
-    linear-gradient(145deg, #fdf2ff 0%, #f8dafd 48%, #f7e8fb 100%);
-}
-
-.library-page .card,
-.client-task-page .card,
-.users-page .card,
-.approvals-page .card {
-  border: 1px solid rgba(255, 255, 255, 0.68);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.54));
-  backdrop-filter: blur(10px);
-  box-shadow:
-    10px 10px 24px rgba(148, 163, 184, 0.18),
-    -8px -8px 18px rgba(255, 255, 255, 0.86),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.library-page input,
-.library-page select,
-.library-page textarea,
-.client-task-page input,
-.client-task-page select,
-.client-task-page textarea,
-.users-page input,
-.users-page select,
-.users-page textarea,
-.approvals-page input,
-.approvals-page select,
-.approvals-page textarea {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(226, 232, 240, 0.92);
-  box-shadow:
-    inset 3px 3px 6px rgba(148, 163, 184, 0.12),
-    inset -3px -3px 6px rgba(255, 255, 255, 0.82);
-}
-
-.library-page .btn:not(.btn-primary):not(.btn-danger),
-.client-task-page .btn:not(.btn-primary):not(.btn-danger),
-.users-page .btn:not(.btn-primary):not(.btn-danger),
-.approvals-page .btn:not(.btn-primary):not(.btn-danger) {
-  background: #f8fbff;
-  box-shadow:
-    4px 4px 9px rgba(148, 163, 184, 0.2),
-    -3px -3px 6px rgba(255, 255, 255, 0.86);
-}
-
-.library-page .btn-primary,
-.client-task-page .btn-primary,
-.users-page .btn-primary,
-.approvals-page .btn-primary {
-  background: linear-gradient(135deg, #640277, #4c025b);
-  box-shadow:
-    6px 10px 18px rgba(100, 2, 119, 0.34),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.45);
-}
-
-.library-page .btn-danger,
-.client-task-page .btn-danger,
-.users-page .btn-danger,
-.approvals-page .btn-danger {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  box-shadow:
-    6px 10px 18px rgba(185, 28, 28, 0.32),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.4);
-}
-
-/* Payroll neumorphism (scoped) */
 .payroll-page {
   position: relative;
   overflow: hidden;
   border-radius: 18px;
-  background:
-    radial-gradient(circle at 12% 14%, rgba(248, 218, 253, 0.58), rgba(248, 218, 253, 0) 34%),
-    radial-gradient(circle at 92% 18%, rgba(187, 212, 14, 0.18), rgba(187, 212, 14, 0) 28%),
-    radial-gradient(circle at 88% 86%, rgba(125, 211, 252, 0.18), rgba(125, 211, 252, 0) 26%),
-    linear-gradient(145deg, #fdf2ff 0%, #f8dafd 46%, #eef4ff 100%);
-}
-
-.payroll-page .card {
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(244, 247, 253, 0.62));
-  backdrop-filter: blur(10px);
-  box-shadow:
-    10px 10px 24px rgba(148, 163, 184, 0.18),
-    -8px -8px 18px rgba(255, 255, 255, 0.88),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.72);
-}
-
-.payroll-page input,
-.payroll-page select,
-.payroll-page textarea {
-  background: rgba(255, 255, 255, 0.84);
-  border: 1px solid rgba(226, 232, 240, 0.92);
-  box-shadow:
-    inset 3px 3px 6px rgba(148, 163, 184, 0.12),
-    inset -3px -3px 6px rgba(255, 255, 255, 0.82);
-}
-
-.payroll-page .btn:not(.btn-primary):not(.btn-danger) {
-  background: linear-gradient(145deg, #f8fbff, #eef3fb);
-  box-shadow:
-    5px 5px 11px rgba(148, 163, 184, 0.2),
-    -4px -4px 8px rgba(255, 255, 255, 0.9);
-}
-
-.payroll-page .btn:not(.btn-primary):not(.btn-danger):active {
-  box-shadow:
-    inset 4px 4px 8px rgba(148, 163, 184, 0.18),
-    inset -3px -3px 7px rgba(255, 255, 255, 0.9);
-}
-
-.payroll-page .btn-primary {
-  background: linear-gradient(135deg, var(--brand-purple), var(--brand-purple-dark));
-  box-shadow:
-    7px 10px 18px rgba(100, 2, 119, 0.34),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.46);
-}
-
-.payroll-page .btn-danger {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
-  box-shadow:
-    6px 10px 18px rgba(185, 28, 28, 0.32),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.4);
+  background: transparent;
 }
 
 .payroll-card {
@@ -1674,45 +1561,12 @@ textarea{ resize: vertical; min-height: 90px; }
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
-}
-
-.payroll-hero-card {
-  background:
-    radial-gradient(circle at 12% 16%, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0) 32%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(244, 247, 253, 0.66));
-}
-
-.payroll-pill-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.payroll-chip {
-  border: 1px solid rgba(255, 255, 255, 0.92);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(239, 244, 250, 0.88));
-  box-shadow:
-    4px 4px 10px rgba(148, 163, 184, 0.18),
-    -3px -3px 8px rgba(255, 255, 255, 0.92);
-}
-
-.payroll-help-btn {
-  border-color: rgba(203, 213, 225, 0.9);
-  background: linear-gradient(145deg, #f7fbff, #edf2f9);
-}
-
-.payroll-section-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0));
 }
 
 .payroll-shell {
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -1724,7 +1578,7 @@ textarea{ resize: vertical; min-height: 90px; }
 
 .payroll-statutory-grid {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -1734,11 +1588,9 @@ textarea{ resize: vertical; min-height: 90px; }
   gap: 10px;
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.82);
-  background: linear-gradient(145deg, rgba(252, 254, 255, 0.9), rgba(240, 245, 251, 0.74));
-  box-shadow:
-    inset 2px 2px 4px rgba(255, 255, 255, 0.75),
-    inset -3px -3px 6px rgba(226, 232, 240, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(18px);
 }
 
 .payroll-form-grid {
@@ -1747,17 +1599,39 @@ textarea{ resize: vertical; min-height: 90px; }
   gap: 12px;
 }
 
+.payroll-section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.payroll-pill-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.payroll-chip {
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.payroll-help-btn {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .payroll-inline-check {
   display: inline-flex;
   gap: 8px;
   align-items: center;
   padding: 8px 12px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.88);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(239, 244, 250, 0.78));
-  box-shadow:
-    4px 4px 10px rgba(148, 163, 184, 0.16),
-    -3px -3px 7px rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .payroll-rail-card {
@@ -1776,11 +1650,8 @@ textarea{ resize: vertical; min-height: 90px; }
 .payroll-employee-btn {
   text-align: left;
   padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.84);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(240, 245, 251, 0.82));
-  box-shadow:
-    5px 5px 12px rgba(148, 163, 184, 0.16),
-    -4px -4px 9px rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.14);
   transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
 }
 
@@ -1791,16 +1662,18 @@ textarea{ resize: vertical; min-height: 90px; }
 
 .payroll-employee-btn.active {
   border: 1px solid var(--sidebar-link-active-border);
-  background: linear-gradient(145deg, var(--sidebar-link-active-start), var(--sidebar-link-active-end));
+  background: rgba(255, 255, 255, 0.22);
   box-shadow:
     7px 7px 16px var(--sidebar-link-active-shadow),
-    -4px -4px 10px rgba(255, 255, 255, 0.88);
+    -4px -4px 10px rgba(255, 255, 255, 0.22);
 }
 
-.payroll-summary-card {
-  background:
-    radial-gradient(circle at 88% 20%, rgba(187, 212, 14, 0.16), rgba(187, 212, 14, 0) 28%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.84), rgba(242, 246, 252, 0.7));
+.payroll-summary-card,
+.payroll-compliance-card,
+.payroll-hero-card,
+.payroll-section-card,
+.payroll-preview-card {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .payroll-actions {
@@ -1818,11 +1691,9 @@ textarea{ resize: vertical; min-height: 90px; }
 .payroll-table-wrap {
   overflow-x: auto;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.84);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.76), rgba(240, 245, 251, 0.72));
-  box-shadow:
-    inset 2px 2px 6px rgba(255, 255, 255, 0.7),
-    inset -3px -3px 8px rgba(226, 232, 240, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px);
 }
 
 .payroll-table {
@@ -1831,26 +1702,23 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 .payroll-table thead tr {
-  background: rgba(248, 250, 252, 0.8);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .payroll-table tbody tr {
-  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .payroll-notes-block {
   padding: 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.85);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(241, 245, 251, 0.72));
-  box-shadow:
-    inset 2px 2px 5px rgba(255, 255, 255, 0.7),
-    inset -2px -2px 6px rgba(226, 232, 240, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .payroll-run-detail {
   padding: 16px;
-  background: rgba(248, 250, 252, 0.78);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .payroll-run-grid {
@@ -1863,16 +1731,10 @@ textarea{ resize: vertical; min-height: 90px; }
   margin-top: 12px;
   padding: 12px;
   border-radius: 10px;
-  background: #dcfce7;
+  background: rgba(34, 197, 94, 0.14);
   color: #166534;
   font-weight: 700;
   font-size: 16px;
-}
-
-.payroll-compliance-card {
-  background:
-    radial-gradient(circle at 94% 16%, rgba(187, 212, 14, 0.18), rgba(187, 212, 14, 0) 28%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(244, 247, 253, 0.68));
 }
 
 @media (max-width: 1024px) {
@@ -1891,17 +1753,14 @@ textarea{ resize: vertical; min-height: 90px; }
 .users-page .table tr,
 .approvals-page .table tr,
 .client-task-page .table tr {
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.38);
 }
 
 [data-theme="dark"] .library-page,
 [data-theme="dark"] .client-task-page,
 [data-theme="dark"] .users-page,
 [data-theme="dark"] .approvals-page {
-  background:
-    radial-gradient(circle at 10% 12%, rgba(100, 2, 119, 0.2), rgba(100, 2, 119, 0) 35%),
-    radial-gradient(circle at 92% 88%, rgba(187, 212, 14, 0.12), rgba(187, 212, 14, 0) 32%),
-    linear-gradient(145deg, #0f172a 0%, #111827 48%, #1f2937 100%);
+  background: transparent;
 }
 
 [data-theme="dark"] .library-page .card,
@@ -1961,11 +1820,11 @@ textarea{ resize: vertical; min-height: 90px; }
   grid-template-columns: 1.3fr 1.7fr 0.6fr;
   padding: 12px;
   gap: 10px;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid rgba(226, 232, 240, 0.72);
 }
-.users-head { background: #f8fafc; font-weight: 900; border-top: none; }
+.users-head { background: rgba(248, 250, 252, 0.7); font-weight: 900; border-top: none; }
 .users-link { text-decoration: none; color: inherit; }
-.users-link:hover { background: #f8fafc; }
+.users-link:hover { background: rgba(248, 250, 252, 0.42); }
 
 .profile-card { width: 100%; box-sizing: border-box; }
 .profile-card textarea { width: 100%; min-height: 90px; }
@@ -1982,13 +1841,13 @@ textarea{ resize: vertical; min-height: 90px; }
 .profile-section {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid #eef2f7;
+  border-top: 1px solid rgba(226, 232, 240, 0.72);
 }
 
 .section-title {
   font-size: 13px;
   font-weight: 900;
-  color: #0f172a;
+  color: var(--text);
   margin-bottom: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -2014,7 +1873,7 @@ textarea{ resize: vertical; min-height: 90px; }
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .doc-upload-meta {
@@ -2048,7 +1907,7 @@ textarea{ resize: vertical; min-height: 90px; }
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .library-item-main {
@@ -2879,27 +2738,27 @@ textarea{ resize: vertical; min-height: 90px; }
   --app-bg-mid:#111827;
   --app-bg-end:#312e81;
   --dashboard-hero-orb:rgba(56, 189, 248, 0.26);
-  --dashboard-hero-start:rgba(8, 17, 31, 0.92);
-  --dashboard-hero-end:rgba(49, 46, 129, 0.82);
-  --dashboard-card-start:rgba(15, 23, 42, 0.92);
-  --dashboard-card-end:rgba(17, 24, 39, 0.86);
+  --dashboard-hero-start:rgba(8, 17, 31, 0.82);
+  --dashboard-hero-end:rgba(49, 46, 129, 0.72);
+  --dashboard-card-start:rgba(15, 23, 42, 0.82);
+  --dashboard-card-end:rgba(17, 24, 39, 0.72);
   --dashboard-date-color:#bae6fd;
   --page-shell-orb-1:rgba(56, 189, 248, 0.22);
   --page-shell-orb-2:rgba(192, 132, 252, 0.2);
   --page-shell-start:#08111f;
   --page-shell-mid:#111827;
   --page-shell-end:#312e81;
-  --page-card-border:rgba(71, 85, 105, 0.84);
-  --page-card-start:rgba(15, 23, 42, 0.9);
-  --page-card-end:rgba(17, 24, 39, 0.82);
+  --page-card-border:rgba(71, 85, 105, 0.72);
+  --page-card-start:rgba(15, 23, 42, 0.82);
+  --page-card-end:rgba(17, 24, 39, 0.7);
   --soft-input-bg:rgba(15, 23, 42, 0.88);
   --soft-input-border:rgba(71, 85, 105, 0.9);
   --soft-btn-start:#172032;
   --soft-btn-end:#0f172a;
   --soft-btn-border:rgba(71, 85, 105, 0.88);
-  --table-header-bg:rgba(15, 23, 42, 0.78);
-  --table-row-border:rgba(51, 65, 85, 0.82);
-  --section-surface-bg:rgba(15, 23, 42, 0.82);
+  --table-header-bg:rgba(15, 23, 42, 0.66);
+  --table-row-border:rgba(51, 65, 85, 0.7);
+  --section-surface-bg:rgba(15, 23, 42, 0.68);
   --section-surface-border:rgba(71, 85, 105, 0.84);
   --error-bg:rgba(127, 29, 29, 0.3);
   --error-border:rgba(248, 113, 113, 0.38);
@@ -3408,10 +3267,7 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 [data-theme="dark"] .profile-page {
-  background:
-    radial-gradient(circle at 10% 12%, rgba(2, 132, 199, 0.2), rgba(2, 132, 199, 0) 35%),
-    radial-gradient(circle at 92% 88%, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0) 30%),
-    linear-gradient(145deg, #0f172a 0%, #111827 48%, #1f2937 100%);
+  background: transparent;
 }
 
 [data-theme="dark"] .profile-page .profile-card {
@@ -3435,11 +3291,7 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 [data-theme="dark"] .payroll-page {
-  background:
-    radial-gradient(circle at 12% 14%, rgba(2, 132, 199, 0.2), rgba(2, 132, 199, 0) 34%),
-    radial-gradient(circle at 92% 18%, rgba(187, 212, 14, 0.14), rgba(187, 212, 14, 0) 28%),
-    radial-gradient(circle at 88% 86%, rgba(56, 189, 248, 0.14), rgba(56, 189, 248, 0) 26%),
-    linear-gradient(145deg, #0f172a 0%, #111827 46%, #0b1220 100%);
+  background: transparent;
 }
 
 [data-theme="dark"] .payroll-page .card {
@@ -4110,25 +3962,63 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 :where(.dashboard-page .card, .dashboard-page .dashboard-hero, .dashboard-page .dashboard-mini-item, .dashboard-page .dashboard-workplan-body, .dashboard-page .dashboard-workplan-group, .dashboard-page .dashboard-workplan-summary, .dashboard-page .dashboard-workplan-preview, .calendar-page .card, .calendar-page .profile-card, .calendar-page .dashboard-hero, .profile-page .card, .profile-page .profile-card, .library-page .card, .client-task-page .card, .users-page .card, .approvals-page .card, .payroll-page .card, .finance-page .card, .performance-page .card, .goals-page .card, .finance-page .reimbursement-request-card, .finance-page .reimbursement-request-items) {
-  border-color: rgba(255, 255, 255, 0.28) !important;
-  background: rgba(255, 255, 255, 0.16) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
   box-shadow:
     0 16px 34px rgba(15, 23, 42, 0.08),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.22) !important;
+    inset 1px 1px 0 rgba(255, 255, 255, 0.18) !important;
   backdrop-filter: blur(22px) !important;
   -webkit-backdrop-filter: blur(22px) !important;
 }
 
 :where(.dashboard-page .dashboard-hero, .calendar-topbar, .calendar-page .fc .fc-scrollgrid, .calendar-page .fc .fc-view-harness, .calendar-page .fc .fc-scroller, .calendar-page .fc .fc-daygrid-body, .calendar-page .fc .fc-daygrid-body table, .calendar-page .fc .fc-timegrid-body, .calendar-page .fc .fc-timegrid-body table, .calendar-page .fc .fc-timegrid-cols, .calendar-page .fc .fc-daygrid-day-frame, .calendar-page .fc .fc-daygrid-day, .calendar-page .fc .fc-timegrid-slot, .calendar-page .fc .fc-timegrid-axis-frame, .calendar-page .fc .fc-col-header, .calendar-page .fc .fc-col-header-cell, .calendar-page .fc .fc-col-header-cell-cushion, .calendar-page .fc table) {
-  background: rgba(255, 255, 255, 0.12) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
 :where(.dashboard-page .table thead tr, .calendar-page .table thead tr, .profile-page .table thead tr, .library-page .table thead tr, .client-task-page .table thead tr, .users-page .table thead tr, .approvals-page .table thead tr, .payroll-page .table thead tr, .finance-page .table thead tr, .performance-page .table thead tr, .goals-page .table thead tr) {
-  background: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
 }
 
 :where(.dashboard-page .table tbody tr, .calendar-page .table tbody tr, .profile-page .table tbody tr, .library-page .table tbody tr, .client-task-page .table tbody tr, .users-page .table tbody tr, .approvals-page .table tbody tr, .payroll-page .table tbody tr, .finance-page .table tbody tr, .performance-page .table tbody tr, .goals-page .table tbody tr) {
-  background: rgba(255, 255, 255, 0.06) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.dashboard-page .dashboard-feed-item,
+.dashboard-page .dashboard-mini-item,
+.dashboard-page .dashboard-activity-input,
+.dashboard-page .dashboard-workplan-subtask,
+.dashboard-page .dashboard-table thead th,
+.dashboard-page .dashboard-metric-danger,
+.finance-page .reimbursement-request-items__state,
+.finance-page .reimbursement-items-table thead tr,
+.finance-page .reimbursement-items-table tbody tr:hover,
+.users-table,
+.users-row,
+.users-head,
+.library-item,
+.doc-upload-row,
+.payroll-chip,
+.payroll-help-btn {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+[data-theme="dark"] .dashboard-page .dashboard-feed-item,
+[data-theme="dark"] .dashboard-page .dashboard-mini-item,
+[data-theme="dark"] .dashboard-page .dashboard-activity-input,
+[data-theme="dark"] .dashboard-page .dashboard-workplan-subtask,
+[data-theme="dark"] .dashboard-page .dashboard-table thead th,
+[data-theme="dark"] .dashboard-page .dashboard-metric-danger,
+[data-theme="dark"] .finance-page .reimbursement-request-items__state,
+[data-theme="dark"] .finance-page .reimbursement-items-table thead tr,
+[data-theme="dark"] .finance-page .reimbursement-items-table tbody tr:hover,
+[data-theme="dark"] .users-table,
+[data-theme="dark"] .users-row,
+[data-theme="dark"] .users-head,
+[data-theme="dark"] .library-item,
+[data-theme="dark"] .doc-upload-row,
+[data-theme="dark"] .payroll-chip,
+[data-theme="dark"] .payroll-help-btn {
+  background: rgba(15, 23, 42, 0.42);
 }
 
 @keyframes loading-spin {
