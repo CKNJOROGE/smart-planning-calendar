@@ -1089,7 +1089,7 @@ export default function CalendarPage() {
         )}
 
         {dashboardBalance && (
-          <div className="card" style={{ marginBottom: 14, background: "#f8fafc" }}>
+          <div className="card" style={{ marginBottom: 14, background: "rgba(255,255,255,0.42)" }}>
             <div style={{ fontWeight: 900, marginBottom: 8 }}>My Leave Balance</div>
             <div className="row">
               <div className="pill">Accrued: <b>{dashboardBalance.accrued}</b></div>
@@ -1103,7 +1103,7 @@ export default function CalendarPage() {
         )}
 
         {(user?.role === "admin" || user?.role === "ceo") && !!allUserBalances.length && (
-          <div className="card" style={{ marginBottom: 14, background: "#f8fafc" }}>
+          <div className="card" style={{ marginBottom: 14, background: "rgba(255,255,255,0.42)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
               <div style={{ fontWeight: 900 }}>All Users Leave Balance</div>
               <button className="btn" type="button" onClick={() => setAllBalancesCollapsed((v) => !v)}>
@@ -1513,7 +1513,7 @@ export default function CalendarPage() {
 
               {/* Leave balance */}
               {form.type === "Leave" && leaveBalance && (
-                <div className="card" style={{ marginBottom: 12, background: "#f8fafc" }}>
+                <div className="card" style={{ marginBottom: 12, background: "rgba(255,255,255,0.42)" }}>
                   <div style={{ fontWeight: 900, marginBottom: 6 }}>Leave balance</div>
                   <div className="row">
                     <div className="pill">Accrued: <b>{leaveBalance.accrued}</b></div>
@@ -1708,7 +1708,7 @@ export default function CalendarPage() {
               )}
 
               {editForm.type === "Leave" && leaveBalance && (
-                <div className="card" style={{ marginBottom: 12, background: "#f8fafc" }}>
+                <div className="card" style={{ marginBottom: 12, background: "rgba(255,255,255,0.42)" }}>
                   <div style={{ fontWeight: 900, marginBottom: 6 }}>Leave balance</div>
                   <div className="row">
                     <div className="pill">Accrued: <b>{leaveBalance.accrued}</b></div>

@@ -448,7 +448,7 @@ textarea{ resize: vertical; min-height: 90px; }
     radial-gradient(ellipse at 56% 82%, rgba(255, 255, 255, 0.22) 0 12%, rgba(255, 255, 255, 0.1) 13% 24%, transparent 25%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.14) 24%, transparent 24% 68%, rgba(255, 255, 255, 0.12) 68% 72%, transparent 72%);
   transform: rotate(-7deg) scale(1.05);
-  animation: shell-orb-drift 20s ease-in-out infinite alternate;
+  animation: shell-orb-drift 18s ease-in-out infinite alternate;
 }
 
 .app-shell::after {
@@ -459,7 +459,7 @@ textarea{ resize: vertical; min-height: 90px; }
     linear-gradient(212deg, transparent 57%, rgba(255, 255, 255, 0.2) 57% 61%, transparent 61%);
   mix-blend-mode: screen;
   transform: rotate(8deg) scale(1.04);
-  animation: shell-band-drift 24s ease-in-out infinite alternate;
+  animation: shell-band-drift 20s ease-in-out infinite alternate;
 }
 
 .app-shell.sidebar-collapsed {
@@ -789,7 +789,7 @@ textarea{ resize: vertical; min-height: 90px; }
     radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.26) 0 7%, var(--page-shell-orb-1) 8% 18%, transparent 19%),
     radial-gradient(circle at 84% 12%, rgba(255, 255, 255, 0.22) 0 6%, var(--page-shell-orb-2) 7% 16%, transparent 17%),
     radial-gradient(circle at 52% 88%, rgba(255, 255, 255, 0.22) 0 8%, rgba(255, 255, 255, 0.08) 9% 16%, transparent 17%);
-  animation: page-orb-drift 24s ease-in-out infinite alternate;
+  animation: page-orb-drift 20s ease-in-out infinite alternate;
 }
 
 .page-wrap::after {
@@ -797,7 +797,7 @@ textarea{ resize: vertical; min-height: 90px; }
     linear-gradient(120deg, transparent 24%, rgba(255, 255, 255, 0.22) 24% 28%, rgba(255, 255, 255, 0.06) 28% 31%, transparent 31%),
     linear-gradient(300deg, transparent 44%, rgba(255, 255, 255, 0.18) 44% 48%, transparent 48%);
   mix-blend-mode: screen;
-  animation: page-band-drift 18s ease-in-out infinite alternate;
+  animation: page-band-drift 16s ease-in-out infinite alternate;
 }
 
 @keyframes shell-orb-drift {
@@ -1070,10 +1070,7 @@ textarea{ resize: vertical; min-height: 90px; }
 .calendar-page {
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 8% 14%, rgba(248, 218, 253, 0.55), rgba(248, 218, 253, 0) 34%),
-    radial-gradient(circle at 92% 88%, rgba(187, 212, 14, 0.22), rgba(187, 212, 14, 0) 32%),
-    linear-gradient(145deg, #fdf2ff 0%, #f8dafd 48%, #f7e8fb 100%);
+  background: transparent;
   border-radius: 18px;
 }
 
@@ -1137,21 +1134,39 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 .calendar-page .fc {
-  --fc-border-color: rgba(148, 163, 184, 0.22);
-  --fc-page-bg-color: rgba(255, 255, 255, 0.42);
-  --fc-neutral-bg-color: rgba(241, 245, 249, 0.34);
-  --fc-today-bg-color: rgba(186, 230, 253, 0.18);
+  --fc-border-color: rgba(148, 163, 184, 0.18);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: transparent;
+  --fc-today-bg-color: rgba(186, 230, 253, 0.12);
 }
 
 .calendar-page .fc .fc-scrollgrid {
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.46);
-  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(18px);
   box-shadow:
-    inset 1px 1px 0 rgba(255, 255, 255, 0.56),
-    inset -1px -1px 0 rgba(148, 163, 184, 0.08);
+    inset 1px 1px 0 rgba(255, 255, 255, 0.34),
+    inset -1px -1px 0 rgba(148, 163, 184, 0.06);
+}
+
+.calendar-page .fc .fc-view-harness,
+.calendar-page .fc .fc-scroller,
+.calendar-page .fc .fc-daygrid-body,
+.calendar-page .fc .fc-daygrid-body table,
+.calendar-page .fc .fc-timegrid-body,
+.calendar-page .fc .fc-timegrid-body table,
+.calendar-page .fc .fc-timegrid-cols,
+.calendar-page .fc .fc-daygrid-day-frame,
+.calendar-page .fc .fc-daygrid-day,
+.calendar-page .fc .fc-timegrid-slot,
+.calendar-page .fc .fc-timegrid-axis-frame,
+.calendar-page .fc .fc-col-header,
+.calendar-page .fc .fc-col-header-cell,
+.calendar-page .fc .fc-col-header-cell-cushion,
+.calendar-page .fc table {
+  background: transparent !important;
 }
 
 .calendar-page .fc .fc-toolbar-title {
