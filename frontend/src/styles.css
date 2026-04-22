@@ -424,9 +424,40 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 .app-shell {
+  position: relative;
   min-height: 100dvh;
   display: grid;
   grid-template-columns: 260px 1fr;
+  isolation: isolate;
+}
+
+.app-shell::before,
+.app-shell::after {
+  content: "";
+  position: fixed;
+  inset: -10vw;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(22px);
+  opacity: 0.95;
+}
+
+.app-shell::before {
+  background:
+    radial-gradient(circle at 18% 16%, var(--app-orb-1), transparent 29%),
+    radial-gradient(circle at 82% 22%, var(--app-orb-2), transparent 27%),
+    radial-gradient(ellipse at 55% 82%, rgba(255, 255, 255, 0.28), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+  transform: rotate(-6deg);
+}
+
+.app-shell::after {
+  background:
+    radial-gradient(circle at 30% 72%, rgba(255, 255, 255, 0.24), transparent 26%),
+    radial-gradient(circle at 74% 34%, rgba(255, 255, 255, 0.18), transparent 22%),
+    linear-gradient(28deg, transparent 38%, rgba(255, 255, 255, 0.22) 39%, rgba(255, 255, 255, 0.08) 43%, transparent 44%);
+  mix-blend-mode: screen;
+  transform: rotate(8deg);
 }
 
 .app-shell.sidebar-collapsed {
@@ -448,6 +479,7 @@ textarea{ resize: vertical; min-height: 90px; }
     radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 25%),
     linear-gradient(165deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
   backdrop-filter: blur(20px);
+  z-index: 1;
 }
 
 .app-sidebar.collapsed {
@@ -720,6 +752,8 @@ textarea{ resize: vertical; min-height: 90px; }
 
 .app-main {
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .app-content {
@@ -728,10 +762,39 @@ textarea{ resize: vertical; min-height: 90px; }
   margin: 0 auto;
   padding: 14px;
   box-sizing: border-box;
+  position: relative;
+  z-index: 1;
 }
 
 .page-wrap {
   width: 100%;
+  position: relative;
+  z-index: 1;
+}
+
+.page-wrap::before,
+.page-wrap::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 18px;
+  z-index: 0;
+  filter: blur(18px);
+}
+
+.page-wrap::before {
+  background:
+    radial-gradient(circle at 14% 18%, var(--page-shell-orb-1), transparent 28%),
+    radial-gradient(circle at 84% 12%, var(--page-shell-orb-2), transparent 26%),
+    radial-gradient(circle at 52% 88%, rgba(255, 255, 255, 0.24), transparent 24%);
+}
+
+.page-wrap::after {
+  background:
+    linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.18) 41%, rgba(255, 255, 255, 0.06) 48%, transparent 58%),
+    linear-gradient(300deg, transparent 42%, rgba(255, 255, 255, 0.14) 50%, transparent 60%);
+  mix-blend-mode: screen;
 }
 
 .auth-page {
