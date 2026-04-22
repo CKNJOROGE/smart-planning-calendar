@@ -563,7 +563,6 @@ export default function ClientTaskManagerPage() {
         groups.set(key, {
           key,
           task: row.task,
-          owner: row.user?.name || `User #${row.user_id}`,
           rows: [],
         });
       }
@@ -1727,7 +1726,7 @@ export default function ClientTaskManagerPage() {
           <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "#f8fafc" }}>
-                <th style={{ textAlign: "left", padding: 10 }}>Employee</th>
+                <th style={{ textAlign: "left", padding: 10 }}>Added By</th>
                 <th style={{ textAlign: "left", padding: 10 }}>Task</th>
                 <th style={{ textAlign: "left", padding: 10 }}>Subtask</th>
                 <th style={{ textAlign: "left", padding: 10 }}>Completion Date</th>
@@ -1745,12 +1744,10 @@ export default function ClientTaskManagerPage() {
                     const showAddButton = isEditMode && rowIdx === 0 && !isEditing;
                     return (
                       <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
-                        {rowIdx === 0 && (
-                          <td style={{ padding: 10, verticalAlign: "top" }} rowSpan={group.rows.length}>
-                            {group.owner}
-                          </td>
-                        )}
-                        {rowIdx === 0 && (
+                        <td style={{ padding: 10, verticalAlign: "top" }}>
+                          {row.user?.name || `User #${row.user_id}`}
+                        </td>
+                        {rowIdx === 0 ? (
                           <td style={{ padding: 10, verticalAlign: "top" }} rowSpan={group.rows.length}>
                             {isEditing ? (
                               <input
@@ -1762,7 +1759,7 @@ export default function ClientTaskManagerPage() {
                               <span style={{ fontWeight: 700 }}>{row.task}</span>
                             )}
                           </td>
-                        )}
+                        ) : null}
                         <td style={{ padding: 10 }}>
                           {isEditing ? (
                             <input
@@ -1771,7 +1768,12 @@ export default function ClientTaskManagerPage() {
                               style={{ width: "100%" }}
                             />
                           ) : (
-                            row.subtask
+                            <div>
+                              <div>{row.subtask}</div>
+                              <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                                Added by {row.user?.name || `User #${row.user_id}`}
+                              </div>
+                            </div>
                           )}
                         </td>
                         <td style={{ padding: 10 }}>

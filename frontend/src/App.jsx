@@ -225,14 +225,14 @@ function Shell({ onLogout, theme, setTheme }) {
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/" end>
               <span className="sidebar-link-text">Calendar</span>
             </NavLink>
+            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/client-task-manager">
+              <span className="sidebar-link-text">Client Task Manager</span>
+            </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/library">
               <span className="sidebar-link-text">Library</span>
             </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/shared-notebook">
               <span className="sidebar-link-text">Shared Notebook</span>
-            </NavLink>
-            <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/client-task-manager">
-              <span className="sidebar-link-text">Client Task Manager</span>
             </NavLink>
             <NavLink className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`} to="/finance-requests" style={{ position: "relative" }}>
               <span className="sidebar-link-text">Finance Requests</span>

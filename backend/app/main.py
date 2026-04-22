@@ -3253,7 +3253,7 @@ def add_client_task_subtask(
 
     created = ClientTask(
         client_id=t.client_id,
-        user_id=t.user_id,
+        user_id=current.id,
         task_group_id=t.task_group_id,
         year=t.year,
         quarter=t.quarter,
