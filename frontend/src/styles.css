@@ -4104,6 +4104,33 @@ textarea{ resize: vertical; min-height: 90px; }
   background: var(--section-surface-bg) !important;
 }
 
+/* Global glass override so the active theme stays in the backdrop */
+:where(.dashboard-page, .calendar-page, .profile-page, .library-page, .client-task-page, .users-page, .approvals-page, .payroll-page, .finance-page, .performance-page, .goals-page, .page-wrap) {
+  background: transparent !important;
+}
+
+:where(.dashboard-page .card, .dashboard-page .dashboard-hero, .dashboard-page .dashboard-mini-item, .dashboard-page .dashboard-workplan-body, .dashboard-page .dashboard-workplan-group, .dashboard-page .dashboard-workplan-summary, .dashboard-page .dashboard-workplan-preview, .calendar-page .card, .calendar-page .profile-card, .calendar-page .dashboard-hero, .profile-page .card, .profile-page .profile-card, .library-page .card, .client-task-page .card, .users-page .card, .approvals-page .card, .payroll-page .card, .finance-page .card, .performance-page .card, .goals-page .card, .finance-page .reimbursement-request-card, .finance-page .reimbursement-request-items) {
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+  box-shadow:
+    0 16px 34px rgba(15, 23, 42, 0.08),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.22) !important;
+  backdrop-filter: blur(22px) !important;
+  -webkit-backdrop-filter: blur(22px) !important;
+}
+
+:where(.dashboard-page .dashboard-hero, .calendar-topbar, .calendar-page .fc .fc-scrollgrid, .calendar-page .fc .fc-view-harness, .calendar-page .fc .fc-scroller, .calendar-page .fc .fc-daygrid-body, .calendar-page .fc .fc-daygrid-body table, .calendar-page .fc .fc-timegrid-body, .calendar-page .fc .fc-timegrid-body table, .calendar-page .fc .fc-timegrid-cols, .calendar-page .fc .fc-daygrid-day-frame, .calendar-page .fc .fc-daygrid-day, .calendar-page .fc .fc-timegrid-slot, .calendar-page .fc .fc-timegrid-axis-frame, .calendar-page .fc .fc-col-header, .calendar-page .fc .fc-col-header-cell, .calendar-page .fc .fc-col-header-cell-cushion, .calendar-page .fc table) {
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+:where(.dashboard-page .table thead tr, .calendar-page .table thead tr, .profile-page .table thead tr, .library-page .table thead tr, .client-task-page .table thead tr, .users-page .table thead tr, .approvals-page .table thead tr, .payroll-page .table thead tr, .finance-page .table thead tr, .performance-page .table thead tr, .goals-page .table thead tr) {
+  background: rgba(255, 255, 255, 0.2) !important;
+}
+
+:where(.dashboard-page .table tbody tr, .calendar-page .table tbody tr, .profile-page .table tbody tr, .library-page .table tbody tr, .client-task-page .table tbody tr, .users-page .table tbody tr, .approvals-page .table tbody tr, .payroll-page .table tbody tr, .finance-page .table tbody tr, .performance-page .table tbody tr, .goals-page .table tbody tr) {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
 @keyframes loading-spin {
   to {
     transform: rotate(360deg);
