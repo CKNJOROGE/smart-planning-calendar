@@ -1,54 +1,54 @@
 :root{
-  --brand-purple:#640177;
-  --brand-purple-dark:#4c025b;
-  --brand-lime:#bbd40e;
+  --brand-purple:#b06cff;
+  --brand-purple-dark:#7c3aed;
+  --brand-lime:#7dd3fc;
   --text:#0f172a;
   --muted:#64748b;
-  --bg:#f8dafd;
+  --bg:#f7f2ff;
   --card:#ffffff;
-  --border:#ead7ef;
+  --border:#e6def5;
   --input-bg:#ffffff;
-  --focus-color:#640177;
-  --focus-ring:rgba(100, 2, 119, 0.18);
-  --sidebar-orb:rgba(187, 212, 14, 0.28);
-  --sidebar-start:#fff4fb;
-  --sidebar-end:#f7e8fb;
+  --focus-color:#a855f7;
+  --focus-ring:rgba(168, 85, 247, 0.16);
+  --sidebar-orb:rgba(125, 211, 252, 0.22);
+  --sidebar-start:#fff7ff;
+  --sidebar-end:#eef2ff;
   --sidebar-link-text:#334155;
   --sidebar-link-bg:rgba(255, 255, 255, 0.55);
   --sidebar-link-hover-bg:rgba(255, 255, 255, 0.82);
   --sidebar-link-hover-border:rgba(203, 213, 225, 0.95);
-  --sidebar-link-active-text:#3b0352;
-  --sidebar-link-active-border:rgba(100, 2, 119, 0.45);
-  --sidebar-link-active-start:rgba(245, 216, 252, 0.9);
+  --sidebar-link-active-text:#5b21b6;
+  --sidebar-link-active-border:rgba(168, 85, 247, 0.28);
+  --sidebar-link-active-start:rgba(240, 237, 255, 0.9);
   --sidebar-link-active-end:rgba(255, 255, 255, 0.85);
-  --sidebar-link-active-shadow:rgba(100, 2, 119, 0.18);
-  --app-orb-1:rgba(244, 114, 182, 0.28);
-  --app-orb-2:rgba(187, 212, 14, 0.24);
-  --app-bg-start:#fff4fb;
-  --app-bg-mid:#fbe4f8;
-  --app-bg-end:#ecfccb;
-  --dashboard-hero-orb:rgba(244, 114, 182, 0.26);
+  --sidebar-link-active-shadow:rgba(168, 85, 247, 0.12);
+  --app-orb-1:rgba(244, 114, 182, 0.22);
+  --app-orb-2:rgba(125, 211, 252, 0.22);
+  --app-bg-start:#fff7ff;
+  --app-bg-mid:#f5f3ff;
+  --app-bg-end:#ecfeff;
+  --dashboard-hero-orb:rgba(244, 114, 182, 0.2);
   --dashboard-hero-start:rgba(255, 255, 255, 0.9);
-  --dashboard-hero-end:rgba(245, 216, 252, 0.9);
-  --dashboard-card-start:rgba(255, 255, 255, 0.86);
-  --dashboard-card-end:rgba(247, 244, 255, 0.82);
-  --dashboard-date-color:#640277;
-  --page-shell-orb-1:rgba(244, 114, 182, 0.22);
-  --page-shell-orb-2:rgba(187, 212, 14, 0.22);
-  --page-shell-start:#fff4fb;
-  --page-shell-mid:#fbe4f8;
-  --page-shell-end:#ecfccb;
+  --dashboard-hero-end:rgba(240, 237, 255, 0.88);
+  --dashboard-card-start:rgba(255, 255, 255, 0.84);
+  --dashboard-card-end:rgba(243, 247, 255, 0.8);
+  --dashboard-date-color:#7c3aed;
+  --page-shell-orb-1:rgba(244, 114, 182, 0.18);
+  --page-shell-orb-2:rgba(125, 211, 252, 0.18);
+  --page-shell-start:#fff7ff;
+  --page-shell-mid:#f5f3ff;
+  --page-shell-end:#ecfeff;
   --page-card-border:rgba(255, 255, 255, 0.7);
-  --page-card-start:rgba(255, 255, 255, 0.82);
-  --page-card-end:rgba(244, 247, 253, 0.62);
-  --soft-input-bg:rgba(255, 255, 255, 0.84);
-  --soft-input-border:rgba(226, 232, 240, 0.92);
-  --soft-btn-start:#f8fbff;
-  --soft-btn-end:#eef3fb;
+  --page-card-start:rgba(255, 255, 255, 0.78);
+  --page-card-end:rgba(243, 247, 255, 0.58);
+  --soft-input-bg:rgba(255, 255, 255, 0.78);
+  --soft-input-border:rgba(226, 232, 240, 0.88);
+  --soft-btn-start:#ffffff;
+  --soft-btn-end:#eef7ff;
   --soft-btn-border:rgba(255, 255, 255, 0.85);
-  --table-header-bg:rgba(248, 250, 252, 0.92);
+  --table-header-bg:rgba(255, 255, 255, 0.84);
   --table-row-border:rgba(226, 232, 240, 0.9);
-  --section-surface-bg:rgba(251, 252, 254, 0.88);
+  --section-surface-bg:rgba(255, 255, 255, 0.8);
   --section-surface-border:rgba(229, 231, 235, 0.88);
   --error-bg:#fef2f2;
   --error-border:#fecaca;
@@ -60,7 +60,7 @@ body {
   background:
     radial-gradient(circle at 14% 18%, var(--app-orb-1), rgba(255, 255, 255, 0) 34%),
     radial-gradient(circle at 84% 12%, var(--app-orb-2), rgba(255, 255, 255, 0) 30%),
-    radial-gradient(circle at 52% 88%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 24%),
+    radial-gradient(circle at 52% 88%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 24%),
     linear-gradient(135deg, var(--app-bg-start) 0%, var(--app-bg-mid) 48%, var(--app-bg-end) 100%);
   color:var(--text);
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
@@ -69,13 +69,15 @@ body {
 
 .topbar{
   display:flex; align-items:flex-start; justify-content:space-between;
-  gap:12px; padding:16px 18px; background:var(--card); border-bottom:1px solid var(--border);
+  gap:12px; padding:16px 18px; background:rgba(255, 255, 255, 0.6); border-bottom:1px solid rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(16px);
 }
 .brand-title{ margin:0; font-size:20px; font-weight:800; letter-spacing:.2px; }
 .brand-sub{ margin-top:4px; color:var(--muted); font-size:13px; }
 .btn{
-  border:1px solid var(--border); background:var(--card);
+  border:1px solid rgba(255, 255, 255, 0.65); background:rgba(255,255,255,0.62);
   padding:10px 12px; border-radius:10px; cursor:pointer; font-weight:600;
+  backdrop-filter: blur(10px);
 }
 .btn-primary{
   border-color: transparent;
@@ -89,15 +91,16 @@ body {
   padding:14px 18px;
 }
 .card{
-  background:var(--card); border:1px solid var(--border); border-radius:14px;
-  padding:12px; box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+  background:rgba(255,255,255,0.58); border:1px solid rgba(255,255,255,0.72); border-radius:14px;
+  padding:12px; box-shadow: 0 10px 30px rgba(15,23,42,0.08); backdrop-filter: blur(16px);
 }
 .row{ display:flex; gap:10px; flex-wrap:wrap; }
 .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:10px; width:100%; }
 label{ font-size:12px; color:var(--muted); font-weight:700; }
 input, select, textarea{
-  border:1px solid var(--border); border-radius:10px;
-  padding:10px 10px; font-size:14px; outline:none; background:var(--input-bg); color:var(--text);
+  border:1px solid rgba(226, 232, 240, 0.9); border-radius:10px;
+  padding:10px 10px; font-size:14px; outline:none; background:rgba(255,255,255,0.76); color:var(--text);
+  backdrop-filter: blur(8px);
 }
 input:focus, select:focus, textarea:focus{
   border-color: var(--focus-color);
@@ -112,8 +115,9 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 .pill{
   display:inline-flex; align-items:center; gap:8px;
-  border:1px solid var(--border); background:var(--card); padding:6px 10px; border-radius:999px;
+  border:1px solid rgba(255,255,255,0.66); background:rgba(255,255,255,0.64); padding:6px 10px; border-radius:999px;
   font-size:12px; color:var(--text);
+  backdrop-filter: blur(10px);
 }
 .dot{ width:10px; height:10px; border-radius:50%; }
 
@@ -438,11 +442,12 @@ textarea{ resize: vertical; min-height: 90px; }
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border-right: 1px solid rgba(226, 232, 240, 0.95);
+  border-right: 1px solid rgba(255, 255, 255, 0.56);
   background:
     radial-gradient(circle at 15% 15%, var(--sidebar-orb), rgba(255, 255, 255, 0) 35%),
-    radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 25%),
+    radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 25%),
     linear-gradient(165deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
+  backdrop-filter: blur(20px);
 }
 
 .app-sidebar.collapsed {
@@ -487,9 +492,10 @@ textarea{ resize: vertical; min-height: 90px; }
   font-size: 14px;
   border-radius: 12px;
   padding: 10px 12px;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255,255,255,0.45);
   background: var(--sidebar-link-bg);
   transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  backdrop-filter: blur(12px);
 }
 
 .sidebar-link:hover {
@@ -609,12 +615,13 @@ textarea{ resize: vertical; min-height: 90px; }
   gap: 10px;
   padding: 8px 10px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--card);
+  border: 1px solid rgba(255,255,255,0.62);
+  background: rgba(255,255,255,0.52);
   color: var(--text);
   cursor: pointer;
   text-align: left;
   transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  backdrop-filter: blur(12px);
 }
 
 .theme-swatch-btn:hover {
@@ -643,72 +650,72 @@ textarea{ resize: vertical; min-height: 90px; }
 
 .theme-light {
   background:
-    radial-gradient(circle at 28% 28%, rgba(244, 114, 182, 0.95) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(187, 212, 14, 0.95) 0 22%, transparent 23%),
-    linear-gradient(135deg, #fff4fb, #ecfccb);
+    radial-gradient(circle at 28% 28%, rgba(244, 114, 182, 0.82) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(125, 211, 252, 0.82) 0 22%, transparent 23%),
+    linear-gradient(135deg, #fff7ff, #ecfeff);
 }
 
 .theme-dark {
   background:
-    radial-gradient(circle at 28% 28%, rgba(56, 189, 248, 0.9) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(168, 85, 247, 0.9) 0 22%, transparent 23%),
-    linear-gradient(135deg, #08111f, #1d4ed8);
+    radial-gradient(circle at 28% 28%, rgba(103, 232, 249, 0.8) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(192, 132, 252, 0.82) 0 22%, transparent 23%),
+    linear-gradient(135deg, #0f172a, #312e81);
 }
 
 .theme-slate {
   background:
-    radial-gradient(circle at 28% 28%, rgba(100, 116, 139, 0.95) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(14, 165, 233, 0.9) 0 22%, transparent 23%),
-    linear-gradient(135deg, #f8fafc, #94a3b8);
+    radial-gradient(circle at 28% 28%, rgba(148, 163, 184, 0.78) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(56, 189, 248, 0.78) 0 22%, transparent 23%),
+    linear-gradient(135deg, #f8fafc, #dbeafe);
 }
 
 .theme-teal {
   background:
-    radial-gradient(circle at 28% 28%, rgba(13, 148, 136, 0.95) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(45, 212, 191, 0.95) 0 22%, transparent 23%),
-    linear-gradient(135deg, #ecfeff, #99f6e4);
+    radial-gradient(circle at 28% 28%, rgba(45, 212, 191, 0.8) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(132, 204, 22, 0.72) 0 22%, transparent 23%),
+    linear-gradient(135deg, #ecfeff, #d9f99d);
 }
 
 .theme-forest {
   background:
-    radial-gradient(circle at 28% 28%, rgba(22, 101, 52, 0.95) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(163, 230, 53, 0.95) 0 22%, transparent 23%),
-    linear-gradient(135deg, #f7fee7, #86efac);
+    radial-gradient(circle at 28% 28%, rgba(132, 204, 22, 0.76) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(34, 197, 94, 0.74) 0 22%, transparent 23%),
+    linear-gradient(135deg, #f7fee7, #dcfce7);
 }
 
 .theme-ocean {
   background:
-    radial-gradient(circle at 28% 28%, rgba(15, 108, 189, 0.95) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(56, 189, 248, 0.95) 0 22%, transparent 23%),
-    linear-gradient(135deg, #f0f9ff, #7dd3fc);
+    radial-gradient(circle at 28% 28%, rgba(56, 189, 248, 0.82) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(103, 232, 249, 0.82) 0 22%, transparent 23%),
+    linear-gradient(135deg, #f0f9ff, #cffafe);
 }
 
 .theme-amber {
   background:
-    radial-gradient(circle at 28% 28%, rgba(180, 83, 9, 0.95) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(251, 191, 36, 0.95) 0 22%, transparent 23%),
-    linear-gradient(135deg, #fffbeb, #fdba74);
+    radial-gradient(circle at 28% 28%, rgba(251, 191, 36, 0.82) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(251, 113, 133, 0.72) 0 22%, transparent 23%),
+    linear-gradient(135deg, #fffbeb, #fde68a);
 }
 
 .theme-rose {
   background:
-    radial-gradient(circle at 28% 28%, rgba(190, 24, 93, 0.95) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(244, 114, 182, 0.95) 0 22%, transparent 23%),
-    linear-gradient(135deg, #fff1f5, #fb7185);
+    radial-gradient(circle at 28% 28%, rgba(244, 114, 182, 0.8) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(251, 113, 133, 0.78) 0 22%, transparent 23%),
+    linear-gradient(135deg, #fff1f5, #ffe4e6);
 }
 
 .theme-indigo {
   background:
-    radial-gradient(circle at 28% 28%, rgba(67, 56, 202, 0.95) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(56, 189, 248, 0.95) 0 22%, transparent 23%),
-    linear-gradient(135deg, #eef2ff, #818cf8);
+    radial-gradient(circle at 28% 28%, rgba(129, 140, 248, 0.82) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(103, 232, 249, 0.82) 0 22%, transparent 23%),
+    linear-gradient(135deg, #eef2ff, #e0e7ff);
 }
 
 .theme-cocoa {
   background:
-    radial-gradient(circle at 28% 28%, rgba(146, 64, 14, 0.95) 0 24%, transparent 25%),
-    radial-gradient(circle at 72% 72%, rgba(251, 191, 36, 0.95) 0 22%, transparent 23%),
-    linear-gradient(135deg, #faf4ee, #d6b08d);
+    radial-gradient(circle at 28% 28%, rgba(214, 176, 141, 0.82) 0 24%, transparent 25%),
+    radial-gradient(circle at 72% 72%, rgba(251, 191, 36, 0.8) 0 22%, transparent 23%),
+    linear-gradient(135deg, #faf4ee, #f5e1ce);
 }
 
 .app-main {
