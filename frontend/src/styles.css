@@ -448,7 +448,7 @@ textarea{ resize: vertical; min-height: 90px; }
     radial-gradient(ellipse at 56% 82%, rgba(255, 255, 255, 0.22) 0 12%, rgba(255, 255, 255, 0.1) 13% 24%, transparent 25%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.14) 24%, transparent 24% 68%, rgba(255, 255, 255, 0.12) 68% 72%, transparent 72%);
   transform: rotate(-7deg) scale(1.05);
-  animation: shell-orb-drift 26s ease-in-out infinite alternate;
+  animation: shell-orb-drift 20s ease-in-out infinite alternate;
 }
 
 .app-shell::after {
@@ -459,7 +459,7 @@ textarea{ resize: vertical; min-height: 90px; }
     linear-gradient(212deg, transparent 57%, rgba(255, 255, 255, 0.2) 57% 61%, transparent 61%);
   mix-blend-mode: screen;
   transform: rotate(8deg) scale(1.04);
-  animation: shell-band-drift 34s ease-in-out infinite alternate;
+  animation: shell-band-drift 24s ease-in-out infinite alternate;
 }
 
 .app-shell.sidebar-collapsed {
@@ -789,7 +789,7 @@ textarea{ resize: vertical; min-height: 90px; }
     radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.26) 0 7%, var(--page-shell-orb-1) 8% 18%, transparent 19%),
     radial-gradient(circle at 84% 12%, rgba(255, 255, 255, 0.22) 0 6%, var(--page-shell-orb-2) 7% 16%, transparent 17%),
     radial-gradient(circle at 52% 88%, rgba(255, 255, 255, 0.22) 0 8%, rgba(255, 255, 255, 0.08) 9% 16%, transparent 17%);
-  animation: page-orb-drift 30s ease-in-out infinite alternate;
+  animation: page-orb-drift 24s ease-in-out infinite alternate;
 }
 
 .page-wrap::after {
@@ -797,7 +797,7 @@ textarea{ resize: vertical; min-height: 90px; }
     linear-gradient(120deg, transparent 24%, rgba(255, 255, 255, 0.22) 24% 28%, rgba(255, 255, 255, 0.06) 28% 31%, transparent 31%),
     linear-gradient(300deg, transparent 44%, rgba(255, 255, 255, 0.18) 44% 48%, transparent 48%);
   mix-blend-mode: screen;
-  animation: page-band-drift 22s ease-in-out infinite alternate;
+  animation: page-band-drift 18s ease-in-out infinite alternate;
 }
 
 @keyframes shell-orb-drift {
@@ -1079,47 +1079,47 @@ textarea{ resize: vertical; min-height: 90px; }
 
 .calendar-topbar {
   border-radius: 16px 16px 0 0;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.42));
-  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.24));
+  backdrop-filter: blur(18px);
   box-shadow:
-    12px 12px 26px rgba(148, 163, 184, 0.16),
-    -8px -8px 16px rgba(255, 255, 255, 0.85),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.72);
+    12px 12px 26px rgba(148, 163, 184, 0.12),
+    -8px -8px 16px rgba(255, 255, 255, 0.72),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.56);
 }
 
 .calendar-page .card {
-  border: 1px solid rgba(255, 255, 255, 0.68);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.48));
-  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.32));
+  backdrop-filter: blur(18px);
   box-shadow:
-    10px 10px 24px rgba(148, 163, 184, 0.17),
-    -8px -8px 18px rgba(255, 255, 255, 0.84),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.64);
+    10px 10px 24px rgba(148, 163, 184, 0.12),
+    -8px -8px 18px rgba(255, 255, 255, 0.72),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.54);
 }
 
 .calendar-page .pill {
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.62);
   box-shadow:
-    3px 3px 8px rgba(148, 163, 184, 0.18),
-    -2px -2px 5px rgba(255, 255, 255, 0.8);
+    3px 3px 8px rgba(148, 163, 184, 0.12),
+    -2px -2px 5px rgba(255, 255, 255, 0.7);
 }
 
 .calendar-page input,
 .calendar-page select,
 .calendar-page textarea {
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(226, 232, 240, 0.72);
   box-shadow:
-    inset 3px 3px 6px rgba(148, 163, 184, 0.12),
-    inset -3px -3px 6px rgba(255, 255, 255, 0.8);
+    inset 3px 3px 6px rgba(148, 163, 184, 0.08),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.72);
 }
 
 .calendar-page .btn:not(.btn-primary):not(.btn-danger) {
-  background: #f8fbff;
+  background: rgba(248, 251, 255, 0.62);
   box-shadow:
-    4px 4px 9px rgba(148, 163, 184, 0.2),
-    -3px -3px 6px rgba(255, 255, 255, 0.85);
+    4px 4px 9px rgba(148, 163, 184, 0.14),
+    -3px -3px 6px rgba(255, 255, 255, 0.72);
 }
 
 .calendar-page .btn-primary {
@@ -1137,19 +1137,21 @@ textarea{ resize: vertical; min-height: 90px; }
 }
 
 .calendar-page .fc {
-  --fc-border-color: rgba(148, 163, 184, 0.3);
-  --fc-page-bg-color: rgba(255, 255, 255, 0.75);
-  --fc-neutral-bg-color: rgba(241, 245, 249, 0.6);
-  --fc-today-bg-color: rgba(186, 230, 253, 0.24);
+  --fc-border-color: rgba(148, 163, 184, 0.22);
+  --fc-page-bg-color: rgba(255, 255, 255, 0.42);
+  --fc-neutral-bg-color: rgba(241, 245, 249, 0.34);
+  --fc-today-bg-color: rgba(186, 230, 253, 0.18);
 }
 
 .calendar-page .fc .fc-scrollgrid {
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  background: rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(18px);
   box-shadow:
-    inset 1px 1px 0 rgba(255, 255, 255, 0.72),
-    inset -1px -1px 0 rgba(148, 163, 184, 0.12);
+    inset 1px 1px 0 rgba(255, 255, 255, 0.56),
+    inset -1px -1px 0 rgba(148, 163, 184, 0.08);
 }
 
 .calendar-page .fc .fc-toolbar-title {
