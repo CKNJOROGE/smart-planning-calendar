@@ -394,7 +394,7 @@ function Shell({ onLogout, theme, setTheme }) {
       </aside>
 
       <main className="app-main">
-        <div className={`app-content${isClientTaskManager ? " app-content--bare" : ""}`}>
+        <div className="app-content">
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/" element={<CalendarPage />} />
