@@ -1478,7 +1478,7 @@ export default function ClientTaskManagerPage() {
                 ? addMonthsToDateInput(draft.hire_date, Number(draft.probation_months || 0))
                 : record.probation_end_date;
               return (
-                <div key={record.id} className="card" style={{ padding: 12, borderRadius: 14 }}>
+                <div key={record.id} className="card" style={{ padding: 12, borderRadius: 14, background: "rgba(255,255,255,0.12)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
                     <div style={{ minWidth: 0, flex: "1 1 auto" }}>
                       {isEditing ? (
@@ -1628,7 +1628,7 @@ export default function ClientTaskManagerPage() {
               <div
                 key={row.id}
                 className="card"
-                style={{ padding: 12, borderRadius: 12, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}
+                style={{ padding: 12, borderRadius: 12, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", background: "rgba(255,255,255,0.12)" }}
               >
                 <div>
                   <div style={{ fontWeight: 800 }}>{row.title}</div>
@@ -1637,7 +1637,7 @@ export default function ClientTaskManagerPage() {
                     {new Date(row.created_at).toLocaleString()}
                   </div>
                   <div style={{ marginTop: 6 }}>
-                    <span className="event-chip" style={{ background: "#eff6ff", color: "#1d4ed8" }}>
+                    <span className="event-chip" style={{ background: "rgba(255,255,255,0.16)", color: "#0f6cbd" }}>
                       AI generated
                     </span>
                   </div>
@@ -1725,7 +1725,7 @@ export default function ClientTaskManagerPage() {
         <div style={{ width: "100%", overflowX: "auto" }}>
           <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr style={{ background: "#f8fafc" }}>
+              <tr style={{ background: "rgba(255,255,255,0.14)" }}>
                 <th style={{ textAlign: "left", padding: 10 }}>Added By</th>
                 <th style={{ textAlign: "left", padding: 10 }}>Task</th>
                 <th style={{ textAlign: "left", padding: 10 }}>Subtask</th>
@@ -1743,7 +1743,7 @@ export default function ClientTaskManagerPage() {
                     const canEditThisRow = canEditRow(current, row);
                     const showAddButton = isEditMode && rowIdx === 0 && !isEditing;
                     return (
-                      <tr key={row.id} style={{ borderTop: "1px solid #eef2f7" }}>
+                      <tr key={row.id} style={{ borderTop: "1px solid rgba(255,255,255,0.16)" }}>
                         <td style={{ padding: 10, verticalAlign: "top" }}>
                           {row.user?.name || `User #${row.user_id}`}
                         </td>
