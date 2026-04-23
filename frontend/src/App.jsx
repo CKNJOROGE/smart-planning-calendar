@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate, NavLink, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation, useNavigate } from "react-router-dom";
 import LoginPage from "./Login";
 import CalendarPage from "./CalendarPage";
 import MyProfilePage from "./MyProfilePage";
@@ -45,6 +45,7 @@ function normalizeTheme(theme) {
 }
 
 function Shell({ onLogout, theme, setTheme }) {
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [financeAttentionTotal, setFinanceAttentionTotal] = useState(0);
   const [payrollAttentionTotal, setPayrollAttentionTotal] = useState(0);
@@ -53,6 +54,7 @@ function Shell({ onLogout, theme, setTheme }) {
   const [themePaletteOpen, setThemePaletteOpen] = useState(false);
   const { showToast } = useToast();
   const nav = useNavigate();
+  const isClientTaskManager = location.pathname.startsWith("/client-task-manager");
   const canManageThemePalette = ["admin", "ceo"].includes(String(user?.role || "").toLowerCase());
 
   useEffect(() => {
@@ -200,7 +202,7 @@ function Shell({ onLogout, theme, setTheme }) {
   }, [user]);
 
   return (
-    <div className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <div className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${isClientTaskManager ? " client-task-manager-route" : ""}`}>
       <aside className={`app-sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
         <div>
           <div className="sidebar-head">
@@ -392,7 +394,7 @@ function Shell({ onLogout, theme, setTheme }) {
       </aside>
 
       <main className="app-main">
-        <div className="app-content">
+        <div className={`app-content${isClientTaskManager ? " app-content--bare" : ""}`}>
           <Routes>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/" element={<CalendarPage />} />

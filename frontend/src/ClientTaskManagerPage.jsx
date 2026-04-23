@@ -1478,7 +1478,7 @@ export default function ClientTaskManagerPage() {
                 ? addMonthsToDateInput(draft.hire_date, Number(draft.probation_months || 0))
                 : record.probation_end_date;
               return (
-                <div key={record.id} className="card" style={{ padding: 12, borderRadius: 14, background: "rgba(255,255,255,0.12)" }}>
+                <div key={record.id} className="card client-task-record-card" style={{ padding: 12, borderRadius: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" }}>
                     <div style={{ minWidth: 0, flex: "1 1 auto" }}>
                       {isEditing ? (
@@ -1627,8 +1627,8 @@ export default function ClientTaskManagerPage() {
             {reportHistory.map((row) => (
               <div
                 key={row.id}
-                className="card"
-                style={{ padding: 12, borderRadius: 12, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", background: "rgba(255,255,255,0.12)" }}
+                className="card client-task-history-card"
+                style={{ padding: 12, borderRadius: 12, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}
               >
                 <div>
                   <div style={{ fontWeight: 800 }}>{row.title}</div>
@@ -1830,7 +1830,7 @@ export default function ClientTaskManagerPage() {
                     );
                   })}
                   {isEditMode && addingSubtask?.groupKey === group.key && (
-                    <tr key={`${group.key}-add`} style={{ borderTop: "1px solid #eef2f7", background: "#fbfdff" }}>
+                <tr key={`${group.key}-add`} style={{ borderTop: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)" }}>
                       <td colSpan={6} style={{ padding: 12 }}>
                         <div className="row" style={{ marginBottom: 0, alignItems: "end" }}>
                           <div className="field" style={{ flex: "1 1 340px", marginBottom: 0 }}>

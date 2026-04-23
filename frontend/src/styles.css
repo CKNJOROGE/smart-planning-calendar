@@ -786,6 +786,11 @@ textarea{ resize: vertical; min-height: 90px; }
   z-index: 1;
 }
 
+.app-content--bare {
+  max-width: none;
+  padding: 14px 0;
+}
+
 .page-wrap {
   width: 100%;
   position: relative;
@@ -816,6 +821,23 @@ textarea{ resize: vertical; min-height: 90px; }
     linear-gradient(300deg, transparent 44%, rgba(255, 255, 255, 0.18) 44% 48%, transparent 48%);
   mix-blend-mode: screen;
   animation: page-band-drift 16s ease-in-out infinite alternate;
+}
+
+.client-task-manager-route::before,
+.client-task-manager-route::after,
+.client-task-manager-route .page-wrap::before,
+.client-task-manager-route .page-wrap::after,
+.client-task-manager-route .app-shell::before,
+.client-task-manager-route .app-shell::after {
+  content: none !important;
+  display: none !important;
+  background: transparent !important;
+  animation: none !important;
+  mix-blend-mode: normal !important;
+}
+
+.client-task-manager-route .app-content--bare {
+  background: transparent !important;
 }
 
 @keyframes shell-orb-drift {
