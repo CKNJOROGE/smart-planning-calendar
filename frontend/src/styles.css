@@ -3956,7 +3956,7 @@ backdrop-filter: blur(33px) !important;
   -webkit-backdrop-filter: blur(33px) !important;
 }
 
-:is(.dashboard-page .dashboard-hero, .calendar-topbar, .calendar-page .fc .fc-scrollgrid, .calendar-page .fc .fc-view-harness, .calendar-page .fc .fc-scroller, .calendar-page .fc .fc-daygrid-body, .calendar-page .fc .fc-daygrid-body table, .calendar-page .fc .fc-timegrid-body, .calendar-page .fc .fc-timegrid-body table, .calendar-page .fc .fc-timegrid-cols, .calendar-page .fc .fc-daygrid-day-frame, .calendar-page .fc .fc-daygrid-day, .calendar-page .fc .fc-timegrid-slot, .calendar-page .fc .fc-timegrid-axis-frame, .calendar-page .fc .fc-col-header, .calendar-page .fc .fc-col-header-cell, .calendar-page .fc .fc-col-header-cell-cushion, .calendar-page .fc table) {
+:is(.dashboard-page .dashboard-hero, .calendar-topbar, .calendar-page .fc .fc-scrollgrid, .calendar-page .fc .fc-view-harness, .calendar-page .fc .fc-scroller, .calendar-page .fc .fc-daygrid-body, .calendar-page .fc .fc-daygrid-body table, .calendar-page .fc .fc-timegrid-body, .calendar-page .fc .fc-timegrid-body table, .calendar-page .fc .fc-timegrid-cols, .calendar-page .fc .fc-daygrid-day-frame, .calendar-page .fc .fc-daygrid-day:not(.fc-day-today), .calendar-page .fc .fc-timegrid-slot, .calendar-page .fc .fc-timegrid-axis-frame, .calendar-page .fc .fc-col-header, .calendar-page .fc .fc-col-header-cell, .calendar-page .fc .fc-col-header-cell-cushion, .calendar-page .fc table) {
   background: rgba(255, 255, 255, 0.1) !important;
 }
 
