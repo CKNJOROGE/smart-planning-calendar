@@ -1140,7 +1140,7 @@ border: 1px solid rgba(255, 255, 255, 0.5);
   --fc-border-color: rgba(148, 163, 184, 0.18);
   --fc-page-bg-color: transparent;
   --fc-neutral-bg-color: transparent;
-  --fc-today-bg-color: rgba(186, 230, 253, 0.12);
+  --fc-today-bg-color: rgba(186, 230, 253, 0.4);
 }
 
 .calendar-page .fc .fc-scrollgrid {
