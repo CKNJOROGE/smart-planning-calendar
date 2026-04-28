@@ -1082,7 +1082,7 @@ export default function CalendarPage() {
       </div>
 
       <div className="page calendar-page">
-        {error && (
+        {error && !createOpen && !editOpen && (
           <div style={{ marginBottom: 10, color: "crimson", whiteSpace: "pre-wrap" }}>
             {error}
           </div>
@@ -1405,6 +1405,11 @@ export default function CalendarPage() {
             </div>
 
             <div style={{ paddingTop: 10 }}>
+              {error && (
+                <div style={{ marginBottom: 10, color: "crimson", whiteSpace: "pre-wrap" }}>
+                  {error}
+                </div>
+              )}
               <div className="row">
                 <div className="field" style={{ flex: "1 1 240px" }}>
                   <label>Type</label>
@@ -1602,6 +1607,11 @@ export default function CalendarPage() {
             </div>
 
             <div style={{ paddingTop: 10 }}>
+              {error && (
+                <div style={{ marginBottom: 10, color: "crimson", whiteSpace: "pre-wrap" }}>
+                  {error}
+                </div>
+              )}
               <div className="row">
                 <div className="field" style={{ flex: "1 1 240px" }}>
                   <label>Type</label>
