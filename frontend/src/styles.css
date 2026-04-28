@@ -487,7 +487,6 @@ border-left: 4px solid var(--event-accent);
 .app-ambient-orb {
   position: absolute;
   border-radius: 999px;
-  filter: blur(10px);
   will-change: transform, opacity;
   opacity: 0.5;
 }
@@ -498,7 +497,6 @@ border-left: 4px solid var(--event-accent);
   top: 8vh;
   left: max(220px, 6vw);
   background: radial-gradient(circle, var(--app-orb-1) 0%, rgba(255, 255, 255, 0) 72%);
-  animation: ambient-float-a 26s ease-in-out infinite alternate;
 }
 
 .app-ambient-orb-b {
@@ -507,7 +505,6 @@ border-left: 4px solid var(--event-accent);
   right: 4vw;
   bottom: 10vh;
   background: radial-gradient(circle, var(--app-orb-2) 0%, rgba(255, 255, 255, 0) 72%);
-  animation: ambient-float-b 32s ease-in-out infinite alternate;
 }
 
 .app-shell.sidebar-collapsed {
@@ -528,8 +525,20 @@ border-left: 4px solid var(--event-accent);
     radial-gradient(circle at 15% 15%, var(--sidebar-orb), rgba(255, 255, 255, 0) 35%),
     radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 25%),
 linear-gradient(165deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
-  backdrop-filter: blur(16px);
   z-index: 1;
+}
+
+.app-shell .topbar,
+.app-shell .card,
+.app-shell .btn,
+.app-shell input,
+.app-shell select,
+.app-shell textarea,
+.app-shell .pill,
+.app-shell .sidebar-link,
+.app-shell .app-sidebar {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .app-sidebar.collapsed {
