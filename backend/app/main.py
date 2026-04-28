@@ -3201,8 +3201,6 @@ def update_client_task(
     t = db.query(ClientTask).filter(ClientTask.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
-    if current.role not in {"admin", "ceo", "supervisor"} and t.user_id != current.id:
-        raise HTTPException(status_code=403, detail="Not allowed")
 
     incoming = payload.dict(exclude_unset=True)
     if "task" in incoming:
@@ -3244,8 +3242,6 @@ def add_client_task_subtask(
     t = db.query(ClientTask).filter(ClientTask.id == task_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
-    if current.role not in {"admin", "ceo", "supervisor"} and t.user_id != current.id:
-        raise HTTPException(status_code=403, detail="Not allowed")
 
     subtask_text = (payload.subtask or "").strip()
     if not subtask_text:

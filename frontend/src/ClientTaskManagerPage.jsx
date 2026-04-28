@@ -499,7 +499,11 @@ async function buildWorkplanReportPdfWithLogo(report, fallbackClientName = "") {
   return doc;
 }
 
-function canEditRow(current, row) {
+function canModifyRow(current, row) {
+  return !!current && !!row;
+}
+
+function canDeleteRow(current, row) {
   if (!current || !row) return false;
   return (
     current.role === "admin" ||
@@ -925,7 +929,7 @@ export default function ClientTaskManagerPage() {
   }
 
   async function handleToggleCompleted(row) {
-    if (!isEditMode || !canEditRow(current, row)) return;
+    if (!isEditMode || !canModifyRow(current, row)) return;
     try {
       const updated = await updateClientTask(row.id, { completed: !row.completed });
       setTasks((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
@@ -937,7 +941,7 @@ export default function ClientTaskManagerPage() {
   }
 
   async function handleDeleteSubtask(row) {
-    if (!isEditMode || !canEditRow(current, row)) return;
+    if (!isEditMode || !canDeleteRow(current, row)) return;
     if (!confirm(`Delete subtask "${row.subtask}"?`)) return;
     try {
       await deleteClientTask(row.id);
@@ -951,7 +955,7 @@ export default function ClientTaskManagerPage() {
   }
 
   function startEditRow(row) {
-    if (!isEditMode || !canEditRow(current, row)) return;
+    if (!isEditMode || !canModifyRow(current, row)) return;
     setEditingRows((prev) => ({
       ...prev,
       [row.id]: {
@@ -1021,7 +1025,7 @@ export default function ClientTaskManagerPage() {
   }
 
   async function saveEditRow(row) {
-    if (!isEditMode || !canEditRow(current, row)) return;
+    if (!isEditMode || !canModifyRow(current, row)) return;
     const draft = editingRows[row.id];
     if (!draft) return;
     const payload = {
@@ -1740,7 +1744,8 @@ export default function ClientTaskManagerPage() {
                   {group.rows.map((row, rowIdx) => {
                     const draft = editingRows[row.id];
                     const isEditing = isEditMode && !!draft;
-                    const canEditThisRow = canEditRow(current, row);
+                    const canModifyThisRow = canModifyRow(current, row);
+                    const canDeleteThisRow = canDeleteRow(current, row);
                     const showAddButton = isEditMode && rowIdx === 0 && !isEditing;
                     return (
                       <tr key={row.id} style={{ borderTop: "1px solid rgba(255,255,255,0.16)" }}>
@@ -1793,7 +1798,7 @@ export default function ClientTaskManagerPage() {
                               type="checkbox"
                               checked={!!row.completed}
                               onChange={() => handleToggleCompleted(row)}
-                              disabled={!isEditMode || !canEditThisRow}
+                              disabled={!isEditMode || !canModifyThisRow}
                             />
                             {row.completed ? "Done" : "Pending"}
                           </label>
@@ -1811,14 +1816,14 @@ export default function ClientTaskManagerPage() {
                               </div>
                             ) : (
                               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                <button className="btn" type="button" onClick={() => startEditRow(row)} disabled={!canEditThisRow}>
+                                <button className="btn" type="button" onClick={() => startEditRow(row)} disabled={!canModifyThisRow}>
                                   Edit
                                 </button>
-                                <button className="btn btn-danger" type="button" onClick={() => handleDeleteSubtask(row)} disabled={!canEditThisRow}>
+                                <button className="btn btn-danger" type="button" onClick={() => handleDeleteSubtask(row)} disabled={!canDeleteThisRow}>
                                   Delete
                                 </button>
                                 {showAddButton && (
-                                  <button className="btn" type="button" onClick={() => startAddSubtask(group)} disabled={!canEditThisRow}>
+                                  <button className="btn" type="button" onClick={() => startAddSubtask(group)} disabled={!canModifyThisRow}>
                                     + Add subtask
                                   </button>
                                 )}
