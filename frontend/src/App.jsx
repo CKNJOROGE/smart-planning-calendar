@@ -201,6 +201,10 @@ function Shell({ onLogout, theme, setTheme }) {
 
   return (
     <div className={`app-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+      <div className="app-ambient" aria-hidden="true">
+        <div className="app-ambient-orb app-ambient-orb-a" />
+        <div className="app-ambient-orb app-ambient-orb-b" />
+      </div>
       <aside className={`app-sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
         <div>
           <div className="sidebar-head">

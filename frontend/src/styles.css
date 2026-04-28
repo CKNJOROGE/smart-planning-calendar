@@ -457,28 +457,57 @@ border-left: 4px solid var(--event-accent);
   inset: -12vw;
   pointer-events: none;
   z-index: 0;
-  opacity: 0.9;
+  opacity: 0.55;
 }
 
 .app-shell::before {
   background:
-    radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.28) 0 8%, var(--app-orb-1) 9% 20%, transparent 21%),
-    radial-gradient(circle at 82% 20%, rgba(255, 255, 255, 0.24) 0 7%, var(--app-orb-2) 8% 18%, transparent 19%),
-    radial-gradient(ellipse at 56% 82%, rgba(255, 255, 255, 0.22) 0 12%, rgba(255, 255, 255, 0.1) 13% 24%, transparent 25%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.14) 24%, transparent 24% 68%, rgba(255, 255, 255, 0.12) 68% 72%, transparent 72%);
-  transform: rotate(-7deg) scale(1.05);
-  animation: shell-orb-drift 18s ease-in-out infinite alternate;
+    radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.18) 0 6%, var(--app-orb-1) 7% 17%, transparent 18%),
+    radial-gradient(circle at 82% 16%, rgba(255, 255, 255, 0.16) 0 5%, var(--app-orb-2) 6% 15%, transparent 16%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12) 24%, transparent 24% 68%, rgba(255, 255, 255, 0.08) 68% 72%, transparent 72%);
+  transform: rotate(-6deg) scale(1.02);
 }
 
 .app-shell::after {
   background:
-    radial-gradient(circle at 30% 72%, rgba(255, 255, 255, 0.22) 0 7%, rgba(255, 255, 255, 0.12) 8% 16%, transparent 17%),
-    radial-gradient(circle at 74% 34%, rgba(255, 255, 255, 0.18) 0 6%, rgba(255, 255, 255, 0.08) 7% 14%, transparent 15%),
-    linear-gradient(26deg, transparent 34%, rgba(255, 255, 255, 0.28) 34% 38%, rgba(255, 255, 255, 0.06) 38% 43%, transparent 43%),
-    linear-gradient(212deg, transparent 57%, rgba(255, 255, 255, 0.2) 57% 61%, transparent 61%);
-  mix-blend-mode: screen;
-  transform: rotate(8deg) scale(1.04);
-  animation: shell-band-drift 20s ease-in-out infinite alternate;
+    radial-gradient(circle at 30% 72%, rgba(255, 255, 255, 0.16) 0 6%, rgba(255, 255, 255, 0.08) 7% 14%, transparent 15%),
+    linear-gradient(26deg, transparent 34%, rgba(255, 255, 255, 0.14) 34% 38%, rgba(255, 255, 255, 0.04) 38% 43%, transparent 43%),
+    linear-gradient(212deg, transparent 57%, rgba(255, 255, 255, 0.12) 57% 61%, transparent 61%);
+  transform: rotate(7deg) scale(1.02);
+}
+
+.app-ambient {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.app-ambient-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(10px);
+  will-change: transform, opacity;
+  opacity: 0.5;
+}
+
+.app-ambient-orb-a {
+  width: min(28vw, 320px);
+  height: min(28vw, 320px);
+  top: 8vh;
+  left: max(220px, 6vw);
+  background: radial-gradient(circle, var(--app-orb-1) 0%, rgba(255, 255, 255, 0) 72%);
+  animation: ambient-float-a 26s ease-in-out infinite alternate;
+}
+
+.app-ambient-orb-b {
+  width: min(24vw, 280px);
+  height: min(24vw, 280px);
+  right: 4vw;
+  bottom: 10vh;
+  background: radial-gradient(circle, var(--app-orb-2) 0%, rgba(255, 255, 255, 0) 72%);
+  animation: ambient-float-b 32s ease-in-out infinite alternate;
 }
 
 .app-shell.sidebar-collapsed {
@@ -499,7 +528,7 @@ border-left: 4px solid var(--event-accent);
     radial-gradient(circle at 15% 15%, var(--sidebar-orb), rgba(255, 255, 255, 0) 35%),
     radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 25%),
 linear-gradient(165deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
-  backdrop-filter: blur(30px);
+  backdrop-filter: blur(16px);
   z-index: 1;
 }
 
@@ -827,6 +856,36 @@ cursor: pointer;
   }
 }
 
+@keyframes ambient-float-a {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translate3d(2vw, 1.5vh, 0) scale(1.05);
+    opacity: 0.52;
+  }
+  100% {
+    transform: translate3d(-1vw, 3vh, 0) scale(0.98);
+    opacity: 0.38;
+  }
+}
+
+@keyframes ambient-float-b {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.34;
+  }
+  50% {
+    transform: translate3d(-2.2vw, -2vh, 0) scale(1.06);
+    opacity: 0.46;
+  }
+  100% {
+    transform: translate3d(1vw, -3vh, 0) scale(0.97);
+    opacity: 0.32;
+  }
+}
+
 @keyframes page-orb-drift {
   0% {
     transform: translate3d(0, 0, 0);
@@ -852,6 +911,7 @@ cursor: pointer;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .app-ambient-orb,
   .app-shell::before,
   .app-shell::after,
   .page-wrap::before,
