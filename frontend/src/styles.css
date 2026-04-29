@@ -448,6 +448,9 @@ border-left: 4px solid var(--event-accent);
   display: grid;
   grid-template-columns: 260px 1fr;
   isolation: isolate;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.06), transparent 32%),
+    linear-gradient(145deg, #06131f 0%, #0a1324 52%, #140c1f 100%);
 }
 
 .app-shell::before,
@@ -462,18 +465,16 @@ border-left: 4px solid var(--event-accent);
 
 .app-shell::before {
   background:
-    radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.18) 0 6%, var(--app-orb-1) 7% 17%, transparent 18%),
-    radial-gradient(circle at 82% 16%, rgba(255, 255, 255, 0.16) 0 5%, var(--app-orb-2) 6% 15%, transparent 16%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.12) 24%, transparent 24% 68%, rgba(255, 255, 255, 0.08) 68% 72%, transparent 72%);
-  transform: rotate(-6deg) scale(1.02);
+    linear-gradient(132deg, rgba(255, 255, 255, 0.05) 0 18%, transparent 18% 65%, rgba(255, 255, 255, 0.03) 65% 74%, transparent 74%),
+    radial-gradient(circle at 12% 20%, rgba(255, 255, 255, 0.08) 0 10%, transparent 11%);
+  transform: rotate(-7deg) scale(1.03);
 }
 
 .app-shell::after {
   background:
-    radial-gradient(circle at 30% 72%, rgba(255, 255, 255, 0.16) 0 6%, rgba(255, 255, 255, 0.08) 7% 14%, transparent 15%),
-    linear-gradient(26deg, transparent 34%, rgba(255, 255, 255, 0.14) 34% 38%, rgba(255, 255, 255, 0.04) 38% 43%, transparent 43%),
-    linear-gradient(212deg, transparent 57%, rgba(255, 255, 255, 0.12) 57% 61%, transparent 61%);
-  transform: rotate(7deg) scale(1.02);
+    linear-gradient(24deg, transparent 28%, rgba(255, 255, 255, 0.04) 28% 34%, transparent 34% 100%),
+    linear-gradient(214deg, transparent 56%, rgba(255, 255, 255, 0.05) 56% 61%, transparent 61% 100%);
+  transform: rotate(8deg) scale(1.04);
 }
 
 .app-ambient {
@@ -484,27 +485,72 @@ border-left: 4px solid var(--event-accent);
   z-index: 0;
 }
 
-.app-ambient-orb {
+.app-ambient-shape {
   position: absolute;
-  border-radius: 999px;
+  filter: blur(80px);
+  opacity: 0.78;
+  mix-blend-mode: screen;
   will-change: transform, opacity;
-  opacity: 0.5;
 }
 
-.app-ambient-orb-a {
-  width: min(28vw, 320px);
-  height: min(28vw, 320px);
-  top: 8vh;
-  left: max(220px, 6vw);
-  background: radial-gradient(circle, var(--app-orb-1) 0%, rgba(255, 255, 255, 0) 72%);
+.app-ambient-shape-a {
+  width: min(30vw, 430px);
+  height: min(30vw, 430px);
+  top: 5vh;
+  left: max(180px, 4vw);
+  border-radius: 50%;
+  background: #38bdf8;
+  animation: ambient-float-a 24s ease-in-out infinite alternate;
 }
 
-.app-ambient-orb-b {
-  width: min(24vw, 280px);
-  height: min(24vw, 280px);
-  right: 4vw;
+.app-ambient-shape-b {
+  width: min(27vw, 390px);
+  height: min(27vw, 390px);
+  top: 14vh;
+  right: 10vw;
+  border-radius: 46% 54% 60% 40% / 42% 42% 58% 58%;
+  background: #f472b6;
+  animation: ambient-float-b 28s ease-in-out infinite alternate;
+}
+
+.app-ambient-shape-c {
+  width: min(25vw, 360px);
+  height: min(25vw, 360px);
+  top: 40vh;
+  left: max(250px, 20vw);
+  border-radius: 50%;
+  background: #facc15;
+  animation: ambient-float-c 30s ease-in-out infinite alternate;
+}
+
+.app-ambient-shape-d {
+  width: min(31vw, 450px);
+  height: min(28vw, 410px);
+  right: 24vw;
   bottom: 10vh;
-  background: radial-gradient(circle, var(--app-orb-2) 0%, rgba(255, 255, 255, 0) 72%);
+  border-radius: 58% 42% 37% 63% / 42% 59% 41% 58%;
+  background: #34d399;
+  animation: ambient-float-d 34s ease-in-out infinite alternate;
+}
+
+.app-ambient-shape-e {
+  width: min(24vw, 340px);
+  height: min(24vw, 340px);
+  right: 2vw;
+  bottom: 22vh;
+  border-radius: 50%;
+  background: #a78bfa;
+  animation: ambient-float-a 26s ease-in-out infinite alternate-reverse;
+}
+
+.app-ambient-shape-f {
+  width: min(22vw, 320px);
+  height: min(26vw, 360px);
+  left: max(140px, 8vw);
+  bottom: -2vh;
+  border-radius: 40% 60% 55% 45% / 53% 35% 65% 47%;
+  background: #fb7185;
+  animation: ambient-float-b 32s ease-in-out infinite alternate-reverse;
 }
 
 .app-shell.sidebar-collapsed {
@@ -520,25 +566,14 @@ border-left: 4px solid var(--event-accent);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border-right: 1px solid rgba(255, 255, 255, 0.56);
-  background:
-    radial-gradient(circle at 15% 15%, var(--sidebar-orb), rgba(255, 255, 255, 0) 35%),
-    radial-gradient(circle at 84% 18%, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 25%),
-linear-gradient(165deg, var(--sidebar-start) 0%, var(--sidebar-end) 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.05) 100%);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.16),
+    18px 0 48px rgba(3, 7, 18, 0.2);
   z-index: 1;
-}
-
-.app-shell .topbar,
-.app-shell .card,
-.app-shell .btn,
-.app-shell input,
-.app-shell select,
-.app-shell textarea,
-.app-shell .pill,
-.app-shell .sidebar-link,
-.app-shell .app-sidebar {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
 }
 
 .app-sidebar.collapsed {
@@ -895,6 +930,36 @@ cursor: pointer;
   }
 }
 
+@keyframes ambient-float-c {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.46;
+  }
+  50% {
+    transform: translate3d(2.6vw, -1.6vh, 0) scale(1.08);
+    opacity: 0.58;
+  }
+  100% {
+    transform: translate3d(-1.2vw, 2.2vh, 0) scale(0.96);
+    opacity: 0.42;
+  }
+}
+
+@keyframes ambient-float-d {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translate3d(-2.8vw, 2vh, 0) scale(1.04);
+    opacity: 0.5;
+  }
+  100% {
+    transform: translate3d(1.4vw, -2.4vh, 0) scale(1.02);
+    opacity: 0.36;
+  }
+}
+
 @keyframes page-orb-drift {
   0% {
     transform: translate3d(0, 0, 0);
@@ -920,7 +985,7 @@ cursor: pointer;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-ambient-orb,
+  .app-ambient-shape,
   .app-shell::before,
   .app-shell::after,
   .page-wrap::before,
@@ -1231,7 +1296,7 @@ border: 1px solid rgba(255, 255, 255, 0.5);
 .calendar-page .fc .fc-timegrid-body table,
 .calendar-page .fc .fc-timegrid-cols,
 .calendar-page .fc .fc-daygrid-day-frame,
-.calendar-page .fc .fc-daygrid-day,
+.calendar-page .fc .fc-daygrid-day:not(.fc-day-today),
 .calendar-page .fc .fc-timegrid-slot,
 .calendar-page .fc .fc-timegrid-axis-frame,
 .calendar-page .fc .fc-col-header,
@@ -1239,6 +1304,13 @@ border: 1px solid rgba(255, 255, 255, 0.5);
 .calendar-page .fc .fc-col-header-cell-cushion,
 .calendar-page .fc table {
   background: transparent !important;
+}
+
+.calendar-page .fc .fc-daygrid-day.fc-day-today {
+  background: rgba(255, 255, 255, 0.16) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(125, 211, 252, 0.46),
+    inset 0 0 36px rgba(56, 189, 248, 0.18);
 }
 
 .calendar-page .fc .fc-toolbar-title {
@@ -4016,25 +4088,25 @@ overflow-x: auto;
 }
 
 :is(.dashboard-page .card, .dashboard-page .dashboard-hero, .dashboard-page .dashboard-mini-item, .dashboard-page .dashboard-workplan-body, .dashboard-page .dashboard-workplan-group, .dashboard-page .dashboard-workplan-summary, .dashboard-page .dashboard-workplan-preview, .calendar-page .card, .calendar-page .profile-card, .calendar-page .dashboard-hero, .profile-page .card, .profile-page .profile-card, .library-page .card, .client-task-page .card, .users-page .card, .approvals-page .card, .payroll-page .card, .finance-page .card, .performance-page .card, .goals-page .card, .finance-page .reimbursement-request-card, .finance-page .reimbursement-request-items) {
-  border-color: rgba(255, 255, 255, 0.24) !important;
-  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.34) !important;
+  background: rgba(255, 255, 255, 0.18) !important;
   box-shadow:
-    0 16px 34px rgba(15, 23, 42, 0.08),
-    inset 1px 1px 0 rgba(255, 255, 255, 0.18) !important;
-backdrop-filter: blur(33px) !important;
+    0 24px 60px rgba(2, 6, 23, 0.24),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.3) !important;
+  backdrop-filter: blur(33px) !important;
   -webkit-backdrop-filter: blur(33px) !important;
 }
 
 :is(.dashboard-page .dashboard-hero, .calendar-topbar, .calendar-page .fc .fc-scrollgrid, .calendar-page .fc .fc-view-harness, .calendar-page .fc .fc-scroller, .calendar-page .fc .fc-daygrid-body, .calendar-page .fc .fc-daygrid-body table, .calendar-page .fc .fc-timegrid-body, .calendar-page .fc .fc-timegrid-body table, .calendar-page .fc .fc-timegrid-cols, .calendar-page .fc .fc-daygrid-day-frame, .calendar-page .fc .fc-daygrid-day:not(.fc-day-today), .calendar-page .fc .fc-timegrid-slot, .calendar-page .fc .fc-timegrid-axis-frame, .calendar-page .fc .fc-col-header, .calendar-page .fc .fc-col-header-cell, .calendar-page .fc .fc-col-header-cell-cushion, .calendar-page .fc table) {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
 }
 
 :is(.dashboard-page .table thead tr, .calendar-page .table thead tr, .profile-page .table thead tr, .library-page .table thead tr, .client-task-page .table thead tr, .users-page .table thead tr, .approvals-page .table thead tr, .payroll-page .table thead tr, .finance-page .table thead tr, .performance-page .table thead tr, .goals-page .table thead tr) {
-  background: rgba(255, 255, 255, 0.14) !important;
+  background: rgba(255, 255, 255, 0.18) !important;
 }
 
 :is(.dashboard-page .table tbody tr, .calendar-page .table tbody tr, .profile-page .table tbody tr, .library-page .table tbody tr, .client-task-page .table tbody tr, .users-page .table tbody tr, .approvals-page .table tbody tr, .payroll-page .table tbody tr, .finance-page .table tbody tr, .performance-page .table tbody tr, .goals-page .table tbody tr) {
-  background: rgba(255, 255, 255, 0.04) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
 }
 
 .client-task-page {
