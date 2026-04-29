@@ -248,6 +248,10 @@ function isForcedAllDayType(type) {
   return isLeaveLikeType(type);
 }
 
+function allowsPastDatesForType(type) {
+  return (type || "").toLowerCase() === "hospital";
+}
+
 function getReviewBlockReason(apiEvent, currentUser) {
   if (!apiEvent || !currentUser) return "";
   const role = String(currentUser.role || "").toLowerCase();
@@ -644,13 +648,14 @@ export default function CalendarPage() {
     setError("");
 
     const d = toLocalDateInput(dateObj);
+    const defaultType = d < minDate ? "Hospital" : "Leave";
     const next = {
       startDate: d,
       endDate: d,
       allDay: true,
       startTime: "09:00",
       endTime: "10:00",
-      type: "Leave",
+      type: defaultType,
       clientSource: "managed",
       clientId: "",
       oneTimeClientName: "",
@@ -659,12 +664,11 @@ export default function CalendarPage() {
     setForm(next);
     setCreateSickNoteFile(null);
     setCreateOpen(true);
-    refreshLeaveBalance(d); // show leave balance by default in create modal
+    if (defaultType === "Leave") refreshLeaveBalance(d); // show leave balance by default in create modal
+    else setLeaveBalance(null);
   }
 
   function onDateClick(info) {
-    const clicked = toLocalDateInput(info.date);
-    if (clicked < minDate) return;
     openCreateForDay(info.date);
   }
 
@@ -891,8 +895,8 @@ export default function CalendarPage() {
       setError("Please select start and end date.");
       return;
     }
-    if (form.startDate < minDate || form.endDate < minDate) {
-      setError("Past dates are not allowed.");
+    if ((form.startDate < minDate || form.endDate < minDate) && !allowsPastDatesForType(form.type)) {
+      setError("Past dates are only allowed for Sick Leave.");
       return;
     }
     const forceAllDay = isForcedAllDayType(form.type);
@@ -985,8 +989,8 @@ export default function CalendarPage() {
       setError("Please select start and end date.");
       return;
     }
-    if (!isAdminLike && (editForm.startDate < minDate || editForm.endDate < minDate)) {
-      setError("Past dates are not allowed.");
+    if (!isAdminLike && (editForm.startDate < minDate || editForm.endDate < minDate) && !allowsPastDatesForType(editForm.type)) {
+      setError("Past dates are only allowed for Sick Leave.");
       return;
     }
     const forceAllDay = isForcedAllDayType(editForm.type);
@@ -1537,7 +1541,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={form.startDate}
-                    min={minDate}
+                    min={allowsPastDatesForType(form.type) ? undefined : minDate}
                     onChange={(e) => {
                       const v = e.target.value;
                       setForm((f) => ({ ...f, startDate: v, endDate: f.allDay ? f.endDate : v }));
@@ -1551,7 +1555,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={form.endDate}
-                    min={minDate}
+                    min={allowsPastDatesForType(form.type) ? undefined : minDate}
                     disabled={!form.allDay}
                     onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
                   />
@@ -1737,7 +1741,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={editForm.startDate}
-                    min={isAdminLike ? undefined : minDate}
+                    min={isAdminLike || allowsPastDatesForType(editForm.type) ? undefined : minDate}
                     onChange={(e) => {
                       const v = e.target.value;
                       setEditForm((f) => ({ ...f, startDate: v, endDate: f.allDay ? f.endDate : v }));
@@ -1751,7 +1755,7 @@ export default function CalendarPage() {
                   <input
                     type="date"
                     value={editForm.endDate}
-                    min={isAdminLike ? undefined : minDate}
+                    min={isAdminLike || allowsPastDatesForType(editForm.type) ? undefined : minDate}
                     disabled={!editForm.allDay}
                     onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
                   />

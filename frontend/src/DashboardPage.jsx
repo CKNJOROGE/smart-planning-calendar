@@ -167,55 +167,60 @@ export default function DashboardPage() {
     [clients, selectedWorkplanClientId]
   );
 
-  const carriedOverTaskIds = useMemo(() => {
-    const ids = new Set();
+  const workplanTaskStatuses = useMemo(() => {
+    const statuses = new Map();
     for (const item of [...(overview.todays_activities || []), ...(overview.carried_over_activities || [])]) {
       if (item.source_client_task_id == null) continue;
       if (!item.completed && item.activity_date && String(item.activity_date) < String(overview.today || "")) {
         if (item.continued_to_activity_id != null) continue;
       }
       if (item.completed) continue;
-      ids.add(Number(item.source_client_task_id));
+      const taskId = Number(item.source_client_task_id);
+      const nextStatus = item.activity_date === overview.today ? "today" : "carried_over";
+      const currentStatus = statuses.get(taskId);
+      if (currentStatus !== "today") {
+        statuses.set(taskId, nextStatus);
+      }
     }
-    return ids;
+    return statuses;
   }, [overview.carried_over_activities, overview.todays_activities, overview.today]);
 
   const groupedWorkplanTasks = useMemo(
     () => groupClientTasks(workplanRows).map((group) => {
       const selectedRowIds = new Set(selectedWorkplanRowIds.map((id) => Number(id)));
-      const selectedRows = group.rows.filter((row) => selectedRowIds.has(Number(row.id)) && !carriedOverTaskIds.has(Number(row.id)));
+      const selectedRows = group.rows.filter((row) => selectedRowIds.has(Number(row.id)) && !workplanTaskStatuses.has(Number(row.id)));
       return {
         ...group,
         selectedRows,
         selectedCount: selectedRows.length,
       };
     }),
-    [carriedOverTaskIds, workplanRows, selectedWorkplanRowIds]
+    [workplanTaskStatuses, workplanRows, selectedWorkplanRowIds]
   );
 
   const selectedWorkplanRows = useMemo(
-    () => groupedWorkplanTasks.flatMap((group) => group.selectedRows.filter((row) => !carriedOverTaskIds.has(Number(row.id)))),
-    [carriedOverTaskIds, groupedWorkplanTasks]
+    () => groupedWorkplanTasks.flatMap((group) => group.selectedRows.filter((row) => !workplanTaskStatuses.has(Number(row.id)))),
+    [workplanTaskStatuses, groupedWorkplanTasks]
   );
 
   const selectedWorkplanItems = useMemo(
     () => groupedWorkplanTasks.flatMap((group) =>
       group.selectedRows
-        .filter((row) => !carriedOverTaskIds.has(Number(row.id)))
+        .filter((row) => !workplanTaskStatuses.has(Number(row.id)))
         .map((row) => ({
           activity: `Task: ${group.task || "Untitled task"} - ${row.subtask}`,
           client_id: Number(selectedWorkplanClientId),
           source_client_task_id: Number(row.id),
         }))
     ),
-    [carriedOverTaskIds, groupedWorkplanTasks, selectedWorkplanClientId]
+    [workplanTaskStatuses, groupedWorkplanTasks, selectedWorkplanClientId]
   );
 
   const selectedWorkplanText = useMemo(() => {
     if (!selectedWorkplanClient || !selectedWorkplanRows.length) return "";
     const lines = [`${selectedWorkplanClient.name} - ${selectedWorkplanYear} Q${selectedWorkplanQuarter}`];
     groupedWorkplanTasks.forEach((group) => {
-      const currentRows = group.selectedRows.filter((row) => !carriedOverTaskIds.has(Number(row.id)));
+      const currentRows = group.selectedRows.filter((row) => !workplanTaskStatuses.has(Number(row.id)));
       if (!currentRows.length) return;
       lines.push(`Task: ${group.task}`);
       currentRows.forEach((row) => {
@@ -224,7 +229,7 @@ export default function DashboardPage() {
       });
     });
     return lines.join("\n");
-  }, [carriedOverTaskIds, groupedWorkplanTasks, selectedWorkplanClient, selectedWorkplanQuarter, selectedWorkplanRows.length, selectedWorkplanYear]);
+  }, [workplanTaskStatuses, groupedWorkplanTasks, selectedWorkplanClient, selectedWorkplanQuarter, selectedWorkplanRows.length, selectedWorkplanYear]);
 
   const groupedTodayPosts = useMemo(
     () => groupActivitiesByUserDay(overview.todays_activities)
@@ -711,7 +716,7 @@ export default function DashboardPage() {
             ) : (
               <div className="dashboard-workplan-groups">
                 {groupedWorkplanTasks.map((group) => {
-                  const selectableRows = group.rows.filter((row) => !carriedOverTaskIds.has(Number(row.id)));
+                  const selectableRows = group.rows.filter((row) => !workplanTaskStatuses.has(Number(row.id)));
                   const allSelected = selectableRows.length > 0 && selectableRows.every((row) => selectedWorkplanRowIds.includes(Number(row.id)));
                   const someSelected = selectableRows.some((row) => selectedWorkplanRowIds.includes(Number(row.id))) && !allSelected;
                   return (
@@ -734,13 +739,14 @@ export default function DashboardPage() {
                       <div className="dashboard-workplan-subtasks">
                         {group.rows.map((row) => {
                           const checked = selectedWorkplanRowIds.includes(Number(row.id));
-                          const isCarriedOver = carriedOverTaskIds.has(Number(row.id));
+                          const taskStatus = workplanTaskStatuses.get(Number(row.id));
+                          const isBlocked = !!taskStatus;
                           return (
-                            <label key={row.id} className={`dashboard-workplan-subtask${checked ? " is-selected" : ""}${isCarriedOver ? " is-disabled" : ""}`}>
+                            <label key={row.id} className={`dashboard-workplan-subtask${checked ? " is-selected" : ""}${isBlocked ? " is-disabled" : ""}`}>
                               <input
                                 type="checkbox"
                                 checked={checked}
-                                disabled={isCarriedOver}
+                                disabled={isBlocked}
                                 onChange={(e) => toggleWorkplanRow(row.id, e.target.checked)}
                               />
                               <div className="dashboard-workplan-subtask-copy">
@@ -748,7 +754,12 @@ export default function DashboardPage() {
                                 <div className="dashboard-workplan-subtask-meta">
                                   {row.completion_date ? `Due ${formatDate(row.completion_date)}` : "No due date"}
                                 </div>
-                                {isCarriedOver ? (
+                                {taskStatus === "today" ? (
+                                  <div className="dashboard-workplan-subtask-meta dashboard-workplan-subtask-warning">
+                                    Already added to today&apos;s to-do list.
+                                  </div>
+                                ) : null}
+                                {taskStatus === "carried_over" ? (
                                   <div className="dashboard-workplan-subtask-meta dashboard-workplan-subtask-warning">
                                     Already carried over. Continue it from the carried over list below.
                                   </div>
