@@ -318,6 +318,8 @@ def _run_startup_migrations():
             pass
         try:
             conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS series_id VARCHAR(40)"))
+            conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_type VARCHAR(20)"))
+            conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_until DATE"))
             conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_series_id ON events(series_id)"))
         except Exception:
             pass
