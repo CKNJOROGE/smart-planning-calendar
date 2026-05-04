@@ -96,6 +96,23 @@ function formatExportBoundary(v, allDay, isEnd = false) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+function formatRecurrenceUntil(value) {
+  if (!value) return "";
+  const d = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString();
+}
+
+function recurrenceSummary(apiEvent) {
+  const recurrenceType = String(apiEvent?.recurrence_type || apiEvent?.recurrenceType || "").toLowerCase();
+  const recurrenceUntil = apiEvent?.recurrence_until || apiEvent?.recurrenceUntil || "";
+  if (recurrenceType !== "weekly") return "";
+  if (recurrenceUntil) {
+    return `Repeats weekly until ${formatRecurrenceUntil(recurrenceUntil)}`;
+  }
+  return "Repeats weekly";
+}
+
 function normalizeStatus(status) {
   const s = (status || "approved").toLowerCase();
   if (s === "pending" || s === "approved" || s === "rejected") return s;
@@ -339,6 +356,8 @@ export default function CalendarPage() {
     startTime: "09:00",
     endTime: "10:00",
     type: "Leave",
+    repeat: "none",
+    recurrenceUntil: "",
     clientSource: "managed",
     clientId: "",
     oneTimeClientName: "",
@@ -356,6 +375,9 @@ export default function CalendarPage() {
     startTime: "09:00",
     endTime: "10:00",
     type: "Leave",
+    seriesId: "",
+    recurrenceType: "",
+    recurrenceUntil: "",
     clientSource: "managed",
     clientId: "",
     oneTimeClientName: "",
@@ -656,6 +678,8 @@ export default function CalendarPage() {
       startTime: "09:00",
       endTime: "10:00",
       type: defaultType,
+      repeat: "none",
+      recurrenceUntil: "",
       clientSource: "managed",
       clientId: "",
       oneTimeClientName: "",
@@ -785,6 +809,9 @@ export default function CalendarPage() {
       startTime: toLocalTimeInput(startDt),
       endTime,
       type: e.type || "Other",
+      seriesId: e.series_id || "",
+      recurrenceType: e.recurrence_type || "",
+      recurrenceUntil: e.recurrence_until || "",
       clientSource: e.one_time_client_name ? "one_time" : "managed",
       clientId: e.client_id ? String(e.client_id) : "",
       oneTimeClientName: e.one_time_client_name || "",
@@ -798,7 +825,10 @@ export default function CalendarPage() {
 
   async function handleDelete() {
     if (!popup) return;
-    if (!confirm("Delete this unavailability entry?")) return;
+    const deleteMessage = popup.apiEvent?.series_id
+      ? "Delete this meeting occurrence only? Other recurring meetings in the series will stay."
+      : "Delete this unavailability entry?";
+    if (!confirm(deleteMessage)) return;
     try {
       await deleteEvent(popup.apiEvent.id);
       setPopup(null);
@@ -926,6 +956,7 @@ export default function CalendarPage() {
     }
     const needsClient = supportsClientSelection(form.type);
     const isSickLeave = (form.type || "").toLowerCase() === "hospital";
+    const isRecurringMeeting = form.type === "Meeting" && form.repeat === "weekly";
     if (needsClient) {
       if (form.clientSource === "managed" && !form.clientId) {
         setError(`Please choose a client for ${form.type}.`);
@@ -933,6 +964,16 @@ export default function CalendarPage() {
       }
       if (form.clientSource === "one_time" && !(form.oneTimeClientName || "").trim()) {
         setError(`Please enter a one-time client name for ${form.type}.`);
+        return;
+      }
+    }
+    if (isRecurringMeeting) {
+      if (!form.recurrenceUntil) {
+        setError("Please choose the date when the weekly meeting series should end.");
+        return;
+      }
+      if (form.recurrenceUntil < form.startDate) {
+        setError("Recurring meeting end date cannot be before the first meeting date.");
         return;
       }
     }
@@ -953,6 +994,8 @@ export default function CalendarPage() {
           end_ts: endISO,
           all_day: allDay,
           type: form.type,
+          recurrence_type: isRecurringMeeting ? "weekly" : null,
+          recurrence_until: isRecurringMeeting ? form.recurrenceUntil : null,
           client_id: needsClient && form.clientSource === "managed" ? Number(form.clientId) : null,
           one_time_client_name: needsClient && form.clientSource === "one_time" ? (form.oneTimeClientName || "").trim() : null,
           note: form.note || null,
@@ -1310,6 +1353,12 @@ export default function CalendarPage() {
                   {formatEventBoundary(popup.apiEvent.end_ts, popup.apiEvent.all_day, true)}
                 </div>
               </div>
+              {popup.apiEvent.series_id && recurrenceSummary(popup.apiEvent) && (
+                <div className="calendar-popup-field">
+                  <div className="calendar-popup-label">Recurrence</div>
+                  <div className="calendar-popup-value">{recurrenceSummary(popup.apiEvent)}</div>
+                </div>
+              )}
               {supportsClientSelection(popup.apiEvent.type) && (
                 <div className="calendar-popup-field">
                   <div className="calendar-popup-label">Client</div>
@@ -1427,6 +1476,8 @@ export default function CalendarPage() {
                         type: t,
                         allDay: forceAllDay ? true : (t === "Meeting" ? false : f.allDay),
                         endDate: forceAllDay ? f.endDate : (t === "Meeting" ? f.startDate : f.endDate),
+                        repeat: t === "Meeting" ? f.repeat : "none",
+                        recurrenceUntil: t === "Meeting" ? f.recurrenceUntil : "",
                         clientSource: supportsClientSelection(t) ? f.clientSource : "managed",
                         clientId: supportsClientSelection(t) ? f.clientId : "",
                         oneTimeClientName: supportsClientSelection(t) ? f.oneTimeClientName : "",
@@ -1544,7 +1595,12 @@ export default function CalendarPage() {
                     min={allowsPastDatesForType(form.type) ? undefined : minDate}
                     onChange={(e) => {
                       const v = e.target.value;
-                      setForm((f) => ({ ...f, startDate: v, endDate: f.allDay ? f.endDate : v }));
+                      setForm((f) => ({
+                        ...f,
+                        startDate: v,
+                        endDate: f.allDay ? f.endDate : v,
+                        recurrenceUntil: f.repeat === "weekly" && f.recurrenceUntil && f.recurrenceUntil < v ? v : f.recurrenceUntil,
+                      }));
                       if (form.type === "Leave" && v) refreshLeaveBalance(v);
                     }}
                   />
@@ -1580,6 +1636,43 @@ export default function CalendarPage() {
                       onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
                     />
                   </div>
+                </div>
+              )}
+
+              {form.type === "Meeting" && (
+                <div className="row">
+                  <div className="field" style={{ flex: "1 1 240px" }}>
+                    <label>Repeat</label>
+                    <select
+                      value={form.repeat}
+                      onChange={(e) => {
+                        const nextRepeat = e.target.value;
+                        setForm((f) => ({
+                          ...f,
+                          repeat: nextRepeat,
+                          recurrenceUntil:
+                            nextRepeat === "weekly"
+                              ? (f.recurrenceUntil && f.recurrenceUntil >= f.startDate ? f.recurrenceUntil : f.startDate)
+                              : "",
+                        }));
+                      }}
+                    >
+                      <option value="none">Does not repeat</option>
+                      <option value="weekly">Weekly</option>
+                    </select>
+                    <div className="helper">Weekly meetings repeat on the same weekday and time as the first meeting.</div>
+                  </div>
+                  {form.repeat === "weekly" && (
+                    <div className="field" style={{ flex: "1 1 240px" }}>
+                      <label>Ends on</label>
+                      <input
+                        type="date"
+                        value={form.recurrenceUntil}
+                        min={form.startDate || minDate}
+                        onChange={(e) => setForm((f) => ({ ...f, recurrenceUntil: e.target.value }))}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1621,6 +1714,7 @@ export default function CalendarPage() {
                   <label>Type</label>
                   <select
                     value={editForm.type}
+                    disabled={!!editForm.seriesId}
                     onChange={(e) => {
                       const t = e.target.value;
                       const forceAllDay = isForcedAllDayType(t);
@@ -1663,10 +1757,21 @@ export default function CalendarPage() {
                     <option value="no">No (pick time)</option>
                   </select>
                   <div className="helper">
-                    {isForcedAllDayType(editForm.type) ? "Leave and Sick Leave are always full-day." : "Choose No to set a specific time window."}
+                    {editForm.seriesId
+                      ? "This occurrence belongs to a recurring meeting series. Type changes are disabled here."
+                      : (isForcedAllDayType(editForm.type) ? "Leave and Sick Leave are always full-day." : "Choose No to set a specific time window.")}
                   </div>
                 </div>
               </div>
+
+              {editForm.seriesId && recurrenceSummary(editForm) && (
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontWeight: 800, marginBottom: 6 }}>Recurring meeting</div>
+                  <div className="muted" style={{ fontSize: 13 }}>
+                    {recurrenceSummary(editForm)}. Changes in this form affect only this occurrence.
+                  </div>
+                </div>
+              )}
 
               {supportsClientSelection(editForm.type) && (
                 <>

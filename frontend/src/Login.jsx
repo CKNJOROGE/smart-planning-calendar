@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { login, saveToken, me } from "./api";
+import { login, me } from "./api";
 
 export default function Login({ onLoggedIn }) {
   const particlesRef = useRef(null);
@@ -202,6 +202,9 @@ export default function Login({ onLoggedIn }) {
 
   function mapErrorMessage(raw) {
     const txt = String(raw || "").toLowerCase();
+    if (txt.includes("too many login attempts") || txt.includes("429")) {
+      return String(raw || "Too many login attempts. Please wait and try again.");
+    }
     if (txt.includes("401") || txt.includes("wrong email or password")) {
       return "Invalid email or password.";
     }
@@ -218,8 +221,7 @@ export default function Login({ onLoggedIn }) {
     }
     setLoading(true);
     try {
-      const data = await login(email.trim(), password);
-      saveToken(data.access_token);
+      await login(email.trim(), password);
       await me();
       onLoggedIn();
     } catch (err) {

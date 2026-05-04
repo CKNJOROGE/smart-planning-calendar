@@ -1,16 +1,29 @@
 const API_BASE = (import.meta.env.VITE_API_BASE || "/api").replace(/\/$/, "");
 const IS_ABSOLUTE_API_BASE = /^https?:\/\//i.test(API_BASE);
+const CSRF_STORAGE_KEY = "csrf_token";
+const CSRF_HEADER_NAME = "X-CSRF-Token";
 
 export function saveToken(token) {
-  localStorage.setItem("token", token);
+  localStorage.removeItem("token");
+  return token;
 }
 
 export function getToken() {
-  return localStorage.getItem("token");
+  return "";
 }
 
 export function clearToken() {
   localStorage.removeItem("token");
+  sessionStorage.removeItem(CSRF_STORAGE_KEY);
+}
+
+function getCsrfToken() {
+  return sessionStorage.getItem(CSRF_STORAGE_KEY) || "";
+}
+
+function saveCsrfToken(token) {
+  if (!token) return;
+  sessionStorage.setItem(CSRF_STORAGE_KEY, token);
 }
 
 export function resolveAvatarUrl(url) {
@@ -52,13 +65,38 @@ function extractErrorMessage(status, statusText, text) {
   return raw;
 }
 
+function storeSecurityHeaders(res) {
+  const csrfToken = res.headers.get(CSRF_HEADER_NAME);
+  if (csrfToken) {
+    saveCsrfToken(csrfToken);
+  }
+}
+
+function buildAuthHeaders(method, headers = {}) {
+  const finalHeaders = { ...headers };
+  const csrfToken = getCsrfToken();
+  const upperMethod = String(method || "GET").toUpperCase();
+  if (!["GET", "HEAD", "OPTIONS", "TRACE"].includes(upperMethod) && csrfToken) {
+    finalHeaders[CSRF_HEADER_NAME] = csrfToken;
+  }
+  return finalHeaders;
+}
+
+async function fetchWithAuth(url, { method = "GET", headers = {}, body } = {}) {
+  const res = await fetch(url, {
+    method,
+    headers: buildAuthHeaders(method, headers),
+    body,
+    credentials: "include",
+  });
+  storeSecurityHeaders(res);
+  return res;
+}
+
 async function request(path, { method = "GET", body } = {}) {
-  const token = getToken();
-
   const headers = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetchWithAuth(`${API_BASE}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -78,7 +116,7 @@ export async function login(email, password) {
   form.append("username", email);
   form.append("password", password);
 
-  const res = await fetch(`${API_BASE}/auth/login`, {
+  const res = await fetchWithAuth(`${API_BASE}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: form.toString(),
@@ -107,6 +145,10 @@ export function resetPassword(token, newPassword) {
   });
 }
 
+export function logout() {
+  return request("/auth/logout", { method: "POST" });
+}
+
 export function me() {
   return request("/me");
 }
@@ -131,10 +173,8 @@ export function createDepartment(name) {
 }
 
 export async function deleteDepartment(departmentId) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/departments/${departmentId}`, {
+  const res = await fetchWithAuth(`${API_BASE}/departments/${departmentId}`, {
     method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();
@@ -155,10 +195,8 @@ export function createDesignation(payload) {
 }
 
 export async function deleteDesignation(designationId) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/designations/${designationId}`, {
+  const res = await fetchWithAuth(`${API_BASE}/designations/${designationId}`, {
     method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();
@@ -210,13 +248,11 @@ export function updateEvent(id, payload) {
 }
 
 export async function uploadEventSickNote(eventId, file) {
-  const token = getToken();
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(`${API_BASE}/events/${eventId}/sick-note`, {
+  const res = await fetchWithAuth(`${API_BASE}/events/${eventId}/sick-note`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   });
   if (!res.ok) {
@@ -227,10 +263,8 @@ export async function uploadEventSickNote(eventId, file) {
 }
 
 export async function deleteEvent(id) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/events/${id}`, {
+  const res = await fetchWithAuth(`${API_BASE}/events/${id}`, {
     method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();
@@ -248,13 +282,11 @@ export function updateUserProfile(userId, payload) {
 }
 
 export async function uploadMyAvatar(file) {
-  const token = getToken();
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(`${API_BASE}/users/me/avatar`, {
+  const res = await fetchWithAuth(`${API_BASE}/users/me/avatar`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   });
 
@@ -267,13 +299,11 @@ export async function uploadMyAvatar(file) {
 }
 
 export async function uploadMyDocument(docType, file) {
-  const token = getToken();
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(`${API_BASE}/users/me/documents/${encodeURIComponent(docType)}`, {
+  const res = await fetchWithAuth(`${API_BASE}/users/me/documents/${encodeURIComponent(docType)}`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   });
 
@@ -294,15 +324,13 @@ export function adminUpdateUserProfile(userId, payload) {
 }
 
 export async function adminUploadUserDocument(userId, docType, file) {
-  const token = getToken();
   const form = new FormData();
   form.append("file", file);
 
-  const res = await fetch(
+  const res = await fetchWithAuth(
     `${API_BASE}/admin/users/${userId}/documents/${encodeURIComponent(docType)}`,
     {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     }
   );
@@ -320,10 +348,8 @@ export function createUser(payload) {
 }
 
 export async function deleteUser(userId) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/users/${userId}`, {
+  const res = await fetchWithAuth(`${API_BASE}/users/${userId}`, {
     method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();
@@ -352,16 +378,14 @@ export function adminGetUserLeaveBalance(userId, asOfYYYYMMDD) {
 
 // WebSocket URL helper
 export function getWsUrl() {
-  const token = (getToken() || "").trim();
-  if (!token) return null;
   if (IS_ABSOLUTE_API_BASE) {
     const u = new URL(API_BASE);
     const proto = u.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${u.host}/ws?token=${encodeURIComponent(token)}`;
+    return `${proto}//${u.host}/ws`;
   }
 
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/ws?token=${encodeURIComponent(token)}`;
+  return `${proto}//${window.location.host}/ws`;
 }
 
 export function listLibraryDocuments(category = "") {
@@ -392,15 +416,13 @@ export function updateSharedNotebook(content) {
 }
 
 export async function uploadLibraryDocument({ title, category, file }) {
-  const token = getToken();
   const form = new FormData();
   form.append("title", title);
   form.append("category", category);
   form.append("file", file);
 
-  const res = await fetch(`${API_BASE}/library/documents`, {
+  const res = await fetchWithAuth(`${API_BASE}/library/documents`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   });
 
@@ -412,10 +434,8 @@ export async function uploadLibraryDocument({ title, category, file }) {
 }
 
 export async function deleteLibraryDocument(docId) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/library/documents/${docId}`, {
+  const res = await fetchWithAuth(`${API_BASE}/library/documents/${docId}`, {
     method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();
@@ -448,10 +468,8 @@ export function updateTaskClient(clientId, reimbursementAmount) {
 }
 
 export async function deleteTaskClient(clientId) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/task-manager/clients/${clientId}`, {
+  const res = await fetchWithAuth(`${API_BASE}/task-manager/clients/${clientId}`, {
     method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();
@@ -495,10 +513,8 @@ export function getSavedClientWorkplanReport(reportId) {
 }
 
 export async function deleteSavedClientWorkplanReport(reportId) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/task-manager/reports/workplan/${reportId}`, {
+  const res = await fetchWithAuth(`${API_BASE}/task-manager/reports/workplan/${reportId}`, {
     method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();
@@ -528,10 +544,8 @@ export function appendClientTaskSubtask(taskId, payload) {
 }
 
 export async function deleteClientTask(taskId) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/task-manager/tasks/${taskId}`, {
+  const res = await fetchWithAuth(`${API_BASE}/task-manager/tasks/${taskId}`, {
     method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();
@@ -560,10 +574,8 @@ export function updateProbationRecord(recordId, payload) {
 }
 
 export async function deleteProbationRecord(recordId) {
-  const token = getToken();
-  const res = await fetch(`${API_BASE}/task-manager/probation-records/${recordId}`, {
+  const res = await fetchWithAuth(`${API_BASE}/task-manager/probation-records/${recordId}`, {
     method: "DELETE",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();
@@ -885,12 +897,10 @@ export function withdrawSalaryAdvanceRequest(requestId) {
 }
 
 export async function setSalaryAdvanceDeductionStart(requestId, deductionStartDate) {
-  const token = getToken();
   const form = new FormData();
   form.append("deduction_start_date", deductionStartDate);
-  const res = await fetch(`${API_BASE}/finance/salary-advances/${requestId}/deduction-start`, {
+  const res = await fetchWithAuth(`${API_BASE}/finance/salary-advances/${requestId}/deduction-start`, {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   });
   if (!res.ok) {
@@ -973,13 +983,11 @@ export function markPayrollRunPaid(runId) {
 }
 
 export async function openProtectedFile(url) {
-  const token = getToken();
   const resolved = resolveFileUrl(url);
   if (!resolved) throw new Error("Missing file URL");
 
-  const res = await fetch(resolved, {
+  const res = await fetchWithAuth(resolved, {
     method: "GET",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
     const text = await res.text();

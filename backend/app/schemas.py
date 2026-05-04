@@ -185,6 +185,8 @@ class EventCreate(BaseModel):
     end_ts: datetime
     all_day: bool = True
     type: str
+    recurrence_type: Optional[str] = None
+    recurrence_until: Optional[date] = None
     client_id: Optional[int] = None
     one_time_client_name: Optional[str] = None
     note: Optional[str] = None
@@ -217,6 +219,9 @@ class EventOut(BaseModel):
     start_ts: datetime
     end_ts: datetime
     all_day: bool
+    series_id: Optional[str] = None
+    recurrence_type: Optional[str] = None
+    recurrence_until: Optional[date] = None
     type: str
     client_id: Optional[int] = None
     one_time_client_name: Optional[str] = None

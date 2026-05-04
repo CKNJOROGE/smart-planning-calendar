@@ -17,7 +17,7 @@ import PerformanceManagementPage from "./PerformanceManagementPage";
 import IndividualGoalsPage from "./IndividualGoalsPage";
 import ForgotPasswordPage from "./ForgotPasswordPage";
 import ResetPasswordPage from "./ResetPasswordPage";
-import { getToken, clearToken, getFinanceAttention, getPayrollAttention, getPayrollAdminAttention, me, updateTheme } from "./api";
+import { clearToken, logout, getFinanceAttention, getPayrollAttention, getPayrollAdminAttention, me, updateTheme } from "./api";
 import { ToastProvider, useToast } from "./ToastProvider";
 
 const THEME_OPTIONS = [
@@ -435,11 +435,6 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      const token = getToken();
-      if (!token) {
-        setAuthState("guest");
-        return;
-      }
       try {
         const payload = await me();
         const effectiveTheme = normalizeTheme(payload?.effective_theme);
@@ -455,6 +450,7 @@ export default function App() {
   }, []);
 
   function handleLogout() {
+    logout().catch(() => {});
     clearToken();
     setAuthState("guest");
   }

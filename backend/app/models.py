@@ -73,6 +73,9 @@ class Event(Base):
     start_ts = Column(DateTime, nullable=False)
     end_ts = Column(DateTime, nullable=False)
     all_day = Column(Boolean, default=True)
+    series_id = Column(String(40), nullable=True, index=True)
+    recurrence_type = Column(String(20), nullable=True)
+    recurrence_until = Column(Date, nullable=True)
 
     type = Column(String(50), nullable=False)
     client_id = Column(Integer, ForeignKey("client_accounts.id"), nullable=True, index=True)

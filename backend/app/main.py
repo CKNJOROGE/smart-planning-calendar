@@ -8,6 +8,7 @@ import json
 import hashlib
 import secrets
 import logging
+from threading import Lock
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query, UploadFile, File, Request, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -164,6 +165,8 @@ from .email_service import (
 from .ai_service import GeminiReportTemporarilyUnavailableError, build_client_workplan_ai_report
 
 logger = logging.getLogger(__name__)
+LOGIN_THROTTLE_LOCK = Lock()
+LOGIN_THROTTLE_STATE: dict[str, dict[str, object]] = {}
 
 app = FastAPI(title="Smart Planning Calendar API")
 ws_manager = ConnectionManager()
@@ -233,6 +236,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[settings.CSRF_HEADER_NAME],
 )
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
@@ -323,6 +327,109 @@ def _password_reset_token_hash(raw_token: str) -> str:
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
 
 
+def _set_auth_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=settings.AUTH_COOKIE_NAME,
+        value=token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite=settings.auth_cookie_samesite,
+        path="/",
+    )
+
+
+def _clear_auth_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=settings.AUTH_COOKIE_NAME,
+        httponly=True,
+        secure=settings.auth_cookie_secure,
+        samesite=settings.auth_cookie_samesite,
+        path="/",
+    )
+
+
+def _set_csrf_header(response: Response, csrf_token: Optional[str]) -> None:
+    if csrf_token:
+        response.headers[settings.CSRF_HEADER_NAME] = csrf_token
+
+
+def _request_ip(request: Request) -> str:
+    forwarded_for = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if forwarded_for:
+        return forwarded_for
+    return request.client.host if request.client else "unknown"
+
+
+def _login_throttle_keys(email: str, request: Request) -> list[str]:
+    normalized_email = (email or "").strip().lower()
+    ip = _request_ip(request)
+    keys = [f"ip:{ip}"]
+    if normalized_email:
+        keys.append(f"ip-email:{ip}:{normalized_email}")
+    return keys
+
+
+def _enforce_login_throttle(email: str, request: Request) -> None:
+    now = datetime.utcnow()
+    with LOGIN_THROTTLE_LOCK:
+        for key in _login_throttle_keys(email, request):
+            state = LOGIN_THROTTLE_STATE.get(key)
+            if not state:
+                continue
+            blocked_until = state.get("blocked_until")
+            if isinstance(blocked_until, datetime) and blocked_until > now:
+                retry_after = max(1, int((blocked_until - now).total_seconds()))
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Too many login attempts. Try again in {retry_after} seconds.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+            if isinstance(blocked_until, datetime) and blocked_until <= now:
+                LOGIN_THROTTLE_STATE.pop(key, None)
+
+
+def _record_login_failure(email: str, request: Request) -> None:
+    now = datetime.utcnow()
+    with LOGIN_THROTTLE_LOCK:
+        for key in _login_throttle_keys(email, request):
+            state = LOGIN_THROTTLE_STATE.get(key)
+            if not state:
+                LOGIN_THROTTLE_STATE[key] = {"count": 1, "window_start": now}
+                continue
+
+            window_start = state.get("window_start")
+            count = int(state.get("count") or 0)
+            if not isinstance(window_start, datetime) or (now - window_start).total_seconds() > settings.LOGIN_THROTTLE_WINDOW_SECONDS:
+                state["count"] = 1
+                state["window_start"] = now
+                state.pop("blocked_until", None)
+                continue
+
+            count += 1
+            state["count"] = count
+            if count >= settings.LOGIN_THROTTLE_MAX_ATTEMPTS:
+                state["blocked_until"] = now + timedelta(seconds=settings.LOGIN_THROTTLE_BLOCK_SECONDS)
+
+
+def _clear_login_throttle(email: str, request: Request) -> None:
+    with LOGIN_THROTTLE_LOCK:
+        for key in _login_throttle_keys(email, request):
+            LOGIN_THROTTLE_STATE.pop(key, None)
+
+
+def _csrf_from_auth_cookie(request: Request) -> Optional[str]:
+    token = request.cookies.get(settings.AUTH_COOKIE_NAME)
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except Exception:
+        return None
+    csrf_value = payload.get("csrf")
+    return str(csrf_value) if csrf_value else None
+
+
 @app.get("/files/documents/{file_name}")
 def get_profile_document_file(
     file_name: str,
@@ -400,7 +507,8 @@ def get_avatar_file(file_name: str):
 # -------------------------
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: str = Query(default="")):
-    # Auth via token query param: ws://127.0.0.1:8000/ws?token=JWT
+    # Prefer auth cookie; keep token query param as a backward-compatible fallback.
+    token = websocket.cookies.get(settings.AUTH_COOKIE_NAME) or token
     if not token:
         await websocket.close(code=1008)
         return
@@ -1407,6 +1515,56 @@ def _is_past_current_day_event(e: Event) -> bool:
     return e.end_ts.date() <= date.today()
 
 
+def _normalize_event_recurrence(
+    event_type: str,
+    start_ts: datetime,
+    end_ts: datetime,
+    recurrence_type: Optional[str],
+    recurrence_until: Optional[date],
+) -> tuple[Optional[str], Optional[date]]:
+    normalized_type = (event_type or "").strip()
+    normalized_recurrence = (recurrence_type or "").strip().lower()
+    if not normalized_recurrence:
+        return None, None
+
+    if normalized_type.lower() != "meeting":
+        raise HTTPException(status_code=400, detail="Recurring events are currently supported for meetings only")
+    if normalized_recurrence != "weekly":
+        raise HTTPException(status_code=400, detail="Only weekly recurrence is currently supported")
+    if recurrence_until is None:
+        raise HTTPException(status_code=400, detail="Please choose an end date for the recurring meeting")
+    if end_ts <= start_ts:
+        raise HTTPException(status_code=400, detail="End time must be after start time")
+    if recurrence_until < start_ts.date():
+        raise HTTPException(status_code=400, detail="Recurring meeting end date cannot be before the first meeting date")
+
+    return normalized_recurrence, recurrence_until
+
+
+def _build_event_occurrences(
+    start_ts: datetime,
+    end_ts: datetime,
+    recurrence_type: Optional[str],
+    recurrence_until: Optional[date],
+) -> list[tuple[datetime, datetime]]:
+    occurrences: list[tuple[datetime, datetime]] = [(start_ts, end_ts)]
+    if recurrence_type != "weekly" or recurrence_until is None:
+        return occurrences
+
+    duration = end_ts - start_ts
+    cursor = start_ts + timedelta(days=7)
+    while cursor.date() <= recurrence_until:
+        occurrences.append((cursor, cursor + duration))
+        if len(occurrences) > 260:
+            raise HTTPException(
+                status_code=400,
+                detail="Recurring meeting series is too long. Please choose an end date within 260 weekly occurrences.",
+            )
+        cursor += timedelta(days=7)
+
+    return occurrences
+
+
 def _compute_leave_review_permissions(
     db: Session,
     current: User,
@@ -1838,13 +1996,31 @@ def create_first_admin(
 # Auth
 # -------------------------
 @app.post("/auth/login", response_model=TokenResponse)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == form_data.username).first()
+def login(
+    request: Request,
+    response: Response,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    email = (form_data.username or "").strip().lower()
+    _enforce_login_throttle(email, request)
+    user = db.query(User).filter(User.email == email).first()
     if not user or not verify_password(form_data.password, user.password_hash):
+        _record_login_failure(email, request)
         raise HTTPException(status_code=401, detail="Wrong email or password")
 
-    token = create_access_token(subject=user.email)
+    _clear_login_throttle(email, request)
+    csrf_token = secrets.token_urlsafe(24)
+    token = create_access_token(subject=user.email, csrf_token=csrf_token)
+    _set_auth_cookie(response, token)
+    _set_csrf_header(response, csrf_token)
     return {"access_token": token, "token_type": "bearer"}
+
+
+@app.post("/auth/logout", response_model=MessageOut)
+def logout(response: Response):
+    _clear_auth_cookie(response)
+    return MessageOut(message="Logged out")
 
 
 @app.post("/auth/forgot-password", response_model=MessageOut)
@@ -1961,12 +2137,15 @@ def reset_password(payload: ResetPasswordIn, db: Session = Depends(get_db)):
 
 @app.get("/me", response_model=MeOut)
 def get_me(
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     _attach_user_supervisor_metadata(db, user)
     _attach_user_payroll_metadata(db, user)
     _attach_user_theme_metadata(user)
+    _set_csrf_header(response, _csrf_from_auth_cookie(request))
     return user
 
 
@@ -6547,6 +6726,13 @@ async def create_event(
     user: User = Depends(get_current_user),
 ):
     normalized_type = (payload.type or "").strip()
+    normalized_recurrence, normalized_recurrence_until = _normalize_event_recurrence(
+        normalized_type,
+        payload.start_ts,
+        payload.end_ts,
+        payload.recurrence_type,
+        payload.recurrence_until,
+    )
     supports_client = _supports_event_client(normalized_type)
     client_id: Optional[int] = payload.client_id if supports_client else None
     one_time_client_name: Optional[str] = (payload.one_time_client_name or "").strip() if supports_client else None
@@ -6571,22 +6757,36 @@ async def create_event(
             raise HTTPException(status_code=400, detail=str(ve))
 
     is_leave_like = normalized_type.lower() in {"leave", "hospital"}
-    e = Event(
-        user_id=user.id,
-        start_ts=payload.start_ts,
-        end_ts=payload.end_ts,
-        all_day=payload.all_day,
-        type=payload.type,
-        client_id=client_id,
-        one_time_client_name=one_time_client_name,
-        note=payload.note,
-        status="pending" if is_leave_like else "approved",
-        requested_by_id=user.id if is_leave_like else None,
+    occurrences = _build_event_occurrences(
+        payload.start_ts,
+        payload.end_ts,
+        normalized_recurrence,
+        normalized_recurrence_until,
     )
-    db.add(e)
-    db.flush()
-    _sync_client_visit_todos(db, e)
+    series_id = uuid4().hex if normalized_recurrence else None
+    created_events: list[Event] = []
+    for start_ts, end_ts in occurrences:
+        e = Event(
+            user_id=user.id,
+            start_ts=start_ts,
+            end_ts=end_ts,
+            all_day=payload.all_day,
+            series_id=series_id,
+            recurrence_type=normalized_recurrence,
+            recurrence_until=normalized_recurrence_until,
+            type=payload.type,
+            client_id=client_id,
+            one_time_client_name=one_time_client_name,
+            note=payload.note,
+            status="pending" if is_leave_like else "approved",
+            requested_by_id=user.id if is_leave_like else None,
+        )
+        db.add(e)
+        db.flush()
+        _sync_client_visit_todos(db, e)
+        created_events.append(e)
     db.commit()
+    e = created_events[0]
     db.refresh(e)
     _ = e.user
     _attach_leave_review_metadata(db, e, user, e.user)

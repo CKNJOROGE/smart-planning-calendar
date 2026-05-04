@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     JWT_SECRET: str = "CHANGE_THIS_TO_A_LONG_RANDOM_STRING"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24
+    AUTH_COOKIE_NAME: str = "spc_access_token"
+    AUTH_COOKIE_SAMESITE: str = ""
+    AUTH_COOKIE_SECURE: bool = False
+    CSRF_HEADER_NAME: str = "X-CSRF-Token"
+    LOGIN_THROTTLE_WINDOW_SECONDS: int = 300
+    LOGIN_THROTTLE_MAX_ATTEMPTS: int = 5
+    LOGIN_THROTTLE_BLOCK_SECONDS: int = 900
 
     CORS_ORIGINS: str = "http://localhost:1420,http://127.0.0.1:1420,http://localhost:5173,http://127.0.0.1:5173"
     TRUSTED_HOSTS: str = "localhost,127.0.0.1"
@@ -68,6 +75,17 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
+
+    @property
+    def auth_cookie_samesite(self) -> str:
+        value = (self.AUTH_COOKIE_SAMESITE or "").strip().lower()
+        if value in {"lax", "strict", "none"}:
+            return value
+        return "none" if self.is_production else "lax"
+
+    @property
+    def auth_cookie_secure(self) -> bool:
+        return bool(self.AUTH_COOKIE_SECURE or self.is_production)
 
     @property
     def r2_enabled(self) -> bool:
