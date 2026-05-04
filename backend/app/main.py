@@ -5727,6 +5727,49 @@ def _to_task_reminder(task: ClientTask) -> TaskReminderOut:
     )
 
 
+def _sync_client_task_completion_from_dashboard(db: Session, task_id: Optional[int]) -> None:
+    if task_id is None:
+        return
+
+    task = db.query(ClientTask).filter(ClientTask.id == task_id).first()
+    if not task:
+        return
+
+    latest_active_row = (
+        db.query(DailyActivity)
+        .filter(
+            DailyActivity.source_client_task_id == task_id,
+            DailyActivity.continued_to_activity_id.is_(None),
+        )
+        .order_by(
+            DailyActivity.activity_date.desc(),
+            DailyActivity.created_at.desc(),
+            DailyActivity.id.desc(),
+        )
+        .first()
+    )
+
+    if latest_active_row is None:
+        latest_active_row = (
+            db.query(DailyActivity)
+            .filter(DailyActivity.source_client_task_id == task_id)
+            .order_by(
+                DailyActivity.activity_date.desc(),
+                DailyActivity.created_at.desc(),
+                DailyActivity.id.desc(),
+            )
+            .first()
+        )
+
+    if latest_active_row is None:
+        task.completed = False
+        task.completed_at = None
+    else:
+        task.completed = bool(latest_active_row.completed)
+        task.completed_at = latest_active_row.completed_at if latest_active_row.completed else None
+    task.updated_at = datetime.utcnow()
+
+
 def _to_probation_record(record: ProbationRecord) -> ProbationRecordOut:
     client_name = record.client.name if record.client else f"Client #{record.client_id}"
     created_by_name = record.created_by.name if record.created_by else f"User #{record.created_by_id}"
@@ -5791,6 +5834,7 @@ def get_dashboard_overview(
         .filter(
             DailyActivity.activity_date < today,
             DailyActivity.activity_date >= history_start,
+            DailyActivity.completed.is_(True),
         )
         .order_by(
             DailyActivity.activity_date.desc(),
@@ -6096,6 +6140,7 @@ def update_todays_activity(
 
     row.completed = bool(payload.completed)
     row.completed_at = datetime.utcnow() if row.completed else None
+    _sync_client_task_completion_from_dashboard(db, row.source_client_task_id)
     db.commit()
     db.refresh(row)
     _ = row.user
@@ -6118,7 +6163,10 @@ def list_todo_history(
     q = (
         db.query(DailyActivity)
         .join(User, User.id == DailyActivity.user_id)
-        .filter(DailyActivity.activity_date < today)
+        .filter(
+            DailyActivity.activity_date < today,
+            DailyActivity.completed.is_(True),
+        )
     )
 
     if start_date is not None:

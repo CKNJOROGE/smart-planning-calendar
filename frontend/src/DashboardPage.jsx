@@ -185,17 +185,24 @@ export default function DashboardPage() {
     return statuses;
   }, [overview.carried_over_activities, overview.todays_activities, overview.today]);
 
+  const completedWorkplanTaskIds = useMemo(
+    () => new Set((workplanRows || []).filter((row) => !!row.completed).map((row) => Number(row.id))),
+    [workplanRows]
+  );
+
   const groupedWorkplanTasks = useMemo(
     () => groupClientTasks(workplanRows).map((group) => {
       const selectedRowIds = new Set(selectedWorkplanRowIds.map((id) => Number(id)));
-      const selectedRows = group.rows.filter((row) => selectedRowIds.has(Number(row.id)) && !workplanTaskStatuses.has(Number(row.id)));
+      const selectedRows = group.rows.filter(
+        (row) => selectedRowIds.has(Number(row.id)) && !workplanTaskStatuses.has(Number(row.id)) && !completedWorkplanTaskIds.has(Number(row.id))
+      );
       return {
         ...group,
         selectedRows,
         selectedCount: selectedRows.length,
       };
     }),
-    [workplanTaskStatuses, workplanRows, selectedWorkplanRowIds]
+    [completedWorkplanTaskIds, workplanTaskStatuses, workplanRows, selectedWorkplanRowIds]
   );
 
   const selectedWorkplanRows = useMemo(
@@ -533,6 +540,15 @@ export default function DashboardPage() {
         unfinished_count: Math.max(0, prev.unfinished_count + (updated.completed ? -1 : 1)),
       }));
       setHistoryRows((prev) => prev.map((row) => (Number(row.id) === id ? { ...row, ...updated } : row)));
+      if (item.source_client_task_id != null) {
+        const sourceTaskId = Number(item.source_client_task_id);
+        setWorkplanRows((prev) =>
+          prev.map((row) => (Number(row.id) === sourceTaskId ? { ...row, completed: !!updated.completed } : row))
+        );
+        if (updated.completed) {
+          setSelectedWorkplanRowIds((prev) => prev.filter((rowId) => Number(rowId) !== sourceTaskId));
+        }
+      }
     } catch (e) {
       setErr(String(e.message || e));
     } finally {
@@ -716,7 +732,7 @@ export default function DashboardPage() {
             ) : (
               <div className="dashboard-workplan-groups">
                 {groupedWorkplanTasks.map((group) => {
-                  const selectableRows = group.rows.filter((row) => !workplanTaskStatuses.has(Number(row.id)));
+                  const selectableRows = group.rows.filter((row) => !workplanTaskStatuses.has(Number(row.id)) && !row.completed);
                   const allSelected = selectableRows.length > 0 && selectableRows.every((row) => selectedWorkplanRowIds.includes(Number(row.id)));
                   const someSelected = selectableRows.some((row) => selectedWorkplanRowIds.includes(Number(row.id))) && !allSelected;
                   return (
@@ -738,9 +754,10 @@ export default function DashboardPage() {
                       </div>
                       <div className="dashboard-workplan-subtasks">
                         {group.rows.map((row) => {
-                          const checked = selectedWorkplanRowIds.includes(Number(row.id));
+                          const isCompletedInTaskManager = !!row.completed;
+                          const checked = !isCompletedInTaskManager && selectedWorkplanRowIds.includes(Number(row.id));
                           const taskStatus = workplanTaskStatuses.get(Number(row.id));
-                          const isBlocked = !!taskStatus;
+                          const isBlocked = !!taskStatus || isCompletedInTaskManager;
                           return (
                             <label key={row.id} className={`dashboard-workplan-subtask${checked ? " is-selected" : ""}${isBlocked ? " is-disabled" : ""}`}>
                               <input
@@ -762,6 +779,11 @@ export default function DashboardPage() {
                                 {taskStatus === "carried_over" ? (
                                   <div className="dashboard-workplan-subtask-meta dashboard-workplan-subtask-warning">
                                     Already carried over. Continue it from the carried over list below.
+                                  </div>
+                                ) : null}
+                                {isCompletedInTaskManager ? (
+                                  <div className="dashboard-workplan-subtask-meta dashboard-workplan-subtask-warning">
+                                    Already marked done in Client Task Manager.
                                   </div>
                                 ) : null}
                               </div>
@@ -987,7 +1009,7 @@ export default function DashboardPage() {
             {historyLoading ? (
               <LoadingState label="Loading history..." compact />
             ) : !historyByDate.length ? (
-              <div className="muted">No historical to-do lists yet.</div>
+              <div className="muted">No completed to-do history yet.</div>
             ) : (
               <div className="dashboard-feed" role="list" aria-label="To-Do List History">
                 {historyByDate.map((day) => (
