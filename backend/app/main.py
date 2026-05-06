@@ -3143,6 +3143,40 @@ def _format_client_report_date(value: Optional[date | datetime]) -> str:
     return f"{normalized.strftime('%B')} {normalized.day}, {normalized.year}"
 
 
+def _format_client_report_month(value: Optional[datetime]) -> str:
+    if value is None:
+        return ""
+    normalized = value if isinstance(value, datetime) else datetime.combine(value, datetime.min.time())
+    return normalized.strftime("%B %Y")
+
+
+def _format_client_report_list(items: list[str]) -> str:
+    values = [item.strip() for item in items if item and item.strip()]
+    if not values:
+        return ""
+    if len(values) == 1:
+        return values[0]
+    if len(values) == 2:
+        return f"{values[0]} and {values[1]}"
+    return f"{', '.join(values[:-1])}, and {values[-1]}"
+
+
+def _describe_monthly_workstream(task: str) -> str:
+    value = (task or "").strip()
+    lowered = value.lower()
+    if "leadership" in lowered:
+        return "leadership development"
+    if "employee relation" in lowered or "hr admin" in lowered:
+        return "HR administration and employee relations"
+    if "policy" in lowered:
+        return "policy enforcement"
+    if "recruit" in lowered or "selection" in lowered:
+        return "recruitment and selection"
+    if "training" in lowered:
+        return "training delivery"
+    return value
+
+
 def _build_monthly_report_status_buckets(report: ClientTaskReportOut) -> dict[str, object]:
     completed_items: list[dict[str, Optional[str]]] = []
     in_progress_items: list[dict[str, Optional[str]]] = []
@@ -3206,6 +3240,24 @@ def _build_monthly_report_status_bullet(item: dict[str, Optional[str]], complete
     return base
 
 
+def _build_monthly_workstream_paragraph(group: ClientTaskReportGroupOut) -> str:
+    focus_area = _describe_monthly_workstream(group.task)
+    if group.completed_subtasks == 0:
+        return (
+            f"This workstream covers {focus_area}. It remains open for the current reporting period, "
+            "and the outstanding actions listed below are still to be progressed."
+        )
+    if group.completed_subtasks == group.total_subtasks:
+        return (
+            f"This workstream covers {focus_area}. All recorded actions under this area have been completed "
+            "for the current reporting period."
+        )
+    return (
+        f"Progress has been made in {focus_area}. {group.completed_subtasks} of {group.total_subtasks} recorded "
+        "actions are complete, while the remaining items continue to be tracked."
+    )
+
+
 def _build_monthly_report_ai_content(
     report: ClientTaskReportOut,
     ai_report: Optional[ClientTaskReportAIOut],
@@ -3214,82 +3266,80 @@ def _build_monthly_report_ai_content(
     completed_items = buckets["completed"]
     in_progress_items = buckets["in_progress"]
     pending_items = buckets["pending"]
-    counts = buckets["counts"]
     period_label = f"{report.year} Q{report.quarter}"
-    total_groups = report.totals.total_groups
     total_subtasks = report.totals.total_subtasks
+    report_month = _format_client_report_month(report.generated_at)
+    focus_areas = _format_client_report_list([_describe_monthly_workstream(group.task) for group in report.groups])
 
     if total_subtasks == 0:
-        opening_summary = (
+        overview_paragraphs = [
             f"No client workplan subtasks are currently recorded for {report.client.name} in {period_label}, "
             "so there is no progress activity to summarize yet."
-        )
+        ]
     else:
-        opening_summary = (
-            f"This monthly progress update for {report.client.name} in {period_label} is based on the current "
-            f"workplan status. {report.totals.completed_subtasks} of {total_subtasks} subtasks are complete "
-            f"({report.totals.completion_percent}% overall), with {counts['in_progress_groups']} active "
-            f"workstream{'s' if counts['in_progress_groups'] != 1 else ''} and {counts['pending_groups']} "
-            f"pending workstream{'s' if counts['pending_groups'] != 1 else ''} still to move forward."
+        timing_label = report_month or period_label
+        focus_sentence = (
+            f"We have achieved significant milestones across several workstreams, with a focus on {focus_areas}."
+            if focus_areas
+            else "We have achieved significant milestones across several workstreams."
         )
+        overview_paragraphs = [
+            f"This report outlines the progress made on key initiatives for {report.client.name} during {timing_label}.",
+            focus_sentence,
+            f"The overall project is currently {report.totals.completion_percent}% complete, with "
+            f"{report.totals.completed_subtasks} out of {total_subtasks} subtasks finalized.",
+        ]
 
-    overall_bullets = [
-        f"{total_groups} task group{'s' if total_groups != 1 else ''} in scope",
-        f"{counts['completed_groups']} fully completed workstream{'s' if counts['completed_groups'] != 1 else ''}",
-        f"{counts['in_progress_groups']} workstream{'s' if counts['in_progress_groups'] != 1 else ''} currently in progress",
-        f"{counts['pending_groups']} workstream{'s' if counts['pending_groups'] != 1 else ''} still pending start",
-    ]
     completed_bullets = [_build_monthly_report_status_bullet(item, completed=True) for item in completed_items]
     in_progress_bullets = [_build_monthly_report_status_bullet(item, completed=False) for item in in_progress_items]
     pending_bullets = [_build_monthly_report_status_bullet(item, completed=False) for item in pending_items]
 
-    sections = [
+    sections: list[ClientTaskReportAISectionOut] = [
         ClientTaskReportAISectionOut(
-            heading="Overall Progress",
-            paragraphs=[
-                opening_summary,
-            ],
-            bullets=overall_bullets,
-        ),
-        ClientTaskReportAISectionOut(
-            heading="Completed Work",
-            paragraphs=[
-                "The following deliverables are marked complete in the current workplan."
-                if completed_bullets
-                else "No subtasks are marked complete yet in the current workplan.",
-            ],
-            bullets=completed_bullets,
-        ),
-        ClientTaskReportAISectionOut(
-            heading="Work In Progress",
-            paragraphs=[
-                "These workstreams have started and still contain open subtasks."
-                if in_progress_bullets
-                else "There are no partially completed workstreams at the moment.",
-            ],
-            bullets=in_progress_bullets,
-        ),
-        ClientTaskReportAISectionOut(
-            heading="Next Priorities",
-            paragraphs=[
-                "These items remain pending and represent the next priorities for delivery."
-                if pending_bullets
-                else "There are no fully pending workstreams at the moment.",
-            ],
-            bullets=pending_bullets,
-        ),
+            heading="Overview",
+            paragraphs=overview_paragraphs,
+            bullets=[],
+        )
     ]
 
+    for group in report.groups:
+        group_bullets: list[str] = []
+        for subtask in group.subtasks:
+            bullet_body = _build_monthly_report_status_bullet(
+                {
+                    "task": "",
+                    "subtask": subtask.subtask,
+                    "completion_date": subtask.completion_date.isoformat() if subtask.completion_date else None,
+                    "completed_at": subtask.completed_at.isoformat() if subtask.completed_at else None,
+                },
+                completed=subtask.completed,
+            )
+            if subtask.completed:
+                group_bullets.append(f"Completed: {bullet_body}")
+            elif group.status == "in_progress":
+                group_bullets.append(f"In Progress: {bullet_body}")
+            else:
+                group_bullets.append(f"Pending: {bullet_body}")
+
+        sections.append(
+            ClientTaskReportAISectionOut(
+                heading=group.task,
+                paragraphs=[_build_monthly_workstream_paragraph(group)],
+                bullets=group_bullets,
+            )
+        )
+
     closing_note = (
-        f"For the remainder of {period_label}, the immediate focus is to close the open subtasks listed above "
-        "and keep momentum across the active workstreams."
+        f"Overall, the workplan continues to move in the right direction for {report.client.name}. "
+        "The focus for the next reporting period will be on closing out the remaining open actions and sustaining "
+        "momentum across each workstream."
         if (in_progress_bullets or pending_bullets)
-        else f"All recorded workstreams for {period_label} are currently complete."
+        else f"Overall, all recorded workstreams for {report.client.name} in {period_label} are currently complete."
     )
 
     return ClientTaskReportAIOut(
         title=(ai_report.title or report.title) if ai_report else report.title,
-        opening_summary=opening_summary,
+        opening_summary="",
         sections=sections,
         closing_note=closing_note,
         completed_highlights=completed_bullets,
