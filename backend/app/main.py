@@ -89,6 +89,7 @@ from .schemas import (
     ClientTaskReportSubtaskOut,
     ClientTaskReportGroupOut,
     ClientTaskReportTotalsOut,
+    ClientTaskReportAISectionOut,
     ClientTaskReportAIOut,
     ClientTaskReportOut,
     ClientTaskReportHistoryOut,
@@ -3135,6 +3136,168 @@ def _build_client_task_workplan_report(
     )
 
 
+def _format_client_report_date(value: Optional[date | datetime]) -> str:
+    if value is None:
+        return ""
+    normalized = value.date() if isinstance(value, datetime) else value
+    return f"{normalized.strftime('%B')} {normalized.day}, {normalized.year}"
+
+
+def _build_monthly_report_status_buckets(report: ClientTaskReportOut) -> dict[str, object]:
+    completed_items: list[dict[str, Optional[str]]] = []
+    in_progress_items: list[dict[str, Optional[str]]] = []
+    pending_items: list[dict[str, Optional[str]]] = []
+    completed_groups = 0
+    in_progress_groups = 0
+    pending_groups = 0
+
+    for group in report.groups:
+        if group.status == "completed":
+            completed_groups += 1
+        elif group.status == "in_progress":
+            in_progress_groups += 1
+        else:
+            pending_groups += 1
+
+        for subtask in group.subtasks:
+            item = {
+                "task": group.task,
+                "subtask": subtask.subtask,
+                "completion_date": subtask.completion_date.isoformat() if subtask.completion_date else None,
+                "completed_at": subtask.completed_at.isoformat() if subtask.completed_at else None,
+            }
+            if subtask.completed:
+                completed_items.append(item)
+            elif group.status == "in_progress":
+                in_progress_items.append(item)
+            else:
+                pending_items.append(item)
+
+    return {
+        "completed": completed_items,
+        "in_progress": in_progress_items,
+        "pending": pending_items,
+        "counts": {
+            "completed_groups": completed_groups,
+            "in_progress_groups": in_progress_groups,
+            "pending_groups": pending_groups,
+        },
+    }
+
+
+def _build_monthly_report_status_bullet(item: dict[str, Optional[str]], completed: bool) -> str:
+    task = (item.get("task") or "").strip()
+    subtask = (item.get("subtask") or "").strip()
+    base = f"{task}: {subtask}" if task and subtask else task or subtask
+    completed_at_value = item.get("completed_at")
+    completion_date_value = item.get("completion_date")
+    if completed:
+        resolved = None
+        if completed_at_value:
+            resolved = datetime.fromisoformat(completed_at_value)
+        elif completion_date_value:
+            resolved = date.fromisoformat(completion_date_value)
+        if resolved is not None:
+            return f"{base} (completed {_format_client_report_date(resolved)})"
+        return base
+
+    if completion_date_value:
+        return f"{base} (target {_format_client_report_date(date.fromisoformat(completion_date_value))})"
+    return base
+
+
+def _build_monthly_report_ai_content(
+    report: ClientTaskReportOut,
+    ai_report: Optional[ClientTaskReportAIOut],
+) -> ClientTaskReportAIOut:
+    buckets = _build_monthly_report_status_buckets(report)
+    completed_items = buckets["completed"]
+    in_progress_items = buckets["in_progress"]
+    pending_items = buckets["pending"]
+    counts = buckets["counts"]
+    period_label = f"{report.year} Q{report.quarter}"
+    total_groups = report.totals.total_groups
+    total_subtasks = report.totals.total_subtasks
+
+    if total_subtasks == 0:
+        opening_summary = (
+            f"No client workplan subtasks are currently recorded for {report.client.name} in {period_label}, "
+            "so there is no progress activity to summarize yet."
+        )
+    else:
+        opening_summary = (
+            f"This monthly progress update for {report.client.name} in {period_label} is based on the current "
+            f"workplan status. {report.totals.completed_subtasks} of {total_subtasks} subtasks are complete "
+            f"({report.totals.completion_percent}% overall), with {counts['in_progress_groups']} active "
+            f"workstream{'s' if counts['in_progress_groups'] != 1 else ''} and {counts['pending_groups']} "
+            f"pending workstream{'s' if counts['pending_groups'] != 1 else ''} still to move forward."
+        )
+
+    overall_bullets = [
+        f"{total_groups} task group{'s' if total_groups != 1 else ''} in scope",
+        f"{counts['completed_groups']} fully completed workstream{'s' if counts['completed_groups'] != 1 else ''}",
+        f"{counts['in_progress_groups']} workstream{'s' if counts['in_progress_groups'] != 1 else ''} currently in progress",
+        f"{counts['pending_groups']} workstream{'s' if counts['pending_groups'] != 1 else ''} still pending start",
+    ]
+    completed_bullets = [_build_monthly_report_status_bullet(item, completed=True) for item in completed_items]
+    in_progress_bullets = [_build_monthly_report_status_bullet(item, completed=False) for item in in_progress_items]
+    pending_bullets = [_build_monthly_report_status_bullet(item, completed=False) for item in pending_items]
+
+    sections = [
+        ClientTaskReportAISectionOut(
+            heading="Overall Progress",
+            paragraphs=[
+                opening_summary,
+            ],
+            bullets=overall_bullets,
+        ),
+        ClientTaskReportAISectionOut(
+            heading="Completed Work",
+            paragraphs=[
+                "The following deliverables are marked complete in the current workplan."
+                if completed_bullets
+                else "No subtasks are marked complete yet in the current workplan.",
+            ],
+            bullets=completed_bullets,
+        ),
+        ClientTaskReportAISectionOut(
+            heading="Work In Progress",
+            paragraphs=[
+                "These workstreams have started and still contain open subtasks."
+                if in_progress_bullets
+                else "There are no partially completed workstreams at the moment.",
+            ],
+            bullets=in_progress_bullets,
+        ),
+        ClientTaskReportAISectionOut(
+            heading="Next Priorities",
+            paragraphs=[
+                "These items remain pending and represent the next priorities for delivery."
+                if pending_bullets
+                else "There are no fully pending workstreams at the moment.",
+            ],
+            bullets=pending_bullets,
+        ),
+    ]
+
+    closing_note = (
+        f"For the remainder of {period_label}, the immediate focus is to close the open subtasks listed above "
+        "and keep momentum across the active workstreams."
+        if (in_progress_bullets or pending_bullets)
+        else f"All recorded workstreams for {period_label} are currently complete."
+    )
+
+    return ClientTaskReportAIOut(
+        title=(ai_report.title or report.title) if ai_report else report.title,
+        opening_summary=opening_summary,
+        sections=sections,
+        closing_note=closing_note,
+        completed_highlights=completed_bullets,
+        pending_focus=in_progress_bullets,
+        recommended_next_steps=pending_bullets,
+    )
+
+
 def _persist_client_task_workplan_report(
     db: Session,
     report: ClientTaskReportOut,
@@ -3198,6 +3361,7 @@ def get_client_task_workplan_report(
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     report = _build_client_task_workplan_report(db, client, year, quarter, normalized_kind)
+    monthly_status_buckets = _build_monthly_report_status_buckets(report) if normalized_kind == "monthly" else None
     ai_payload = {
         "client": {
             "id": report.client.id,
@@ -3233,6 +3397,8 @@ def get_client_task_workplan_report(
             for group in report.groups
         ],
     }
+    if monthly_status_buckets is not None:
+        ai_payload["status_buckets"] = monthly_status_buckets
     try:
         ai_report = build_client_workplan_ai_report(ai_payload)
     except GeminiReportTemporarilyUnavailableError as exc:
@@ -3242,10 +3408,12 @@ def get_client_task_workplan_report(
         raise HTTPException(status_code=502, detail="AI report generation failed")
 
     report.ai_report = ClientTaskReportAIOut(**ai_report.model_dump())
+    if normalized_kind == "monthly":
+        report.ai_report = _build_monthly_report_ai_content(report, report.ai_report)
     if ai_report.title:
-        report.title = ai_report.title.strip()
-    if ai_report.opening_summary:
-        report.overview = ai_report.opening_summary.strip()
+        report.title = report.ai_report.title.strip()
+    if report.ai_report.opening_summary:
+        report.overview = report.ai_report.opening_summary.strip()
     _persist_client_task_workplan_report(db, report, current.id)
     return report
 

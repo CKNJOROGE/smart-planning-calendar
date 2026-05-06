@@ -103,6 +103,8 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
         "Return a title, a short opening summary, 3 to 5 sections, and a closing note.\n"
         "Each section should have a heading, 1 to 2 short paragraphs, and bullet points only where they add value.\n"
         "If there are no completed items, say that clearly.\n"
+        "For monthly reports, treat the status_buckets in the payload as authoritative.\n"
+        "Never describe an item from in_progress or pending as completed, and never move an item from completed into a pending status.\n"
         "If the report is for the start of a quarter, focus on the planned work and priorities.\n"
         "If the report is a monthly progress update, focus on what has been achieved so far, what is currently in progress, and what should happen next.\n"
         "If the report is for the end of a quarter, focus on completed work, notable outcomes, and what remains pending."
