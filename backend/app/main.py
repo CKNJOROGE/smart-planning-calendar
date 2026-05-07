@@ -1146,6 +1146,11 @@ def _taxable_non_cash_benefit(value: Decimal, threshold: Decimal) -> Decimal:
     return value
 
 
+def _fmt_audit_money(value: Decimal) -> str:
+    quantized = _dec(value).quantize(Decimal("0.01"))
+    return f"KES {quantized:,.2f}"
+
+
 def _calculate_paye_monthly(taxable_amount: Decimal, bands_payload: list[dict[str, object]]) -> Decimal:
     remaining = max(taxable_amount, Decimal("0.00"))
     tax = Decimal("0.00")
@@ -1292,6 +1297,31 @@ def _calculate_payroll_breakdown(
     tax_exempt_allowance = values["tax_exempt_allowance"]
     gross_salary_for_statutory = max(gross_cash_pay - tax_exempt_allowance, Decimal("0.00"))
     employment_type = _normalize_employment_type(getattr(employee, "employment_type", None))
+    audit_trail: list[str] = [
+        (
+            f"Gross cash pay = basic salary {_fmt_audit_money(values['basic_salary'])}"
+            f" + house allowance {_fmt_audit_money(values['house_allowance'])}"
+            f" + transport allowance {_fmt_audit_money(values['transport_allowance'])}"
+            f" + other taxable allowance {_fmt_audit_money(values['other_taxable_allowance'])}"
+            f" + bonus {_fmt_audit_money(values['bonus'])}"
+            f" + overtime {_fmt_audit_money(values['overtime'])}"
+            f" + commission {_fmt_audit_money(values['commission'])}"
+            f" = {_fmt_audit_money(gross_cash_pay)}."
+        ),
+        (
+            f"Taxable non-cash benefits = {_fmt_audit_money(taxable_non_cash)}"
+            f" from declared non-cash benefit {_fmt_audit_money(values['non_cash_benefit'])}"
+            f" using threshold {_fmt_audit_money(non_cash_benefit_threshold)}."
+        ),
+        (
+            f"Gross taxable pay = gross cash pay {_fmt_audit_money(gross_cash_pay)}"
+            f" + taxable non-cash benefits {_fmt_audit_money(taxable_non_cash)}"
+            f" = {_fmt_audit_money(gross_taxable_pay)}."
+        ),
+        (
+            f"Tax-exempt allowances applied = {_fmt_audit_money(tax_exempt_allowance)}."
+        ),
+    ]
     if employment_type == "consultant":
         if gross_cash_pay <= Decimal("24000"):
             withholding_tax = Decimal("0.00")
@@ -1314,6 +1344,29 @@ def _calculate_payroll_breakdown(
         other_deductions = (values["other_deductions"] + salary_advance_deduction).quantize(Decimal("0.01"))
         net_pay = (gross_cash_pay - withholding_tax - other_deductions).quantize(Decimal("0.01"))
         employer_total_cost = gross_cash_pay.quantize(Decimal("0.01"))
+        audit_trail.extend([
+            (
+                f"Consultant taxable income = gross taxable pay {_fmt_audit_money(gross_taxable_pay)}"
+                f" - tax-exempt allowances {_fmt_audit_money(tax_exempt_allowance)}"
+                f" = {_fmt_audit_money(taxable_income)}."
+            ),
+            (
+                f"Withholding tax = 5% of gross cash pay {_fmt_audit_money(gross_cash_pay)}"
+                f" = {_fmt_audit_money(withholding_tax)}"
+                f"{' because gross cash pay is above KES 24,000.00' if gross_cash_pay > Decimal('24000') else ' because gross cash pay is KES 24,000.00 or below.'}"
+            ),
+            (
+                f"Other deductions = manual other deductions {_fmt_audit_money(values['other_deductions'])}"
+                f" + salary advance deductions {_fmt_audit_money(salary_advance_deduction)}"
+                f" = {_fmt_audit_money(other_deductions)}."
+            ),
+            (
+                f"Net pay = gross cash pay {_fmt_audit_money(gross_cash_pay)}"
+                f" - withholding tax {_fmt_audit_money(withholding_tax)}"
+                f" - other deductions {_fmt_audit_money(other_deductions)}"
+                f" = {_fmt_audit_money(net_pay)}."
+            ),
+        ])
     else:
         withholding_tax = Decimal("0.00")
         nssf_pensionable_pay = max(values["nssf_pensionable_pay"], Decimal("0.00"))
@@ -1350,6 +1403,73 @@ def _calculate_payroll_breakdown(
         other_deductions = (values["other_deductions"] + salary_advance_deduction).quantize(Decimal("0.01"))
         net_pay = (gross_cash_pay - nssf_employee - shif_employee - ahl_employee - pension_employee - paye_after_reliefs - other_deductions).quantize(Decimal("0.01"))
         employer_total_cost = (gross_cash_pay + nssf_employer + ahl_employer + pension_employer + nita_levy_monthly).quantize(Decimal("0.01"))
+        audit_trail.extend([
+            (
+                f"NSSF employee contribution = tier 1 base {_fmt_audit_money(tier_one_base)} x {float(nssf_employee_rate) * 100:.1f}%"
+                f" + tier 2 base {_fmt_audit_money(tier_two_base)} x {float(nssf_employee_rate) * 100:.1f}%"
+                f" = {_fmt_audit_money(nssf_employee)}."
+            ),
+            (
+                f"Employee pension used = min(saved/input pension {_fmt_audit_money(values['pension_employee'])}, monthly relief cap {_fmt_audit_money(PENSION_RELIEF_CAP_MONTHLY)})"
+                f" = {_fmt_audit_money(pension_employee)}."
+            ),
+            (
+                f"SHIF = max(({_fmt_audit_money(gross_salary_for_statutory)} x {float(shif_rate) * 100:.2f}%), minimum {_fmt_audit_money(shif_minimum_monthly)})"
+                f" = {_fmt_audit_money(shif_employee)}."
+            ),
+            (
+                f"AHL = {_fmt_audit_money(gross_salary_for_statutory)} x {float(ahl_rate_employee) * 100:.2f}%"
+                f" = {_fmt_audit_money(ahl_employee)}."
+            ),
+            (
+                f"Owner occupier interest relief used = min(input {_fmt_audit_money(values['owner_occupier_interest'])}, monthly cap {_fmt_audit_money(owner_occupier_interest_cap_monthly)})"
+                f" = {_fmt_audit_money(owner_occupier_interest_relief)}."
+            ),
+            (
+                f"Disability exemption used = min(input {_fmt_audit_money(values['disability_exemption_amount'])}, monthly cap {_fmt_audit_money(disability_exemption_cap_monthly)})"
+                f" = {_fmt_audit_money(disability_exemption)}."
+            ),
+            (
+                f"Taxable income = gross taxable pay {_fmt_audit_money(gross_taxable_pay)}"
+                f" - tax-exempt allowances {_fmt_audit_money(tax_exempt_allowance)}"
+                f" - NSSF {_fmt_audit_money(nssf_employee)}"
+                f" - employee pension {_fmt_audit_money(pension_employee)}"
+                f" - SHIF {_fmt_audit_money(shif_employee)}"
+                f" - AHL {_fmt_audit_money(ahl_employee)}"
+                f" - owner occupier interest relief {_fmt_audit_money(owner_occupier_interest_relief)}"
+                f" - disability exemption {_fmt_audit_money(disability_exemption)}"
+                f" = {_fmt_audit_money(taxable_income)}."
+            ),
+            (
+                f"PAYE before reliefs calculated from PAYE bands on taxable income {_fmt_audit_money(taxable_income)}"
+                f" = {_fmt_audit_money(paye_before_reliefs)}."
+            ),
+            (
+                f"Insurance relief = min(insurance relief base {_fmt_audit_money(values['insurance_relief_base'])} x {float(insurance_relief_rate) * 100:.1f}%, cap {_fmt_audit_money(insurance_relief_cap_monthly)})"
+                f" = {_fmt_audit_money(insurance_relief)}."
+            ),
+            (
+                f"PAYE after reliefs = PAYE before reliefs {_fmt_audit_money(paye_before_reliefs)}"
+                f" - personal relief {_fmt_audit_money(personal_relief)}"
+                f" - insurance relief {_fmt_audit_money(insurance_relief)}"
+                f" = {_fmt_audit_money(paye_after_reliefs)}."
+            ),
+            (
+                f"Other deductions = manual other deductions {_fmt_audit_money(values['other_deductions'])}"
+                f" + salary advance deductions {_fmt_audit_money(salary_advance_deduction)}"
+                f" = {_fmt_audit_money(other_deductions)}."
+            ),
+            (
+                f"Net pay = gross cash pay {_fmt_audit_money(gross_cash_pay)}"
+                f" - NSSF {_fmt_audit_money(nssf_employee)}"
+                f" - SHIF {_fmt_audit_money(shif_employee)}"
+                f" - AHL {_fmt_audit_money(ahl_employee)}"
+                f" - employee pension {_fmt_audit_money(pension_employee)}"
+                f" - PAYE after reliefs {_fmt_audit_money(paye_after_reliefs)}"
+                f" - other deductions {_fmt_audit_money(other_deductions)}"
+                f" = {_fmt_audit_money(net_pay)}."
+            ),
+        ])
 
     breakdown = {
         "employee": {
@@ -1396,6 +1516,7 @@ def _calculate_payroll_breakdown(
             "withholding_tax": _money_to_float(withholding_tax),
             "paye_after_reliefs": _money_to_float(paye_after_reliefs),
         },
+        "audit_trail": audit_trail,
         "notes": [
             *(
                 [

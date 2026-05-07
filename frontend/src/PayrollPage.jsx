@@ -55,6 +55,14 @@ function previewMathLines(run, employmentType) {
   ];
 }
 
+function payrollAuditTrail(run) {
+  return run?.breakdown?.audit_trail || [];
+}
+
+function payrollRuleNotes(run) {
+  return run?.breakdown?.notes || [];
+}
+
 function payrollDetailRows(run, employmentType) {
   const consultant = isConsultantType(employmentType);
   return [
@@ -1185,18 +1193,20 @@ export default function PayrollPage() {
                     </table>
                   </div>
 
-                  <div className="payroll-notes-block" style={{ marginTop: 12 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>How Net Pay Was Calculated</div>
-                    {previewMathLines(preview, selectedEmploymentType).map((line, idx) => (
-                      <div key={`payroll_math_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{line}</div>
-                    ))}
-                  </div>
-
-                  {!!preview.breakdown?.notes?.length && (
+                  {!!payrollAuditTrail(preview).length && (
                     <div className="payroll-notes-block" style={{ marginTop: 12 }}>
                       <div style={{ fontWeight: 700, marginBottom: 6 }}>Calculation Notes</div>
-                      {preview.breakdown.notes.map((note, idx) => (
+                      {payrollAuditTrail(preview).map((note, idx) => (
                         <div key={`payroll_note_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{note}</div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!!payrollRuleNotes(preview).length && (
+                    <div className="payroll-notes-block" style={{ marginTop: 12 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 6 }}>Payroll Rules Applied</div>
+                      {payrollRuleNotes(preview).map((note, idx) => (
+                        <div key={`payroll_rule_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{note}</div>
                       ))}
                     </div>
                   )}
@@ -1286,17 +1296,19 @@ export default function PayrollPage() {
                                         </div>
                                       ))}
                                     </div>
-                                    <div className="payroll-notes-block" style={{ marginTop: 12 }}>
-                                      <div style={{ fontWeight: 700, marginBottom: 6 }}>Net Pay Math</div>
-                                      {previewMathLines(row, row.employee?.employment_type).map((line, idx) => (
-                                        <div key={`${row.id}_math_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{line}</div>
-                                      ))}
-                                    </div>
-                                    {!!row.breakdown?.notes?.length && (
+                                    {!!payrollAuditTrail(row).length && (
                                       <div className="payroll-notes-block" style={{ marginTop: 12 }}>
                                         <div style={{ fontWeight: 700, marginBottom: 6 }}>Calculation Notes</div>
-                                        {row.breakdown.notes.map((note, idx) => (
+                                        {payrollAuditTrail(row).map((note, idx) => (
                                           <div key={`${row.id}_note_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{note}</div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {!!payrollRuleNotes(row).length && (
+                                      <div className="payroll-notes-block" style={{ marginTop: 12 }}>
+                                        <div style={{ fontWeight: 700, marginBottom: 6 }}>Payroll Rules Applied</div>
+                                        {payrollRuleNotes(row).map((note, idx) => (
+                                          <div key={`${row.id}_rule_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{note}</div>
                                         ))}
                                       </div>
                                     )}
