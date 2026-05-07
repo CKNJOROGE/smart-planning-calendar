@@ -7,6 +7,7 @@ import {
   createPayrollStatutoryConfig,
   updatePayrollStatutoryConfig,
   listPayrollEmployees,
+  listPayrollAdminOverview,
   getPayrollProfile,
   updatePayrollProfile,
   previewPayrollRun,
@@ -24,6 +25,12 @@ function fmtCurrency(value) {
     currency: "KES",
     maximumFractionDigits: 2,
   }).format(Number(value || 0));
+}
+
+function payrollTaxLabel(run, employmentType) {
+  return String(employmentType || "").toLowerCase() === "consultant"
+    ? Number(run?.withholding_tax || 0)
+    : Number(run?.paye_after_reliefs || 0);
 }
 
 function monthStartToday() {
@@ -269,6 +276,9 @@ export default function PayrollPage() {
   const [current, setCurrent] = useState(null);
   const [busy, setBusy] = useState(true);
   const [employees, setEmployees] = useState([]);
+  const [overviewMonth, setOverviewMonth] = useState(monthStartToday());
+  const [adminOverviewRows, setAdminOverviewRows] = useState([]);
+  const [loadingOverview, setLoadingOverview] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [statutory, setStatutory] = useState(null);
@@ -292,6 +302,21 @@ export default function PayrollPage() {
   const canOpen = ["finance", "admin", "ceo"].includes(role);
   const canEditSetup = ["finance", "admin", "ceo"].includes(role);
 
+  async function refreshPayrollOverview(monthValue = overviewMonth) {
+    if (!canOpen || !monthValue) return;
+    setLoadingOverview(true);
+    try {
+      const rows = await listPayrollAdminOverview(monthValue);
+      setAdminOverviewRows(rows || []);
+    } catch (e) {
+      const text = String(e.message || e);
+      setErr(text);
+      showToast(text, "error");
+    } finally {
+      setLoadingOverview(false);
+    }
+  }
+
   useEffect(() => {
     (async () => {
       try {
@@ -300,10 +325,11 @@ export default function PayrollPage() {
         if (!["finance", "admin", "ceo"].includes(String(meData?.role || "").toLowerCase())) {
           return;
         }
-        const [statutoryData, statutoryConfigRows, employeeRows] = await Promise.all([
+        const [statutoryData, statutoryConfigRows, employeeRows, overviewRows] = await Promise.all([
           getPayrollStatutoryInfo(),
           listPayrollStatutoryConfigs(),
           listPayrollEmployees(),
+          listPayrollAdminOverview(overviewMonth),
         ]);
         setStatutory(statutoryData);
         setStatutoryConfigs(statutoryConfigRows || []);
@@ -314,6 +340,7 @@ export default function PayrollPage() {
           setStatutoryForm(statutoryFormFromApi(statutoryData));
         }
         setEmployees(employeeRows || []);
+        setAdminOverviewRows(overviewRows || []);
         if (employeeRows?.length) setSelectedEmployeeId(String(employeeRows[0].id));
       } catch (e) {
         setErr(String(e.message || e));
@@ -332,6 +359,15 @@ export default function PayrollPage() {
       })
       .catch(() => {});
   }, [canOpen]);
+
+  useEffect(() => {
+    if (!canOpen) return;
+    refreshPayrollOverview(overviewMonth);
+  }, [canOpen, overviewMonth]);
+
+  useEffect(() => {
+    setRunForm((prev) => (prev.payroll_month === overviewMonth ? prev : { ...prev, payroll_month: overviewMonth }));
+  }, [overviewMonth]);
 
   async function loadEmployeePayroll(userId, payrollMonth) {
     if (!userId) return;
@@ -359,16 +395,16 @@ export default function PayrollPage() {
       .catch(() => {});
   }, [selectedEmployeeId, canOpen]);
 
-  const filteredEmployees = useMemo(() => {
+  const filteredOverviewRows = useMemo(() => {
     const query = employeeSearch.trim().toLowerCase();
-    if (!query) return employees;
-    return (employees || []).filter((row) =>
-      [row.name, row.email, row.department, row.designation, row.role]
+    if (!query) return adminOverviewRows;
+    return (adminOverviewRows || []).filter((row) =>
+      [row.employee?.name, row.employee?.email, row.employee?.department, row.employee?.designation, row.employee?.role]
         .map((part) => String(part || "").toLowerCase())
         .join(" ")
         .includes(query)
     );
-  }, [employees, employeeSearch]);
+  }, [adminOverviewRows, employeeSearch]);
 
   const filteredRuns = useMemo(() => {
     const query = runsFilter.trim().toLowerCase();
@@ -436,6 +472,7 @@ export default function PayrollPage() {
       const saved = await updatePayrollProfile(Number(selectedEmployeeId), payload);
       setProfile(saved);
       setProfileForm(profileStateFromApi(saved));
+      await refreshPayrollOverview();
       showToast("Payroll setup saved", "success");
     } catch (e) {
       const text = String(e.message || e);
@@ -472,6 +509,7 @@ export default function PayrollPage() {
       setPreview(result);
       const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId) });
       setRuns(updatedRuns || []);
+      await refreshPayrollOverview();
       showToast("Payroll saved as draft", "success");
     } catch (e) {
       const text = String(e.message || e);
@@ -491,7 +529,52 @@ export default function PayrollPage() {
       setPreview(result);
       const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId) });
       setRuns(updatedRuns || []);
+      await refreshPayrollOverview();
       showToast("Payroll submitted - employee can now confirm", "success");
+    } catch (e) {
+      const text = String(e.message || e);
+      setErr(text);
+      showToast(text, "error");
+    } finally {
+      setSavingRun(false);
+    }
+  }
+
+  async function handleSubmitFromOverview(employeeId) {
+    setSavingRun(true);
+    setErr("");
+    try {
+      await savePayrollRun({
+        employee_id: Number(employeeId),
+        payroll_month: overviewMonth,
+        status: "approved",
+      });
+      if (Number(selectedEmployeeId) === Number(employeeId)) {
+        const updatedRuns = await listPayrollRuns({ employeeId: Number(employeeId) });
+        setRuns(updatedRuns || []);
+      }
+      await refreshPayrollOverview();
+      showToast("Payroll submitted from table", "success");
+    } catch (e) {
+      const text = String(e.message || e);
+      setErr(text);
+      showToast(text, "error");
+    } finally {
+      setSavingRun(false);
+    }
+  }
+
+  async function handleMarkPaidFromOverview(runId, employeeId) {
+    setSavingRun(true);
+    setErr("");
+    try {
+      await markPayrollRunPaid(Number(runId));
+      if (Number(selectedEmployeeId) === Number(employeeId)) {
+        const updatedRuns = await listPayrollRuns({ employeeId: Number(employeeId) });
+        setRuns(updatedRuns || []);
+      }
+      await refreshPayrollOverview();
+      showToast("Payroll marked as paid", "success");
     } catch (e) {
       const text = String(e.message || e);
       setErr(text);
@@ -508,6 +591,7 @@ export default function PayrollPage() {
       await markPayrollRunPaid(Number(runId));
       const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId) });
       setRuns(updatedRuns || []);
+      await refreshPayrollOverview();
       showToast("Payroll marked as paid", "success");
     } catch (e) {
       const text = String(e.message || e);
@@ -750,51 +834,118 @@ export default function PayrollPage() {
         </div>
       </div>
 
-      <div className="payroll-shell">
-        <div className="card payroll-card payroll-rail-card">
-          <div style={{ fontWeight: 800, marginBottom: 8 }}>Employees</div>
-          <div className="field" style={{ marginBottom: 10 }}>
-            <label>Search employees</label>
-            <input value={employeeSearch} onChange={(e) => setEmployeeSearch(e.target.value)} placeholder="Name, department, role..." />
+      <div className="payroll-panel-stack">
+        <div className="card payroll-card payroll-section-card">
+          <div className="payroll-section-head" style={{ marginBottom: 8 }}>
+            <div>
+              <div style={{ fontWeight: 900, display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Payroll Submission Grid</span>
+                <SectionHelp text="This finance view shows all employees for the selected payroll month with their key salary figures at a glance. Use Edit to open the full employee form, or Submit to create that month's payroll directly from the table using the saved payroll setup." />
+              </div>
+              <div className="muted">Review the month, scan salary figures, then edit or submit payroll without opening each employee first.</div>
+            </div>
+            <div className="payroll-overview-toolbar">
+              <div className="field" style={{ marginBottom: 0, minWidth: 190 }}>
+                <label>Payroll month</label>
+                <input type="date" value={overviewMonth} onChange={(e) => setOverviewMonth(e.target.value)} />
+              </div>
+              <div className="field" style={{ marginBottom: 0, minWidth: 240 }}>
+                <label>Search employees</label>
+                <input value={employeeSearch} onChange={(e) => setEmployeeSearch(e.target.value)} placeholder="Name, department, role..." />
+              </div>
+            </div>
           </div>
-          <div className="payroll-employee-list">
-            {filteredEmployees.map((row) => {
-              const active = Number(selectedEmployeeId) === Number(row.id);
-              const hasConfirmed = confirmedEmployeeIds.has(row.id);
-              return (
-                <button
-                  key={row.id}
-                  type="button"
-                  className={`btn payroll-employee-btn${active ? " active" : ""}`}
-                  onClick={() => setSelectedEmployeeId(String(row.id))}
-                >
-                  <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 6 }}>
-                    {row.name}
-                    {hasConfirmed && (
-                      <span
-                        title="Payroll confirmed, awaiting payment"
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: "50%",
-                          background: "#dc2626",
-                          display: "inline-block",
-                        }}
-                      />
-                    )}
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {row.department || "Unassigned"} | {row.designation || row.role} | {row.employment_type || "employee"}
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>{row.email}</div>
-                </button>
-              );
-            })}
-            {!filteredEmployees.length && <div className="muted">No employees matched your search.</div>}
+
+          <div className="payroll-table-wrap">
+            <table className="table payroll-table payroll-overview-table">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left", padding: 10 }}>Employee</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Basic Salary</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Gross Cash</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>PAYE / WHT</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Non-cash</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Tax-exempt</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Net Pay</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Status</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOverviewRows.map((row) => {
+                  const payrollRun = row.payroll_run;
+                  const employee = row.employee || {};
+                  const active = Number(selectedEmployeeId) === Number(employee.id);
+                  const employmentType = String(employee.employment_type || "employee").toLowerCase();
+                  const runStatus = row.has_saved_run ? payrollRun.status : "not_submitted";
+                  const canSubmitRow = !row.has_saved_run || payrollRun.status === "draft";
+                  const canMarkPaidRow = payrollRun.status === "approved" && payrollRun.employee_confirmed;
+                  return (
+                    <tr key={`payroll_overview_${employee.id}`} className={active ? "payroll-overview-row-active" : ""}>
+                      <td style={{ padding: 10 }}>
+                        <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: 6 }}>
+                          {employee.name}
+                          {(row.has_confirmed_pending_payment || confirmedEmployeeIds.has(employee.id)) && (
+                            <span
+                              title="Payroll confirmed, awaiting payment"
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                background: "#dc2626",
+                                display: "inline-block",
+                              }}
+                            />
+                          )}
+                        </div>
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {employee.department || "Unassigned"} | {employee.designation || employee.role} | {employee.employment_type || "employee"}
+                        </div>
+                      </td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.basic_salary || row.profile?.basic_salary)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.gross_cash_pay)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollTaxLabel(payrollRun, employmentType))}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.taxable_non_cash_benefits)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.tax_exempt_allowance)}</td>
+                      <td style={{ padding: 10, fontWeight: 800 }}>{fmtCurrency(payrollRun.net_pay)}</td>
+                      <td style={{ padding: 10 }}>
+                        <span className={`dashboard-status-badge ${runStatus === "paid" ? "dashboard-status-ok" : runStatus === "approved" ? "dashboard-status-info" : runStatus === "draft" ? "dashboard-status-pending" : ""}`}>
+                          {runStatus.replaceAll("_", " ")}
+                        </span>
+                      </td>
+                      <td style={{ padding: 10 }}>
+                        <div className="payroll-overview-actions">
+                          <button className={`btn${active ? " btn-primary" : ""}`} type="button" onClick={() => setSelectedEmployeeId(String(employee.id))}>
+                            Edit
+                          </button>
+                          <button className="btn" type="button" disabled={savingRun || !canSubmitRow} onClick={() => handleSubmitFromOverview(employee.id)}>
+                            {row.has_saved_run && payrollRun.status === "draft" ? "Submit Draft" : "Submit"}
+                          </button>
+                          {canMarkPaidRow && (
+                            <button className="btn btn-primary" type="button" disabled={savingRun} onClick={() => handleMarkPaidFromOverview(payrollRun.id, employee.id)}>
+                              Mark Paid
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {loadingOverview && (
+                  <tr>
+                    <td colSpan={9} style={{ padding: 14 }} className="muted">Refreshing payroll grid...</td>
+                  </tr>
+                )}
+                {!loadingOverview && !filteredOverviewRows.length && (
+                  <tr>
+                    <td colSpan={9} style={{ padding: 14 }} className="muted">No employees matched your search.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        <div className="payroll-panel-stack">
           <div className="card payroll-card payroll-summary-card">
             <div className="payroll-section-head">
               <div>
@@ -1059,6 +1210,5 @@ export default function PayrollPage() {
           )}
         </div>
       </div>
-    </div>
   );
 }

@@ -934,6 +934,13 @@ export function getPayrollProfile(userId) {
   return request(`/payroll/profiles/${userId}`);
 }
 
+export function listPayrollAdminOverview(payrollMonth) {
+  const qs = new URLSearchParams();
+  if (payrollMonth) qs.set("payroll_month", payrollMonth);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request(`/payroll/admin-overview${suffix}`);
+}
+
 export function updatePayrollProfile(userId, payload) {
   return request(`/payroll/profiles/${userId}`, { method: "PATCH", body: payload });
 }

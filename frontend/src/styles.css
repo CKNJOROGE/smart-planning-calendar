@@ -1736,6 +1736,28 @@ border: 1px solid rgba(255, 255, 255, 0.68);
   flex-wrap: wrap;
 }
 
+.payroll-overview-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.payroll-overview-table th,
+.payroll-overview-table td {
+  vertical-align: top;
+}
+
+.payroll-overview-row-active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.payroll-overview-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .payroll-preview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1796,6 +1818,10 @@ overflow-x: auto;
   .payroll-statutory-grid,
   .payroll-run-grid {
     grid-template-columns: 1fr;
+  }
+
+  .payroll-overview-toolbar {
+    align-items: stretch;
   }
 
   .payroll-rail-card {

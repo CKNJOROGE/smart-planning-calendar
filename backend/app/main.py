@@ -134,6 +134,7 @@ from .schemas import (
     PayrollRunPreviewIn,
     PayrollRunInputIn,
     PayrollRunOut,
+    PayrollAdminOverviewRowOut,
     PayrollSaveIn,
     PayrollStatutoryOut,
     PayrollAttentionOut,
@@ -1501,6 +1502,84 @@ def _serialize_payroll_run(db: Session, row: PayrollRun) -> PayrollRunOut:
         notes=row.notes,
         updated_at=row.updated_at,
         employee=row.employee,
+        basic_salary=inputs.get("basic_salary", 0) or 0,
+        housing_allowance=inputs.get("house_allowance", 0) or 0,
+        transport_allowance=inputs.get("transport_allowance", 0) or 0,
+        other_allowance=inputs.get("other_taxable_allowance", 0) or 0,
+        total_deductions=total_deductions,
+        salary_advance_deduction=salary_advance_deduction,
+    )
+
+
+def _build_preview_payroll_run_out(
+    db: Session,
+    employee: User,
+    computed: dict[str, object],
+    *,
+    status: str = "draft",
+    run_id: int = 0,
+    employee_confirmed: bool = False,
+    employee_confirmed_at: Optional[datetime] = None,
+    updated_at: Optional[datetime] = None,
+) -> PayrollRunOut:
+    _attach_user_supervisor_metadata(db, employee)
+    _attach_user_payroll_metadata(db, employee)
+    employment_type = _normalize_employment_type(getattr(employee, "employment_type", None))
+    inputs = computed.get("breakdown", {}).get("inputs", {})
+    taxes = computed.get("breakdown", {}).get("taxes", {})
+    withholding_tax = _money_to_float(_dec(computed["withholding_tax"]))
+    if employment_type == "consultant" and withholding_tax <= 0:
+        withholding_tax = _money_to_float(_dec(taxes.get("withholding_tax", 0)))
+    total_deductions = (
+        _money_to_float(_dec(computed["nssf_employee"])) +
+        _money_to_float(_dec(computed["shif_employee"])) +
+        _money_to_float(_dec(computed["ahl_employee"])) +
+        _money_to_float(_dec(computed["pension_employee"])) +
+        _money_to_float(_dec(computed["paye_after_reliefs"])) +
+        _money_to_float(_dec(computed["other_deductions"]))
+    )
+    salary_advance_deduction = 0
+    for note in computed.get("breakdown", {}).get("notes", []):
+        if "Salary Advance" in note and "/month" in note:
+            try:
+                other_base = inputs.get("other_deductions", 0) or 0
+                salary_advance_deduction = max(0, _money_to_float(_dec(computed["other_deductions"])) - float(other_base))
+            except Exception:
+                salary_advance_deduction = 0
+            break
+    return PayrollRunOut(
+        id=run_id,
+        employee_id=employee.id,
+        payroll_month=computed["payroll_month"],
+        pay_date=computed["pay_date"],
+        status=status,
+        employee_confirmed=employee_confirmed,
+        employee_confirmed_at=employee_confirmed_at,
+        gross_cash_pay=_money_to_float(computed["gross_cash_pay"]),
+        taxable_non_cash_benefits=_money_to_float(computed["taxable_non_cash_benefits"]),
+        gross_taxable_pay=_money_to_float(computed["gross_taxable_pay"]),
+        tax_exempt_allowance=_money_to_float(computed["tax_exempt_allowance"]),
+        taxable_income=_money_to_float(computed["taxable_income"]),
+        nssf_employee=_money_to_float(computed["nssf_employee"]),
+        nssf_employer=_money_to_float(computed["nssf_employer"]),
+        shif_employee=_money_to_float(computed["shif_employee"]),
+        ahl_employee=_money_to_float(computed["ahl_employee"]),
+        ahl_employer=_money_to_float(computed["ahl_employer"]),
+        pension_employee=_money_to_float(computed["pension_employee"]),
+        pension_employer=_money_to_float(computed["pension_employer"]),
+        other_deductions=_money_to_float(computed["other_deductions"]),
+        personal_relief=_money_to_float(computed["personal_relief"]),
+        insurance_relief=_money_to_float(computed["insurance_relief"]),
+        owner_occupier_interest_relief=_money_to_float(computed["owner_occupier_interest_relief"]),
+        paye_before_reliefs=_money_to_float(computed["paye_before_reliefs"]),
+        paye_after_reliefs=_money_to_float(computed["paye_after_reliefs"]),
+        withholding_tax=withholding_tax,
+        net_pay=_money_to_float(computed["net_pay"]),
+        employer_total_cost=_money_to_float(computed["employer_total_cost"]),
+        breakdown=computed["breakdown"],
+        notes=computed["notes"],
+        updated_at=updated_at or datetime.utcnow(),
+        employee=employee,
         basic_salary=inputs.get("basic_salary", 0) or 0,
         housing_allowance=inputs.get("house_allowance", 0) or 0,
         transport_allowance=inputs.get("transport_allowance", 0) or 0,
@@ -5315,6 +5394,57 @@ def get_payroll_profile(
     return _serialize_payroll_profile(db, profile)
 
 
+@app.get("/payroll/admin-overview", response_model=List[PayrollAdminOverviewRowOut])
+def get_payroll_admin_overview(
+    payroll_month: date = Query(...),
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    normalized_month = _normalize_payroll_month(payroll_month)
+    statutory_row = _get_effective_payroll_statutory_config(db, normalized_month)
+    users = db.query(User).order_by(User.name.asc()).all()
+    existing_runs = (
+        db.query(PayrollRun)
+        .filter(PayrollRun.payroll_month == normalized_month)
+        .all()
+    )
+    existing_by_employee_id = {row.employee_id: row for row in existing_runs}
+    confirmed_ids = {
+        row.employee_id
+        for row in existing_runs
+        if row.status == "approved" and bool(row.employee_confirmed)
+    }
+
+    rows: list[PayrollAdminOverviewRowOut] = []
+    for user in users:
+        _attach_user_supervisor_metadata(db, user)
+        _attach_user_payroll_metadata(db, user)
+        profile = _get_or_create_payroll_profile(db, user.id)
+        _ = profile.user
+        existing_run = existing_by_employee_id.get(user.id)
+        if existing_run:
+            _ = existing_run.employee
+            run_out = _serialize_payroll_run(db, existing_run)
+            has_saved_run = True
+        else:
+            payload = PayrollRunInputIn(payroll_month=normalized_month)
+            computed = _calculate_payroll_breakdown(user, profile, payload, statutory_row, db, normalized_month)
+            run_out = _build_preview_payroll_run_out(db, user, computed, status="draft")
+            has_saved_run = False
+        rows.append(
+            PayrollAdminOverviewRowOut(
+                employee=user,
+                profile=_serialize_payroll_profile(db, profile),
+                payroll_run=run_out,
+                has_saved_run=has_saved_run,
+                has_confirmed_pending_payment=user.id in confirmed_ids,
+            )
+        )
+    db.commit()
+    return rows
+
+
 @app.patch("/payroll/profiles/{user_id}", response_model=PayrollProfileOut)
 def update_payroll_profile(
     user_id: int,
@@ -5355,38 +5485,7 @@ def preview_payroll_run(
     db.refresh(profile)
     statutory_row = _get_effective_payroll_statutory_config(db, payload.payroll_month)
     computed = _calculate_payroll_breakdown(employee, profile, payload, statutory_row, db, payload.payroll_month)
-    return PayrollRunOut(
-        id=0,
-        employee_id=employee.id,
-        payroll_month=computed["payroll_month"],
-        pay_date=computed["pay_date"],
-        status="draft",
-        gross_cash_pay=_money_to_float(computed["gross_cash_pay"]),
-        taxable_non_cash_benefits=_money_to_float(computed["taxable_non_cash_benefits"]),
-        gross_taxable_pay=_money_to_float(computed["gross_taxable_pay"]),
-        tax_exempt_allowance=_money_to_float(computed["tax_exempt_allowance"]),
-        taxable_income=_money_to_float(computed["taxable_income"]),
-        nssf_employee=_money_to_float(computed["nssf_employee"]),
-        nssf_employer=_money_to_float(computed["nssf_employer"]),
-        shif_employee=_money_to_float(computed["shif_employee"]),
-        ahl_employee=_money_to_float(computed["ahl_employee"]),
-        ahl_employer=_money_to_float(computed["ahl_employer"]),
-        pension_employee=_money_to_float(computed["pension_employee"]),
-        pension_employer=_money_to_float(computed["pension_employer"]),
-        other_deductions=_money_to_float(computed["other_deductions"]),
-        personal_relief=_money_to_float(computed["personal_relief"]),
-        insurance_relief=_money_to_float(computed["insurance_relief"]),
-        owner_occupier_interest_relief=_money_to_float(computed["owner_occupier_interest_relief"]),
-        paye_before_reliefs=_money_to_float(computed["paye_before_reliefs"]),
-        paye_after_reliefs=_money_to_float(computed["paye_after_reliefs"]),
-        withholding_tax=_money_to_float(computed["withholding_tax"]),
-        net_pay=_money_to_float(computed["net_pay"]),
-        employer_total_cost=_money_to_float(computed["employer_total_cost"]),
-        breakdown=computed["breakdown"],
-        notes=computed["notes"],
-        updated_at=datetime.utcnow(),
-        employee=employee,
-    )
+    return _build_preview_payroll_run_out(db, employee, computed, status="draft")
 
 
 @app.post("/payroll/runs", response_model=PayrollRunOut)

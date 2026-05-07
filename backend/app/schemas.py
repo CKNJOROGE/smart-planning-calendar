@@ -1081,6 +1081,14 @@ class PayrollRunOut(BaseModel):
     salary_advance_deduction: float = 0
 
 
+class PayrollAdminOverviewRowOut(BaseModel):
+    employee: UserOut
+    profile: PayrollProfileOut
+    payroll_run: PayrollRunOut
+    has_saved_run: bool = False
+    has_confirmed_pending_payment: bool = False
+
+
 class PayrollSaveIn(PayrollRunPreviewIn):
     status: Optional[str] = "draft"
 
