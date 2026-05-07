@@ -33,6 +33,47 @@ function payrollTaxLabel(run, employmentType) {
     : Number(run?.paye_after_reliefs || 0);
 }
 
+function isConsultantType(employmentType) {
+  return String(employmentType || "").toLowerCase() === "consultant";
+}
+
+function previewMathLines(run, employmentType) {
+  if (isConsultantType(employmentType)) {
+    return [
+      `Basic/Gross cash pay: ${fmtCurrency(run.gross_cash_pay)}`,
+      `Less withholding tax: ${fmtCurrency(run.withholding_tax)}`,
+      `Less other deductions: ${fmtCurrency(run.other_deductions)}`,
+      `Net pay = ${fmtCurrency(run.gross_cash_pay)} - ${fmtCurrency(run.withholding_tax)} - ${fmtCurrency(run.other_deductions)} = ${fmtCurrency(run.net_pay)}`,
+    ];
+  }
+  return [
+    `Basic/Gross cash pay: ${fmtCurrency(run.gross_cash_pay)}`,
+    `Taxable income starts from gross cash ${fmtCurrency(run.gross_cash_pay)} + taxable non-cash benefits ${fmtCurrency(run.taxable_non_cash_benefits)} - tax-exempt allowances ${fmtCurrency(run.tax_exempt_allowance)} - employee pension ${fmtCurrency(run.pension_employee)} - NSSF ${fmtCurrency(run.nssf_employee)} - SHIF ${fmtCurrency(run.shif_employee)} - AHL ${fmtCurrency(run.ahl_employee)} = ${fmtCurrency(run.taxable_income)}`,
+    `PAYE before reliefs: ${fmtCurrency(run.paye_before_reliefs)}`,
+    `Less personal relief ${fmtCurrency(run.personal_relief)} and insurance relief ${fmtCurrency(run.insurance_relief)} gives PAYE after reliefs of ${fmtCurrency(run.paye_after_reliefs)}`,
+    `Net pay = gross cash ${fmtCurrency(run.gross_cash_pay)} - employee pension ${fmtCurrency(run.pension_employee)} - NSSF ${fmtCurrency(run.nssf_employee)} - SHIF ${fmtCurrency(run.shif_employee)} - AHL ${fmtCurrency(run.ahl_employee)} - PAYE after relief ${fmtCurrency(run.paye_after_reliefs)} - other deductions ${fmtCurrency(run.other_deductions)} = ${fmtCurrency(run.net_pay)}`,
+  ];
+}
+
+function payrollDetailRows(run, employmentType) {
+  const consultant = isConsultantType(employmentType);
+  return [
+    ["Basic/Gross cash pay", run.gross_cash_pay],
+    ["Taxable non-cash benefits", run.taxable_non_cash_benefits],
+    ["Tax-exempt allowances", run.tax_exempt_allowance],
+    ...(!consultant ? [["Employee pension", run.pension_employee]] : []),
+    ...(!consultant ? [["NSSF", run.nssf_employee]] : []),
+    ...(!consultant ? [["SHIF", run.shif_employee]] : []),
+    ...(!consultant ? [["AHL", run.ahl_employee]] : []),
+    ...(!consultant ? [["PAYE before relief", run.paye_before_reliefs]] : []),
+    ...(!consultant ? [["Personal relief", run.personal_relief]] : []),
+    ...(!consultant ? [["Insurance relief", run.insurance_relief]] : []),
+    [consultant ? "Withholding tax" : "PAYE after relief", consultant ? run.withholding_tax : run.paye_after_reliefs],
+    ["Other deductions", run.other_deductions],
+    ["Net pay", run.net_pay],
+  ];
+}
+
 function monthStartToday() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
@@ -291,6 +332,7 @@ export default function PayrollPage() {
   const [preview, setPreview] = useState(null);
   const [runs, setRuns] = useState([]);
   const [runsFilter, setRunsFilter] = useState("");
+  const [expandedRuns, setExpandedRuns] = useState(new Set());
   const [err, setErr] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingRun, setSavingRun] = useState(false);
@@ -391,7 +433,10 @@ export default function PayrollPage() {
   useEffect(() => {
     if (!selectedEmployeeId || !canOpen) return;
     listPayrollRuns({ employeeId: Number(selectedEmployeeId) })
-      .then((rows) => setRuns(rows || []))
+      .then((rows) => {
+        setRuns(rows || []);
+        setExpandedRuns(new Set());
+      })
       .catch(() => {});
   }, [selectedEmployeeId, canOpen]);
 
@@ -600,6 +645,15 @@ export default function PayrollPage() {
     } finally {
       setSavingRun(false);
     }
+  }
+
+  function toggleRunExpanded(runId) {
+    setExpandedRuns((prev) => {
+      const next = new Set(prev);
+      if (next.has(runId)) next.delete(runId);
+      else next.add(runId);
+      return next;
+    });
   }
 
   async function refreshStatutoryConfigs() {
@@ -861,11 +915,18 @@ export default function PayrollPage() {
               <thead>
                 <tr>
                   <th style={{ textAlign: "left", padding: 10 }}>Employee</th>
-                  <th style={{ textAlign: "left", padding: 10 }}>Basic Salary</th>
-                  <th style={{ textAlign: "left", padding: 10 }}>Gross Cash</th>
-                  <th style={{ textAlign: "left", padding: 10 }}>PAYE / WHT</th>
-                  <th style={{ textAlign: "left", padding: 10 }}>Non-cash</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Basic / Gross Cash</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Taxable Non-cash</th>
                   <th style={{ textAlign: "left", padding: 10 }}>Tax-exempt</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Employee Pension</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>NSSF</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>SHIF</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>AHL</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>PAYE Before Relief</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Personal Relief</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Insurance Relief</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>PAYE After Relief / WHT</th>
+                  <th style={{ textAlign: "left", padding: 10 }}>Other Deductions</th>
                   <th style={{ textAlign: "left", padding: 10 }}>Net Pay</th>
                   <th style={{ textAlign: "left", padding: 10 }}>Status</th>
                   <th style={{ textAlign: "left", padding: 10 }}>Actions</th>
@@ -902,11 +963,18 @@ export default function PayrollPage() {
                           {employee.department || "Unassigned"} | {employee.designation || employee.role} | {employee.employment_type || "employee"}
                         </div>
                       </td>
-                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.basic_salary || row.profile?.basic_salary)}</td>
                       <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.gross_cash_pay)}</td>
-                      <td style={{ padding: 10 }}>{fmtCurrency(payrollTaxLabel(payrollRun, employmentType))}</td>
                       <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.taxable_non_cash_benefits)}</td>
                       <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.tax_exempt_allowance)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.pension_employee)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.nssf_employee)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.shif_employee)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.ahl_employee)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.paye_before_reliefs)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.personal_relief)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.insurance_relief)}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollTaxLabel(payrollRun, employmentType))}</td>
+                      <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.other_deductions)}</td>
                       <td style={{ padding: 10, fontWeight: 800 }}>{fmtCurrency(payrollRun.net_pay)}</td>
                       <td style={{ padding: 10 }}>
                         <span className={`dashboard-status-badge ${runStatus === "paid" ? "dashboard-status-ok" : runStatus === "approved" ? "dashboard-status-info" : runStatus === "draft" ? "dashboard-status-pending" : ""}`}>
@@ -933,12 +1001,12 @@ export default function PayrollPage() {
                 })}
                 {loadingOverview && (
                   <tr>
-                    <td colSpan={9} style={{ padding: 14 }} className="muted">Refreshing payroll grid...</td>
+                    <td colSpan={16} style={{ padding: 14 }} className="muted">Refreshing payroll grid...</td>
                   </tr>
                 )}
                 {!loadingOverview && !filteredOverviewRows.length && (
                   <tr>
-                    <td colSpan={9} style={{ padding: 14 }} className="muted">No employees matched your search.</td>
+                    <td colSpan={16} style={{ padding: 14 }} className="muted">No employees matched your search.</td>
                   </tr>
                 )}
               </tbody>
@@ -1067,7 +1135,7 @@ export default function PayrollPage() {
                 <div className="card payroll-card payroll-preview-card">
                   <div style={{ fontWeight: 900, marginBottom: 10 }}>Payroll Preview</div>
                   <div className="payroll-preview-grid">
-                    {statChip("Gross Cash", fmtCurrency(preview.gross_cash_pay))}
+                    {statChip("Basic / Gross Cash", fmtCurrency(preview.gross_cash_pay))}
                     {statChip("Taxable Income", fmtCurrency(preview.taxable_income))}
                     {statChip(
                       isConsultantSelected ? "Withholding Tax" : "PAYE",
@@ -1117,6 +1185,13 @@ export default function PayrollPage() {
                     </table>
                   </div>
 
+                  <div className="payroll-notes-block" style={{ marginTop: 12 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 6 }}>How Net Pay Was Calculated</div>
+                    {previewMathLines(preview, selectedEmploymentType).map((line, idx) => (
+                      <div key={`payroll_math_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{line}</div>
+                    ))}
+                  </div>
+
                   {!!preview.breakdown?.notes?.length && (
                     <div className="payroll-notes-block" style={{ marginTop: 12 }}>
                       <div style={{ fontWeight: 700, marginBottom: 6 }}>Calculation Notes</div>
@@ -1151,47 +1226,87 @@ export default function PayrollPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredRuns.map((row) => (
-                        <tr key={row.id}>
-                          <td style={{ padding: 10 }}>{row.payroll_month}</td>
-                          <td style={{ padding: 10 }}>
-                            <span className={`dashboard-status-badge ${row.status === "paid" ? "dashboard-status-ok" : row.status === "approved" ? "dashboard-status-info" : "dashboard-status-pending"}`}>
-                              {row.status}
-                            </span>
-                          </td>
-                          <td style={{ padding: 10 }}>
-                            {row.employee_confirmed ? (
-                              <span
-                                style={{
-                                  background: "linear-gradient(to bottom, #cfc09f 27%, #ffecb3 40%, #3a2c0f 78%)",
-                                  WebkitBackgroundClip: "text",
-                                  WebkitTextFillColor: "transparent",
-                                  fontWeight: 700,
-                                  filter: "drop-shadow(-1px 0 1px #c6bb9f) drop-shadow(0 1px 1px #c6bb9f) drop-shadow(3px 3px 6px rgba(0,0,0,0.5))",
-                                }}
-                              >
-                                Confirmed
-                              </span>
-                            ) : (
-                              <span className="dashboard-status-badge dashboard-status-pending">Pending</span>
+                      {filteredRuns.map((row) => {
+                        const isExpanded = expandedRuns.has(row.id);
+                        return (
+                          <React.Fragment key={row.id}>
+                            <tr>
+                              <td style={{ padding: 10 }}>{row.payroll_month}</td>
+                              <td style={{ padding: 10 }}>
+                                <span className={`dashboard-status-badge ${row.status === "paid" ? "dashboard-status-ok" : row.status === "approved" ? "dashboard-status-info" : "dashboard-status-pending"}`}>
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td style={{ padding: 10 }}>
+                                {row.employee_confirmed ? (
+                                  <span
+                                    style={{
+                                      background: "linear-gradient(to bottom, #cfc09f 27%, #ffecb3 40%, #3a2c0f 78%)",
+                                      WebkitBackgroundClip: "text",
+                                      WebkitTextFillColor: "transparent",
+                                      fontWeight: 700,
+                                      filter: "drop-shadow(-1px 0 1px #c6bb9f) drop-shadow(0 1px 1px #c6bb9f) drop-shadow(3px 3px 6px rgba(0,0,0,0.5))",
+                                    }}
+                                  >
+                                    Confirmed
+                                  </span>
+                                ) : (
+                                  <span className="dashboard-status-badge dashboard-status-pending">Pending</span>
+                                )}
+                              </td>
+                              <td style={{ padding: 10 }}>{fmtCurrency(row.net_pay)}</td>
+                              <td style={{ padding: 10 }}>
+                                <div className="payroll-overview-actions">
+                                  <button className="btn" type="button" onClick={() => toggleRunExpanded(row.id)}>
+                                    {isExpanded ? "Hide Details" : "View Details"}
+                                  </button>
+                                  {row.status === "approved" && (
+                                    <button
+                                      className="btn btn-primary"
+                                      type="button"
+                                      disabled={!row.employee_confirmed}
+                                      onClick={() => handleMarkPaid(row.id)}
+                                      title={!row.employee_confirmed ? "Employee must confirm before marking paid" : ""}
+                                    >
+                                      Mark Paid
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr className="payroll-run-expanded-row">
+                                <td colSpan={5} style={{ padding: 12 }}>
+                                  <div className="payroll-run-detail">
+                                    <div className="payroll-run-grid">
+                                      {payrollDetailRows(row, row.employee?.employment_type).map(([label, amount]) => (
+                                        <div key={`${row.id}_${label}`} className="payroll-run-detail-item">
+                                          <div className="muted">{label}</div>
+                                          <div style={{ fontWeight: 800 }}>{fmtCurrency(amount)}</div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="payroll-notes-block" style={{ marginTop: 12 }}>
+                                      <div style={{ fontWeight: 700, marginBottom: 6 }}>Net Pay Math</div>
+                                      {previewMathLines(row, row.employee?.employment_type).map((line, idx) => (
+                                        <div key={`${row.id}_math_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{line}</div>
+                                      ))}
+                                    </div>
+                                    {!!row.breakdown?.notes?.length && (
+                                      <div className="payroll-notes-block" style={{ marginTop: 12 }}>
+                                        <div style={{ fontWeight: 700, marginBottom: 6 }}>Calculation Notes</div>
+                                        {row.breakdown.notes.map((note, idx) => (
+                                          <div key={`${row.id}_note_${idx}`} className="muted" style={{ marginTop: idx ? 4 : 0 }}>{note}</div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
                             )}
-                          </td>
-                          <td style={{ padding: 10 }}>{fmtCurrency(row.net_pay)}</td>
-                          <td style={{ padding: 10 }}>
-                            {row.status === "approved" && (
-                              <button
-                                className="btn btn-primary"
-                                type="button"
-                                disabled={!row.employee_confirmed}
-                                onClick={() => handleMarkPaid(row.id)}
-                                title={!row.employee_confirmed ? "Employee must confirm before marking paid" : ""}
-                              >
-                                Mark Paid
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                          </React.Fragment>
+                        );
+                      })}
                       {!filteredRuns.length && <tr><td colSpan={5} style={{ padding: 14 }} className="muted">No payroll runs found for this filter.</td></tr>}
                     </tbody>
                   </table>
