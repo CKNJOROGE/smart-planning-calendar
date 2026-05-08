@@ -96,7 +96,7 @@ def _send_email_brevo(to_email: str, subject: str, body_text: str) -> None:
         raise RuntimeError("Brevo API is not configured: " + "; ".join(config_errors))
 
     from_email = settings.BREVO_FROM_EMAIL or settings.SMTP_FROM_EMAIL
-    from_name = settings.BREVO_FROM_NAME or "Smart Planning Calendar"
+    from_name = settings.BREVO_FROM_NAME or "SustainFlow"
     payload = {
         "sender": {"email": from_email, "name": from_name},
         "to": [{"email": to_email}],

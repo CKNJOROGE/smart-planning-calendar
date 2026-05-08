@@ -208,7 +208,7 @@ function Shell({ onLogout, theme, setTheme }) {
       <aside className={`app-sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
         <div>
           <div className="sidebar-head">
-            <div className="sidebar-brand">SHR PLANNING CALENDAR</div>
+            <div className="sidebar-brand">SustainFlow</div>
             <button
               className="btn sidebar-toggle-btn"
               type="button"

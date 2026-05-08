@@ -170,7 +170,7 @@ logger = logging.getLogger(__name__)
 LOGIN_THROTTLE_LOCK = Lock()
 LOGIN_THROTTLE_STATE: dict[str, dict[str, object]] = {}
 
-app = FastAPI(title="Smart Planning Calendar API")
+app = FastAPI(title="SustainFlow API")
 ws_manager = ConnectionManager()
 UPLOADS_DIR = Path(__file__).resolve().parents[1] / "uploads"
 AVATARS_DIR = UPLOADS_DIR / "avatars"
