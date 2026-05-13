@@ -318,13 +318,23 @@ def _run_startup_migrations():
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_daily_activities_continued_to_activity_id ON daily_activities(continued_to_activity_id)"))
         except Exception:
             pass
-        try:
-            conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS series_id VARCHAR(40)"))
-            conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_type VARCHAR(20)"))
-            conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_until DATE"))
-            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_series_id ON events(series_id)"))
-        except Exception:
-            pass
+    try:
+        conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS series_id VARCHAR(40)"))
+        conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_type VARCHAR(20)"))
+        conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_until DATE"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_series_id ON events(series_id)"))
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE client_tasks ADD COLUMN IF NOT EXISTS workstream VARCHAR(255)"))
+        conn.execute(text("ALTER TABLE client_tasks ADD COLUMN IF NOT EXISTS deliverable VARCHAR(255)"))
+        conn.execute(text("ALTER TABLE client_tasks ADD COLUMN IF NOT EXISTS kpi TEXT"))
+        conn.execute(text("UPDATE client_tasks SET workstream = COALESCE(NULLIF(workstream, ''), NULLIF(task, ''), 'Legacy Workstream') WHERE workstream IS NULL OR workstream = ''"))
+        conn.execute(text("UPDATE client_tasks SET deliverable = COALESCE(NULLIF(deliverable, ''), NULLIF(task, ''), NULLIF(subtask, ''), 'Legacy Deliverable') WHERE deliverable IS NULL OR deliverable = ''"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_tasks_workstream ON client_tasks(workstream)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_tasks_deliverable ON client_tasks(deliverable)"))
+    except Exception:
+        pass
 
 
 @app.get("/healthz")
@@ -3219,6 +3229,22 @@ def list_client_tasks(
     return rows
 
 
+def _client_task_workstream(row: ClientTask) -> str:
+    return (getattr(row, "workstream", None) or row.task or "").strip()
+
+
+def _client_task_deliverable(row: ClientTask) -> str:
+    return (getattr(row, "deliverable", None) or row.task or "").strip()
+
+
+def _client_task_kpi(row: ClientTask) -> str:
+    return (getattr(row, "kpi", None) or "").strip()
+
+
+def _client_task_operational_subtask(row: ClientTask) -> str:
+    return (row.subtask or "").strip()
+
+
 def _build_client_task_workplan_report(
     db: Session,
     client: ClientAccount,
@@ -3245,18 +3271,28 @@ def _build_client_task_workplan_report(
 
     grouped_rows: dict[str, dict[str, object]] = {}
     for row in rows:
+        workstream = _client_task_workstream(row)
+        deliverable = _client_task_deliverable(row)
+        kpi = _client_task_kpi(row)
         group = grouped_rows.setdefault(
             row.task_group_id,
             {
                 "task_group_id": row.task_group_id,
-                "task": row.task,
+                "workstream": workstream,
+                "deliverable": deliverable,
+                "kpi": kpi,
+                "task": workstream,
                 "subtasks": [],
             },
         )
-        group["task"] = row.task
+        group["workstream"] = workstream
+        group["deliverable"] = deliverable
+        group["kpi"] = kpi
+        group["task"] = workstream
         group["subtasks"].append(
             ClientTaskReportSubtaskOut(
-                subtask=row.subtask,
+                operational_subtask=_client_task_operational_subtask(row),
+                subtask=_client_task_operational_subtask(row),
                 completion_date=row.completion_date,
                 completed=bool(row.completed),
                 completed_at=row.completed_at,
@@ -3284,16 +3320,23 @@ def _build_client_task_workplan_report(
         groups.append(
             ClientTaskReportGroupOut(
                 task_group_id=str(group["task_group_id"]),
+                workstream=str(group["workstream"]),
+                deliverable=str(group["deliverable"]),
+                kpi=str(group["kpi"]) if group["kpi"] else None,
                 task=str(group["task"]),
+                total_operational_subtasks=total,
                 total_subtasks=total,
+                completed_operational_subtasks=completed,
                 completed_subtasks=completed,
+                pending_operational_subtasks=pending,
                 pending_subtasks=pending,
                 status=status,
+                operational_subtasks=subtasks,
                 subtasks=subtasks,
             )
         )
 
-    groups.sort(key=lambda item: (item.task_group_id.lower(), item.task.lower()))
+    groups.sort(key=lambda item: (item.workstream.lower(), item.deliverable.lower(), item.task_group_id.lower()))
     pending_subtasks = max(0, total_subtasks - completed_subtasks)
     completion_percent = round((completed_subtasks / total_subtasks * 100) if total_subtasks else 0.0, 1)
 
@@ -3308,6 +3351,12 @@ def _build_client_task_workplan_report(
         overview = (
             f"This report captures monthly progress for {client.name} within {year} Q{quarter}, "
             f"showing progress so far, items in progress, and what remains to be done."
+        )
+    elif report_kind == "workplan":
+        title = f"Implementation Workplan - {client.name} - {year} Q{quarter}"
+        overview = (
+            f"This document presents the implementation workplan for {client.name} for {year} Q{quarter}, "
+            "showing the delivery approach, key activities, and expected management outputs."
         )
     else:
         title = f"Quarter Start Workplan Report - {client.name} - {year} Q{quarter}"
@@ -3334,6 +3383,46 @@ def _build_client_task_workplan_report(
         groups=groups,
         ai_report=None,
     )
+
+
+def _build_workstream_ai_payload(groups: list[ClientTaskReportGroupOut]) -> list[dict[str, object]]:
+    workstreams: dict[str, dict[str, object]] = {}
+    for group in groups:
+        key = (group.workstream or "").strip().lower()
+        bucket = workstreams.setdefault(
+            key,
+            {
+                "workstream": group.workstream,
+                "deliverables": [],
+                "completed_subtasks": 0,
+                "pending_subtasks": 0,
+                "total_subtasks": 0,
+            },
+        )
+        bucket["deliverables"].append(
+            {
+                "deliverable": group.deliverable,
+                "kpi": group.kpi,
+                "status": group.status,
+                "completed_subtasks": group.completed_subtasks,
+                "pending_subtasks": group.pending_subtasks,
+                "total_subtasks": group.total_subtasks,
+                "operational_subtasks": [
+                    {
+                        "operational_subtask": subtask.operational_subtask,
+                        "completed": subtask.completed,
+                        "completed_at": subtask.completed_at,
+                        "completion_date": subtask.completion_date,
+                    }
+                    for subtask in group.subtasks
+                ],
+            }
+        )
+        bucket["completed_subtasks"] += group.completed_subtasks
+        bucket["pending_subtasks"] += group.pending_subtasks
+        bucket["total_subtasks"] += group.total_subtasks
+
+    return sorted(workstreams.values(), key=lambda item: str(item["workstream"]).lower())
 
 
 def _format_client_report_date(value: Optional[date | datetime]) -> str:
@@ -3395,8 +3484,11 @@ def _build_monthly_report_status_buckets(report: ClientTaskReportOut) -> dict[st
 
         for subtask in group.subtasks:
             item = {
+                "workstream": group.workstream,
+                "deliverable": group.deliverable,
+                "kpi": group.kpi,
                 "task": group.task,
-                "subtask": subtask.subtask,
+                "subtask": subtask.operational_subtask,
                 "completion_date": subtask.completion_date.isoformat() if subtask.completion_date else None,
                 "completed_at": subtask.completed_at.isoformat() if subtask.completed_at else None,
             }
@@ -3420,9 +3512,14 @@ def _build_monthly_report_status_buckets(report: ClientTaskReportOut) -> dict[st
 
 
 def _build_monthly_report_status_bullet(item: dict[str, Optional[str]], completed: bool) -> str:
-    task = (item.get("task") or "").strip()
+    workstream = (item.get("workstream") or item.get("task") or "").strip()
+    deliverable = (item.get("deliverable") or "").strip()
     subtask = (item.get("subtask") or "").strip()
-    base = f"{task}: {subtask}" if task and subtask else task or subtask
+    kpi = (item.get("kpi") or "").strip()
+    parts = [part for part in [workstream, deliverable, subtask] if part]
+    base = " - ".join(parts)
+    if kpi:
+        base = f"{base} [KPI: {kpi}]"
     completed_at_value = item.get("completed_at")
     completion_date_value = item.get("completion_date")
     if completed:
@@ -3441,20 +3538,21 @@ def _build_monthly_report_status_bullet(item: dict[str, Optional[str]], complete
 
 
 def _build_monthly_workstream_paragraph(group: ClientTaskReportGroupOut) -> str:
-    focus_area = _describe_monthly_workstream(group.task)
+    focus_area = _describe_monthly_workstream(group.workstream)
+    deliverable = group.deliverable
     if group.completed_subtasks == 0:
         return (
-            f"This workstream covers {focus_area}. It remains open for the current reporting period, "
-            "and the outstanding actions listed below are still to be progressed."
+            f"This workstream covers {focus_area}, with {deliverable} as the current deliverable. "
+            "It remains open for the current reporting period, and the outstanding operational actions listed below are still to be progressed."
         )
     if group.completed_subtasks == group.total_subtasks:
         return (
-            f"This workstream covers {focus_area}. All recorded actions under this area have been completed "
-            "for the current reporting period."
+            f"This workstream covers {focus_area}, with {deliverable} as the current deliverable. "
+            "All recorded operational actions under this area have been completed for the current reporting period."
         )
     return (
-        f"Progress has been made in {focus_area}. {group.completed_subtasks} of {group.total_subtasks} recorded "
-        "actions are complete, while the remaining items continue to be tracked."
+        f"Progress has been made in {focus_area} for the deliverable {deliverable}. "
+        f"{group.completed_subtasks} of {group.total_subtasks} recorded operational actions are complete, while the remaining items continue to be tracked."
     )
 
 
@@ -3469,7 +3567,7 @@ def _build_monthly_report_ai_content(
     period_label = f"{report.year} Q{report.quarter}"
     total_subtasks = report.totals.total_subtasks
     report_month = _format_client_report_month(report.generated_at)
-    focus_areas = _format_client_report_list([_describe_monthly_workstream(group.task) for group in report.groups])
+    focus_areas = _format_client_report_list([_describe_monthly_workstream(group.workstream) for group in report.groups])
 
     if total_subtasks == 0:
         overview_paragraphs = [
@@ -3508,7 +3606,10 @@ def _build_monthly_report_ai_content(
             bullet_body = _build_monthly_report_status_bullet(
                 {
                     "task": "",
-                    "subtask": subtask.subtask,
+                    "workstream": group.workstream,
+                    "deliverable": group.deliverable,
+                    "kpi": group.kpi,
+                    "subtask": subtask.operational_subtask,
                     "completion_date": subtask.completion_date.isoformat() if subtask.completion_date else None,
                     "completed_at": subtask.completed_at.isoformat() if subtask.completed_at else None,
                 },
@@ -3523,7 +3624,7 @@ def _build_monthly_report_ai_content(
 
         sections.append(
             ClientTaskReportAISectionOut(
-                heading=group.task,
+                heading=f"{group.workstream} - {group.deliverable}",
                 paragraphs=[_build_monthly_workstream_paragraph(group)],
                 bullets=group_bullets,
             )
@@ -3572,6 +3673,27 @@ def _persist_client_task_workplan_report(
 
 def _row_to_client_task_report(row: ClientTaskReport) -> ClientTaskReportOut:
     payload = json.loads(row.report_json or "{}")
+    groups = payload.get("groups") or []
+    for group in groups:
+        workstream = (group.get("workstream") or group.get("task") or "").strip()
+        deliverable = (group.get("deliverable") or group.get("task") or "").strip()
+        group["workstream"] = workstream
+        group["deliverable"] = deliverable
+        group["task"] = workstream
+        if "kpi" not in group:
+            group["kpi"] = None
+        if "total_operational_subtasks" not in group:
+            group["total_operational_subtasks"] = group.get("total_subtasks", 0)
+        if "completed_operational_subtasks" not in group:
+            group["completed_operational_subtasks"] = group.get("completed_subtasks", 0)
+        if "pending_operational_subtasks" not in group:
+            group["pending_operational_subtasks"] = group.get("pending_subtasks", 0)
+        subtasks = group.get("subtasks") or []
+        for subtask in subtasks:
+            subtask["operational_subtask"] = (subtask.get("operational_subtask") or subtask.get("subtask") or "").strip()
+            subtask["subtask"] = subtask["operational_subtask"]
+        if "operational_subtasks" not in group:
+            group["operational_subtasks"] = subtasks
     return ClientTaskReportOut.model_validate(payload)
 
 
@@ -3604,8 +3726,8 @@ def get_client_task_workplan_report(
     if quarter not in {1, 2, 3, 4}:
         raise HTTPException(status_code=400, detail="quarter must be between 1 and 4")
     normalized_kind = (report_kind or "").strip().lower()
-    if normalized_kind not in {"start", "monthly", "end"}:
-        raise HTTPException(status_code=400, detail="report_kind must be start, monthly, or end")
+    if normalized_kind not in {"start", "monthly", "end", "workplan"}:
+        raise HTTPException(status_code=400, detail="report_kind must be start, monthly, end, or workplan")
 
     client = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
     if not client:
@@ -3630,22 +3752,41 @@ def get_client_task_workplan_report(
         "groups": [
             {
                 "task_group_id": group.task_group_id,
+                "workstream": group.workstream,
+                "deliverable": group.deliverable,
+                "kpi": group.kpi,
                 "task": group.task,
                 "status": group.status,
+                "total_operational_subtasks": group.total_operational_subtasks,
                 "total_subtasks": group.total_subtasks,
+                "completed_operational_subtasks": group.completed_operational_subtasks,
                 "completed_subtasks": group.completed_subtasks,
+                "pending_operational_subtasks": group.pending_operational_subtasks,
                 "pending_subtasks": group.pending_subtasks,
-                "subtasks": [
-                    {
-                        "subtask": subtask.subtask,
-                        "completed": subtask.completed,
-                        "completed_at": subtask.completed_at,
-                    }
-                    for subtask in group.subtasks
-                ],
+                        "operational_subtasks": [
+                            {
+                                "operational_subtask": subtask.operational_subtask,
+                                "subtask": subtask.subtask,
+                                "completed": subtask.completed,
+                                "completed_at": subtask.completed_at,
+                                "completion_date": subtask.completion_date,
+                            }
+                            for subtask in group.operational_subtasks
+                        ],
+                        "subtasks": [
+                            {
+                                "operational_subtask": subtask.operational_subtask,
+                                "subtask": subtask.subtask,
+                                "completed": subtask.completed,
+                                "completed_at": subtask.completed_at,
+                                "completion_date": subtask.completion_date,
+                            }
+                            for subtask in group.subtasks
+                        ],
             }
             for group in report.groups
         ],
+        "workstreams": _build_workstream_ai_payload(report.groups),
     }
     if monthly_status_buckets is not None:
         ai_payload["status_buckets"] = monthly_status_buckets
@@ -3658,8 +3799,6 @@ def get_client_task_workplan_report(
         raise HTTPException(status_code=502, detail="AI report generation failed")
 
     report.ai_report = ClientTaskReportAIOut(**ai_report.model_dump())
-    if normalized_kind == "monthly":
-        report.ai_report = _build_monthly_report_ai_content(report, report.ai_report)
     if ai_report.title:
         report.title = report.ai_report.title.strip()
     if report.ai_report.opening_summary:
@@ -3750,22 +3889,27 @@ def create_client_task(
         raise HTTPException(status_code=400, detail="quarter must be between 1 and 4")
     if payload.year < 2000 or payload.year > 2100:
         raise HTTPException(status_code=400, detail="year must be between 2000 and 2100")
-    task_text = (payload.task or "").strip()
-    subtask_text = (payload.subtask or "").strip() if payload.subtask is not None else ""
-    if not task_text:
-        raise HTTPException(status_code=400, detail="task is required")
+    workstream_text = (payload.workstream or payload.task or "").strip()
+    deliverable_text = (payload.deliverable or payload.task or "").strip()
+    kpi_text = (payload.kpi or "").strip() or None
+    operational_subtask_text = (payload.operational_subtask or payload.subtask or "").strip() if (payload.operational_subtask is not None or payload.subtask is not None) else ""
+    if not workstream_text:
+        raise HTTPException(status_code=400, detail="workstream is required")
+    if not deliverable_text:
+        raise HTTPException(status_code=400, detail="deliverable is required")
     entries: list[tuple[str, Optional[date]]] = []
-    if payload.subtasks:
-        for item in payload.subtasks:
-            st = (item.subtask or "").strip()
+    source_subtasks = payload.operational_subtasks or payload.subtasks
+    if source_subtasks:
+        for item in source_subtasks:
+            st = (item.operational_subtask or item.subtask or "").strip()
             if not st:
                 continue
             entries.append((st, item.completion_date))
-    elif subtask_text:
-        entries.append((subtask_text, payload.completion_date))
+    elif operational_subtask_text:
+        entries.append((operational_subtask_text, payload.completion_date))
 
     if not entries:
-        raise HTTPException(status_code=400, detail="at least one subtask is required")
+        raise HTTPException(status_code=400, detail="at least one operational subtask is required")
 
     client = db.query(ClientAccount).filter(ClientAccount.id == payload.client_id).first()
     if not client:
@@ -3780,7 +3924,10 @@ def create_client_task(
             task_group_id=group_id,
             year=payload.year,
             quarter=payload.quarter,
-            task=task_text,
+            workstream=workstream_text,
+            deliverable=deliverable_text,
+            kpi=kpi_text,
+            task=workstream_text,
             subtask=subtask_value,
             completion_date=completion_date_value,
             completed=False,
@@ -3807,21 +3954,31 @@ def update_client_task(
         raise HTTPException(status_code=404, detail="Task not found")
 
     incoming = payload.dict(exclude_unset=True)
-    if "task" in incoming:
-        task_text = (incoming["task"] or "").strip()
-        if not task_text:
-            raise HTTPException(status_code=400, detail="task cannot be empty")
-        if t.task_group_id:
-            siblings = db.query(ClientTask).filter(ClientTask.task_group_id == t.task_group_id).all()
-            for sibling in siblings:
-                sibling.task = task_text
-                sibling.updated_at = datetime.utcnow()
-        else:
-            t.task = task_text
-    if "subtask" in incoming:
-        subtask_text = (incoming["subtask"] or "").strip()
+    siblings = db.query(ClientTask).filter(ClientTask.task_group_id == t.task_group_id).all() if t.task_group_id else [t]
+    if "workstream" in incoming or "task" in incoming:
+        workstream_text = (incoming.get("workstream") or incoming.get("task") or "").strip()
+        if not workstream_text:
+            raise HTTPException(status_code=400, detail="workstream cannot be empty")
+        for sibling in siblings:
+            sibling.workstream = workstream_text
+            sibling.task = workstream_text
+            sibling.updated_at = datetime.utcnow()
+    if "deliverable" in incoming:
+        deliverable_text = (incoming.get("deliverable") or "").strip()
+        if not deliverable_text:
+            raise HTTPException(status_code=400, detail="deliverable cannot be empty")
+        for sibling in siblings:
+            sibling.deliverable = deliverable_text
+            sibling.updated_at = datetime.utcnow()
+    if "kpi" in incoming:
+        kpi_text = (incoming.get("kpi") or "").strip() or None
+        for sibling in siblings:
+            sibling.kpi = kpi_text
+            sibling.updated_at = datetime.utcnow()
+    if "operational_subtask" in incoming or "subtask" in incoming:
+        subtask_text = (incoming.get("operational_subtask") or incoming.get("subtask") or "").strip()
         if not subtask_text:
-            raise HTTPException(status_code=400, detail="subtask cannot be empty")
+            raise HTTPException(status_code=400, detail="operational_subtask cannot be empty")
         t.subtask = subtask_text
     if "completion_date" in incoming:
         t.completion_date = incoming["completion_date"]
@@ -3847,9 +4004,9 @@ def add_client_task_subtask(
     if not t:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    subtask_text = (payload.subtask or "").strip()
+    subtask_text = (payload.operational_subtask or payload.subtask or "").strip()
     if not subtask_text:
-        raise HTTPException(status_code=400, detail="subtask cannot be empty")
+        raise HTTPException(status_code=400, detail="operational_subtask cannot be empty")
 
     created = ClientTask(
         client_id=t.client_id,
@@ -3857,6 +4014,9 @@ def add_client_task_subtask(
         task_group_id=t.task_group_id,
         year=t.year,
         quarter=t.quarter,
+        workstream=_client_task_workstream(t),
+        deliverable=_client_task_deliverable(t),
+        kpi=_client_task_kpi(t) or None,
         task=t.task,
         subtask=subtask_text,
         completion_date=payload.completion_date,
@@ -6344,6 +6504,10 @@ def _to_task_reminder(task: ClientTask) -> TaskReminderOut:
         user_name=user_name,
         year=task.year,
         quarter=task.quarter,
+        workstream=_client_task_workstream(task),
+        deliverable=_client_task_deliverable(task),
+        kpi=_client_task_kpi(task) or None,
+        operational_subtask=_client_task_operational_subtask(task),
         task=task.task,
         subtask=task.subtask,
         completion_date=task.completion_date,

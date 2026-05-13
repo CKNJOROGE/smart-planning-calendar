@@ -187,6 +187,9 @@ class ClientTask(Base):
     task_group_id = Column(String(40), nullable=False, index=True)
     year = Column(Integer, nullable=False, index=True)
     quarter = Column(Integer, nullable=False, index=True)
+    workstream = Column(String(255), nullable=False)
+    deliverable = Column(String(255), nullable=False)
+    kpi = Column(Text, nullable=True)
     task = Column(String(255), nullable=False)
     subtask = Column(Text, nullable=False)
     completion_date = Column(Date, nullable=True)
@@ -197,6 +200,10 @@ class ClientTask(Base):
 
     client = relationship("ClientAccount", back_populates="tasks")
     user = relationship("User", back_populates="client_tasks", foreign_keys=[user_id])
+
+    @property
+    def operational_subtask(self) -> str:
+        return self.subtask
 
 
 class ClientTaskReport(Base):

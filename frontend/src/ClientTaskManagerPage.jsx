@@ -28,7 +28,18 @@ import LoadingState from "./LoadingState";
 const QUARTERS = [1, 2, 3, 4];
 
 function emptySubtask() {
-  return { subtask: "", completion_date: "" };
+  return { operational_subtask: "", completion_date: "" };
+}
+
+function emptyInlineWorkplanRow(overrides = {}) {
+  return {
+    workstream: "",
+    deliverable: "",
+    operational_subtask: "",
+    kpi: "",
+    completion_date: "",
+    ...overrides,
+  };
 }
 
 function pad2(value) {
@@ -89,6 +100,7 @@ function getReportStatusColor(status) {
 }
 
 function getReportKindLabel(kind) {
+  if (kind === "workplan") return "Implementation Workplan";
   if (kind === "end") return "End of Quarter";
   if (kind === "monthly") return "Monthly Progress";
   return "Start of Quarter";
@@ -156,6 +168,89 @@ function buildWorkplanReportPdf(report, fallbackClientName = "") {
     return y;
   };
 
+  const addPdfTable = (y, table) => {
+    if (!table || !table.headers || !table.headers.length) return y;
+    const headers = table.headers;
+    const rows = table.rows || [];
+    const colCount = headers.length;
+    const colWidth = contentWidth / colCount;
+    const rowHeight = 7;
+    const cellPadX = 2;
+
+    y = ensureSpace(y, rowHeight * 3 + 4);
+    doc.setFillColor(20, 28, 56);
+    doc.rect(marginX, y, contentWidth, rowHeight, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    headers.forEach((header, i) => {
+      doc.text(String(header || ""), marginX + i * colWidth + cellPadX, y + 5, { maxWidth: colWidth - cellPadX * 2 });
+    });
+    y += rowHeight;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    rows.forEach((row, rowIdx) => {
+      y = ensureSpace(y, rowHeight + 2);
+      if (rowIdx % 2 === 0) {
+        doc.setFillColor(243, 244, 246);
+        doc.rect(marginX, y, contentWidth, rowHeight, "F");
+      }
+      doc.setTextColor(17, 24, 39);
+      (row.cells || []).forEach((cell, i) => {
+        const cellText = doc.splitTextToSize(String(cell || ""), colWidth - cellPadX * 2);
+        doc.text(cellText[0] || "", marginX + i * colWidth + cellPadX, y + 5);
+      });
+      y += rowHeight;
+    });
+    y += 4;
+    return y;
+  };
+
+  const addPdfSection = (y, section, depth = 0) => {
+    y = ensureSpace(y, 24);
+    const fontSize = depth === 0 ? 13 : 11;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize);
+    doc.setTextColor(31, 41, 55);
+    doc.text(section.heading || "Section", marginX + depth * 4, y);
+    y += 6;
+
+    const paragraphs = Array.isArray(section.paragraphs) ? section.paragraphs : [];
+    paragraphs.forEach((paragraph) => {
+      y = ensureSpace(y, 14);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(17, 24, 39);
+      y = addPdfWrappedText(doc, paragraph, marginX + depth * 4, y, contentWidth - depth * 4, 5.5);
+      y += 1.5;
+    });
+
+    if (section.table) {
+      y = addPdfTable(y, section.table);
+    }
+
+    const bullets = Array.isArray(section.bullets) ? section.bullets : [];
+    if (bullets.length) {
+      y = ensureSpace(y, bullets.length * 8 + 8);
+      doc.setFontSize(11);
+      bullets.forEach((bullet) => {
+        const bulletLines = doc.splitTextToSize(`• ${bullet}`, contentWidth - 4 - depth * 4);
+        doc.text(bulletLines, marginX + 2 + depth * 4, y);
+        y += bulletLines.length * 5.2;
+      });
+      y += 2;
+    }
+
+    const subSections = Array.isArray(section.sub_sections) ? section.sub_sections : [];
+    subSections.forEach((sub) => {
+      y = addPdfSection(y, sub, depth + 1);
+    });
+
+    y += 4;
+    return y;
+  };
+
   let y = 16;
   doc.setFillColor(20, 28, 56);
   doc.rect(0, 0, pageWidth, 28, "F");
@@ -199,36 +294,7 @@ function buildWorkplanReportPdf(report, fallbackClientName = "") {
   const sections = Array.isArray(ai.sections) ? ai.sections : [];
   if (sections.length) {
     sections.forEach((section) => {
-      y = ensureSpace(y, 24);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.setTextColor(31, 41, 55);
-      doc.text(section.heading || "Section", marginX, y);
-      y += 6;
-
-      const paragraphs = Array.isArray(section.paragraphs) ? section.paragraphs : [];
-      paragraphs.forEach((paragraph) => {
-        y = ensureSpace(y, 14);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        doc.setTextColor(17, 24, 39);
-        y = addPdfWrappedText(doc, paragraph, marginX, y, contentWidth, 5.5);
-        y += 1.5;
-      });
-
-      const bullets = Array.isArray(section.bullets) ? section.bullets : [];
-      if (bullets.length) {
-        y = ensureSpace(y, bullets.length * 8 + 8);
-        doc.setFontSize(11);
-        bullets.forEach((bullet) => {
-          const bulletLines = doc.splitTextToSize(`• ${bullet}`, contentWidth - 4);
-          doc.text(bulletLines, marginX + 2, y);
-          y += bulletLines.length * 5.2;
-        });
-        y += 2;
-      }
-
-      y += 4;
+      y = addPdfSection(y, section, 0);
     });
   } else {
     const legacySections = [
@@ -296,67 +362,85 @@ function buildWorkplanReportMarkup(report, fallbackClientName = "") {
   const renderBullets = (bullets, className = "report-preview-bullets") =>
     (bullets || []).length
       ? `<ul class="${className}">
-          ${(bullets || []).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("")}
-        </ul>`
+      ${(bullets || []).map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("")}
+    </ul>`
       : "";
 
+  const renderTable = (table) => {
+    if (!table || !table.headers || !table.headers.length) return "";
+    const headerCells = table.headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
+    const bodyRows = (table.rows || [])
+      .map(
+        (row) =>
+          `<tr>${(row.cells || [])
+            .map((cell) => `<td>${escapeHtml(cell)}</td>`)
+            .join("")}</tr>`
+      )
+      .join("");
+    return `<div class="report-preview-table-wrap"><table class="report-preview-table"><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+  };
+
+  const renderSection = (section, depth = 0) => {
+    const headingClass = depth === 0 ? "report-preview-section-title" : "report-preview-sub-section-title";
+    const sectionClass = depth === 0 ? "report-preview-section" : "report-preview-sub-section";
+    const html = `
+    <section class="${sectionClass}">
+      <h${depth + 2} class="${headingClass}">${escapeHtml(section.heading || "Section")}</h${depth + 2}>
+      ${renderParagraphs(section.paragraphs)}
+      ${renderTable(section.table)}
+      ${renderBullets(section.bullets)}
+      ${(section.sub_sections || []).map((sub) => renderSection(sub, depth + 1)).join("")}
+    </section>`;
+    return html;
+  };
+
   return `
-    <section class="report-preview-body report-preview-ai-document">
-      <div class="report-preview-kicker">
-        <span class="report-preview-ai-badge">AI Generated Report</span>
-        <span>Client: ${escapeHtml(report.client?.name || fallbackClientName)}</span>
-        <span>Period: ${escapeHtml(String(report.year))} Q${escapeHtml(String(report.quarter))}</span>
-        <span>Type: ${escapeHtml(reportTypeLabel)}</span>
-      </div>
-      <h1 class="report-preview-report-title">${escapeHtml(title)}</h1>
-      ${openingSummary ? `<p class="report-preview-summary">${escapeHtml(openingSummary)}</p>` : ""}
+  <section class="report-preview-body report-preview-ai-document">
+    <div class="report-preview-kicker">
+      <span class="report-preview-ai-badge">AI Generated Report</span>
+      <span>Client: ${escapeHtml(report.client?.name || fallbackClientName)}</span>
+      <span>Period: ${escapeHtml(String(report.year))} Q${escapeHtml(String(report.quarter))}</span>
+      <span>Type: ${escapeHtml(reportTypeLabel)}</span>
+    </div>
+    <h1 class="report-preview-report-title">${escapeHtml(title)}</h1>
+    ${openingSummary ? `<p class="report-preview-summary">${escapeHtml(openingSummary)}</p>` : ""}
+    ${
+      sections.length
+        ? sections.map((section) => renderSection(section, 0)).join("")
+        : legacyHighlights.length || legacyPending.length || legacyNextSteps.length
+        ? `
+    <section class="report-preview-section">
+      <h2 class="report-preview-section-title">Key points</h2>
       ${
-        sections.length
-          ? sections
-              .map(
-                (section) => `
-                  <section class="report-preview-section">
-                    <h2 class="report-preview-section-title">${escapeHtml(section.heading)}</h2>
-                    ${renderParagraphs(section.paragraphs)}
-                    ${renderBullets(section.bullets)}
-                  </section>
-                `
-              )
-              .join("")
-          : legacyHighlights.length || legacyPending.length || legacyNextSteps.length
-            ? `
-              <section class="report-preview-section">
-                <h2 class="report-preview-section-title">Key points</h2>
-                ${
-                  legacyHighlights.length
-                    ? `
-                      <h3 class="report-preview-mini-title">Completed highlights</h3>
-                      ${renderBullets(legacyHighlights, "report-preview-bullets report-preview-bullets--success")}
-                    `
-                    : ""
-                }
-                ${
-                  legacyPending.length
-                    ? `
-                      <h3 class="report-preview-mini-title">Pending focus</h3>
-                      ${renderBullets(legacyPending, "report-preview-bullets report-preview-bullets--warn")}
-                    `
-                    : ""
-                }
-                ${
-                  legacyNextSteps.length
-                    ? `
-                      <h3 class="report-preview-mini-title">Next steps</h3>
-                      ${renderBullets(legacyNextSteps, "report-preview-bullets report-preview-bullets--accent")}
-                    `
-                    : ""
-                }
-              </section>
-            `
-            : ""
+        legacyHighlights.length
+          ? `
+      <h3 class="report-preview-mini-title">Completed highlights</h3>
+      ${renderBullets(legacyHighlights, "report-preview-bullets report-preview-bullets--success")}
+      `
+          : ""
       }
-      ${ai.closing_note ? `<p class="report-preview-closing">${escapeHtml(ai.closing_note)}</p>` : ""}
+      ${
+        legacyPending.length
+          ? `
+      <h3 class="report-preview-mini-title">Pending focus</h3>
+      ${renderBullets(legacyPending, "report-preview-bullets report-preview-bullets--warn")}
+      `
+          : ""
+      }
+      ${
+        legacyNextSteps.length
+          ? `
+      <h3 class="report-preview-mini-title">Next steps</h3>
+      ${renderBullets(legacyNextSteps, "report-preview-bullets report-preview-bullets--accent")}
+      `
+          : ""
+      }
     </section>
+    `
+        : ""
+    }
+    ${ai.closing_note ? `<p class="report-preview-closing">${escapeHtml(ai.closing_note)}</p>` : ""}
+  </section>
   `;
 }
 
@@ -377,6 +461,89 @@ async function buildWorkplanReportPdfWithLogo(report, fallbackClientName = "") {
       doc.addPage();
       return 16;
     }
+    return y;
+  };
+
+  const addPdfTable = (y, table) => {
+    if (!table || !table.headers || !table.headers.length) return y;
+    const headers = table.headers;
+    const rows = table.rows || [];
+    const colCount = headers.length;
+    const colWidth = contentWidth / colCount;
+    const rowHeight = 7;
+    const cellPadX = 2;
+
+    y = ensureSpace(y, rowHeight * 3 + 4);
+    doc.setFillColor(20, 28, 56);
+    doc.rect(marginX, y, contentWidth, rowHeight, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    headers.forEach((header, i) => {
+      doc.text(String(header || ""), marginX + i * colWidth + cellPadX, y + 5, { maxWidth: colWidth - cellPadX * 2 });
+    });
+    y += rowHeight;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    rows.forEach((row, rowIdx) => {
+      y = ensureSpace(y, rowHeight + 2);
+      if (rowIdx % 2 === 0) {
+        doc.setFillColor(243, 244, 246);
+        doc.rect(marginX, y, contentWidth, rowHeight, "F");
+      }
+      doc.setTextColor(17, 24, 39);
+      (row.cells || []).forEach((cell, i) => {
+        const cellText = doc.splitTextToSize(String(cell || ""), colWidth - cellPadX * 2);
+        doc.text(cellText[0] || "", marginX + i * colWidth + cellPadX, y + 5);
+      });
+      y += rowHeight;
+    });
+    y += 4;
+    return y;
+  };
+
+  const addPdfSection = (y, section, depth = 0) => {
+    y = ensureSpace(y, 24);
+    const fontSize = depth === 0 ? 13 : 11;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize);
+    doc.setTextColor(31, 41, 55);
+    doc.text(section.heading || "Section", marginX + depth * 4, y);
+    y += 6;
+
+    const paragraphs = Array.isArray(section.paragraphs) ? section.paragraphs : [];
+    paragraphs.forEach((paragraph) => {
+      y = ensureSpace(y, 14);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.setTextColor(17, 24, 39);
+      y = addPdfWrappedText(doc, paragraph, marginX + depth * 4, y, contentWidth - depth * 4, 5.5);
+      y += 1.5;
+    });
+
+    if (section.table) {
+      y = addPdfTable(y, section.table);
+    }
+
+    const bullets = Array.isArray(section.bullets) ? section.bullets : [];
+    if (bullets.length) {
+      y = ensureSpace(y, bullets.length * 8 + 8);
+      doc.setFontSize(11);
+      bullets.forEach((bullet) => {
+        const bulletLines = doc.splitTextToSize(`• ${bullet}`, contentWidth - 4 - depth * 4);
+        doc.text(bulletLines, marginX + 2 + depth * 4, y);
+        y += bulletLines.length * 5.2;
+      });
+      y += 2;
+    }
+
+    const subSections = Array.isArray(section.sub_sections) ? section.sub_sections : [];
+    subSections.forEach((sub) => {
+      y = addPdfSection(y, sub, depth + 1);
+    });
+
+    y += 4;
     return y;
   };
 
@@ -450,35 +617,7 @@ async function buildWorkplanReportPdfWithLogo(report, fallbackClientName = "") {
   const sections = Array.isArray(ai.sections) ? ai.sections : [];
   if (sections.length) {
     sections.forEach((section) => {
-      y = ensureSpace(y, 24);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.setTextColor(31, 41, 55);
-      doc.text(section.heading || "Section", marginX, y);
-      y += 6;
-
-      const paragraphs = Array.isArray(section.paragraphs) ? section.paragraphs : [];
-      paragraphs.forEach((paragraph) => {
-        y = ensureSpace(y, 14);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        doc.setTextColor(17, 24, 39);
-        y = addPdfWrappedText(doc, paragraph, marginX, y, contentWidth, 5.5);
-        y += 1.5;
-      });
-
-      const bullets = Array.isArray(section.bullets) ? section.bullets : [];
-      if (bullets.length) {
-        y = ensureSpace(y, bullets.length * 8 + 8);
-        doc.setFontSize(11);
-        bullets.forEach((bullet) => {
-          const bulletLines = doc.splitTextToSize(`• ${bullet}`, contentWidth - 4);
-          doc.text(bulletLines, marginX + 2, y);
-          y += bulletLines.length * 5.2;
-        });
-        y += 2;
-      }
-      y += 4;
+      y = addPdfSection(y, section, 0);
     });
   }
 
@@ -513,6 +652,69 @@ function canDeleteRow(current, row) {
   );
 }
 
+function getWorkstreamLabel(row) {
+  return row?.workstream || row?.task || "";
+}
+
+function getDeliverableLabel(row) {
+  return row?.deliverable || row?.task || "";
+}
+
+function getOperationalSubtaskLabel(row) {
+  return row?.operational_subtask || row?.subtask || "";
+}
+
+function getKpiLabel(row) {
+  return row?.kpi || "";
+}
+
+const workplanTableStyle = {
+  width: "100%",
+  borderCollapse: "collapse",
+  tableLayout: "fixed",
+};
+
+const workplanHeaderCellStyle = {
+  textAlign: "left",
+  padding: "8px 10px",
+  border: "1px solid rgba(148, 163, 184, 0.32)",
+  background: "rgba(241, 245, 249, 0.92)",
+  color: "#0f172a",
+  fontSize: 13,
+  fontWeight: 800,
+};
+
+const workplanCellStyle = {
+  padding: "6px 10px",
+  border: "1px solid rgba(148, 163, 184, 0.24)",
+  verticalAlign: "top",
+  background: "rgba(255,255,255,0.86)",
+};
+
+const workplanInputStyle = {
+  width: "100%",
+  minWidth: 0,
+  border: "1px solid rgba(203, 213, 225, 0.9)",
+  outline: "none",
+  background: "rgba(255,255,255,0.96)",
+  padding: "4px 8px",
+  margin: 0,
+  font: "inherit",
+  color: "inherit",
+  boxSizing: "border-box",
+  borderRadius: 4,
+  lineHeight: 1.25,
+  minHeight: 28,
+};
+
+const workplanTextareaStyle = {
+  ...workplanInputStyle,
+  resize: "none",
+  lineHeight: 1.25,
+  paddingTop: 6,
+  paddingBottom: 6,
+};
+
 export default function ClientTaskManagerPage() {
   const { showToast } = useToast();
 
@@ -528,10 +730,18 @@ export default function ClientTaskManagerPage() {
 
   const [mode, setMode] = useState("view");
   const [newClientName, setNewClientName] = useState("");
-  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newWorkstream, setNewWorkstream] = useState("");
+  const [newDeliverable, setNewDeliverable] = useState("");
+  const [newKpi, setNewKpi] = useState("");
   const [subtaskRows, setSubtaskRows] = useState([emptySubtask()]);
-  const [editingRows, setEditingRows] = useState({});
-  const [addingSubtask, setAddingSubtask] = useState(null);
+  const [inlineWorkstreamEdits, setInlineWorkstreamEdits] = useState({});
+  const [inlineDeliverableEdits, setInlineDeliverableEdits] = useState({});
+  const [inlineRowEdits, setInlineRowEdits] = useState({});
+  const [newDeliverableRows, setNewDeliverableRows] = useState({});
+  const [newSubtaskRows, setNewSubtaskRows] = useState({});
+  const [newWorkplanRow, setNewWorkplanRow] = useState(emptyInlineWorkplanRow());
+  const [showNewWorkstreamRow, setShowNewWorkstreamRow] = useState(false);
+  const [workplanSavingKey, setWorkplanSavingKey] = useState("");
   const [probationRecords, setProbationRecords] = useState([]);
   const [probationDraft, setProbationDraft] = useState({
     employee_name: "",
@@ -544,6 +754,8 @@ export default function ClientTaskManagerPage() {
   const [reportKind, setReportKind] = useState("start");
   const [reportHistory, setReportHistory] = useState([]);
   const [reportGenerating, setReportGenerating] = useState(false);
+  const [workplanGenerating, setWorkplanGenerating] = useState(false);
+  const anyReportGenerating = reportGenerating || workplanGenerating;
   const [reportPreview, setReportPreview] = useState(null);
 
   const isEditMode = mode === "edit";
@@ -566,7 +778,9 @@ export default function ClientTaskManagerPage() {
       if (!groups.has(key)) {
         groups.set(key, {
           key,
-          task: row.task,
+          workstream: getWorkstreamLabel(row),
+          deliverable: getDeliverableLabel(row),
+          kpi: getKpiLabel(row),
           rows: [],
         });
       }
@@ -574,6 +788,31 @@ export default function ClientTaskManagerPage() {
     }
     return Array.from(groups.values());
   }, [tasks]);
+
+  const workstreamGroups = useMemo(() => {
+    const groups = new Map();
+    for (const deliverableGroup of groupedTasks) {
+      const workstream = deliverableGroup.workstream || "Untitled workstream";
+      const key = workstream.trim().toLowerCase() || `workstream_${deliverableGroup.key}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          workstream,
+          deliverables: [],
+        });
+      }
+      groups.get(key).deliverables.push(deliverableGroup);
+    }
+
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      rowSpan:
+        group.deliverables.reduce(
+          (total, deliverableGroup) => total + deliverableGroup.rows.length + (isEditMode ? 1 : 0),
+          0
+        ) + (isEditMode ? 1 : 0),
+    }));
+  }, [groupedTasks, isEditMode]);
 
   useEffect(() => {
     (async () => {
@@ -685,12 +924,26 @@ export default function ClientTaskManagerPage() {
   }, [selectedClientId, selectedYear, selectedQuarter, reportKind]);
 
   useEffect(() => {
-    if (!isEditMode) setEditingRows({});
+    if (!isEditMode) {
+      setInlineWorkstreamEdits({});
+      setInlineDeliverableEdits({});
+      setInlineRowEdits({});
+      setNewDeliverableRows({});
+      setNewSubtaskRows({});
+      setNewWorkplanRow(emptyInlineWorkplanRow());
+      setShowNewWorkstreamRow(false);
+    }
   }, [isEditMode]);
 
   useEffect(() => {
-    setAddingSubtask(null);
-  }, [isEditMode, selectedYear, selectedClientId, selectedQuarter]);
+    setInlineWorkstreamEdits({});
+    setInlineDeliverableEdits({});
+    setInlineRowEdits({});
+    setNewDeliverableRows({});
+    setNewSubtaskRows({});
+    setNewWorkplanRow(emptyInlineWorkplanRow());
+    setShowNewWorkstreamRow(false);
+  }, [selectedYear, selectedClientId, selectedQuarter]);
 
   async function refreshTasks() {
     if (!selectedYear || !selectedClientId || !selectedQuarter) return;
@@ -893,19 +1146,21 @@ export default function ClientTaskManagerPage() {
   async function handleCreateTask(e) {
     e.preventDefault();
     if (!isEditMode) return;
-    const taskTitle = (newTaskTitle || "").trim();
-    if (!taskTitle || !selectedClientId) {
-      setErr("Task title is required.");
+    const workstream = (newWorkstream || "").trim();
+    const deliverable = (newDeliverable || "").trim();
+    const kpi = (newKpi || "").trim();
+    if (!workstream || !deliverable || !selectedClientId) {
+      setErr("Workstream and deliverable are required.");
       return;
     }
     const cleanedSubtasks = subtaskRows
       .map((s) => ({
-        subtask: (s.subtask || "").trim(),
+        operational_subtask: (s.operational_subtask || "").trim(),
         completion_date: s.completion_date || null,
       }))
-      .filter((s) => s.subtask);
+      .filter((s) => s.operational_subtask);
     if (!cleanedSubtasks.length) {
-      setErr("At least one subtask is required.");
+      setErr("At least one operational subtask is required.");
       return;
     }
 
@@ -914,13 +1169,17 @@ export default function ClientTaskManagerPage() {
         client_id: Number(selectedClientId),
         year: Number(selectedYear),
         quarter: Number(selectedQuarter),
-        task: taskTitle,
-        subtasks: cleanedSubtasks,
+        workstream,
+        deliverable,
+        kpi: kpi || null,
+        operational_subtasks: cleanedSubtasks,
       });
-      setNewTaskTitle("");
+      setNewWorkstream("");
+      setNewDeliverable("");
+      setNewKpi("");
       setSubtaskRows([emptySubtask()]);
       await refreshTasks();
-      showToast("Task workplan added", "success");
+      showToast("Workplan added", "success");
     } catch (e2) {
       const msg = String(e2.message || e2);
       setErr(msg);
@@ -942,11 +1201,11 @@ export default function ClientTaskManagerPage() {
 
   async function handleDeleteSubtask(row) {
     if (!isEditMode || !canDeleteRow(current, row)) return;
-    if (!confirm(`Delete subtask "${row.subtask}"?`)) return;
+    if (!confirm(`Delete operational subtask "${getOperationalSubtaskLabel(row)}"?`)) return;
     try {
       await deleteClientTask(row.id);
       setTasks((prev) => prev.filter((r) => r.id !== row.id));
-      showToast("Subtask deleted", "success");
+      showToast("Operational subtask deleted", "success");
     } catch (e) {
       const msg = String(e.message || e);
       setErr(msg);
@@ -954,103 +1213,240 @@ export default function ClientTaskManagerPage() {
     }
   }
 
-  function startEditRow(row) {
-    if (!isEditMode || !canModifyRow(current, row)) return;
-    setEditingRows((prev) => ({
+  function patchInlineWorkstream(workstreamKey, value) {
+    setInlineWorkstreamEdits((prev) => ({ ...prev, [workstreamKey]: value }));
+  }
+
+  function patchInlineDeliverable(groupKey, patch) {
+    setInlineDeliverableEdits((prev) => ({
       ...prev,
-      [row.id]: {
-        task: row.task || "",
-        subtask: row.subtask || "",
-        completion_date: row.completion_date || "",
-      },
+      [groupKey]: { ...(prev[groupKey] || {}), ...patch },
     }));
   }
 
-  function cancelEditRow(rowId) {
-    setEditingRows((prev) => {
-      const next = { ...prev };
-      delete next[rowId];
-      return next;
-    });
-  }
-
-  function patchEditRow(rowId, patch) {
-    setEditingRows((prev) => ({
+  function patchInlineRow(rowId, patch) {
+    setInlineRowEdits((prev) => ({
       ...prev,
       [rowId]: { ...(prev[rowId] || {}), ...patch },
     }));
   }
 
-  function startAddSubtask(group) {
-    if (!isEditMode || !group?.rows?.length) return;
-    const anchorRow = group.rows[0];
-    setAddingSubtask({
-      taskId: anchorRow.id,
-      groupKey: group.key,
-      subtask: "",
-      completion_date: "",
+  function patchNewDeliverableRow(workstreamKey, patch) {
+    setNewDeliverableRows((prev) => ({
+      ...prev,
+      [workstreamKey]: { ...(prev[workstreamKey] || emptyInlineWorkplanRow()), ...patch },
+    }));
+  }
+
+  function patchNewSubtaskRow(groupKey, patch) {
+    setNewSubtaskRows((prev) => ({
+      ...prev,
+      [groupKey]: { ...(prev[groupKey] || emptySubtask()), ...patch },
+    }));
+  }
+
+  async function runInlineSave(key, callback) {
+    if (workplanSavingKey === key) return;
+    setWorkplanSavingKey(key);
+    try {
+      await callback();
+      setErr("");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    } finally {
+      setWorkplanSavingKey("");
+    }
+  }
+
+  async function saveWorkstreamGroup(group) {
+    const draftValue = (inlineWorkstreamEdits[group.key] ?? group.workstream ?? "").trim();
+    const currentValue = (group.workstream || "").trim();
+    if (!draftValue) {
+      setErr("Workstream cannot be empty.");
+      return;
+    }
+    if (draftValue === currentValue) return;
+
+    await runInlineSave(`workstream:${group.key}`, async () => {
+      await Promise.all(
+        group.deliverables
+          .filter((deliverableGroup) => deliverableGroup.rows?.length)
+          .map((deliverableGroup) => updateClientTask(deliverableGroup.rows[0].id, { workstream: draftValue }))
+      );
+      setInlineWorkstreamEdits((prev) => {
+        const next = { ...prev };
+        delete next[group.key];
+        return next;
+      });
+      await refreshTasks();
     });
   }
 
-  function cancelAddSubtask() {
-    setAddingSubtask(null);
-  }
+  async function saveDeliverableGroup(group) {
+    const draft = inlineDeliverableEdits[group.key] || {};
+    const deliverable = (draft.deliverable ?? group.deliverable ?? "").trim();
+    const kpi = draft.kpi ?? group.kpi ?? "";
+    const currentDeliverable = (group.deliverable || "").trim();
+    const currentKpi = group.kpi || "";
 
-  function patchAddSubtask(patch) {
-    setAddingSubtask((prev) => (prev ? { ...prev, ...patch } : prev));
-  }
-
-  async function saveAddedSubtask(group) {
-    if (!isEditMode || !group?.rows?.length || !addingSubtask) return;
-    const anchorRow = group.rows[0];
-    if (Number(addingSubtask.taskId) !== Number(anchorRow.id)) return;
-    const subtaskText = (addingSubtask.subtask || "").trim();
-    if (!subtaskText) {
-      setErr("Subtask cannot be empty.");
+    if (!deliverable) {
+      setErr("Deliverable cannot be empty.");
       return;
     }
-    try {
-      await appendClientTaskSubtask(anchorRow.id, {
-        subtask: subtaskText,
-        completion_date: addingSubtask.completion_date || null,
+    if (deliverable === currentDeliverable && kpi === currentKpi) return;
+
+    await runInlineSave(`deliverable:${group.key}`, async () => {
+      await updateClientTask(group.rows[0].id, {
+        deliverable,
+        kpi: kpi.trim() || null,
+      });
+      setInlineDeliverableEdits((prev) => {
+        const next = { ...prev };
+        delete next[group.key];
+        return next;
       });
       await refreshTasks();
-      setAddingSubtask(null);
-      showToast("Subtask added", "success");
-    } catch (e) {
-      const msg = String(e.message || e);
-      setErr(msg);
-      showToast(msg, "error");
-    }
+    });
   }
 
-  async function saveEditRow(row) {
-    if (!isEditMode || !canModifyRow(current, row)) return;
-    const draft = editingRows[row.id];
+  async function saveInlineRow(row) {
+    const draft = inlineRowEdits[row.id];
     if (!draft) return;
-    const payload = {
-      task: (draft.task || "").trim(),
-      subtask: (draft.subtask || "").trim(),
-      completion_date: draft.completion_date || null,
-    };
-    if (!payload.task) {
-      setErr("Task cannot be empty.");
+
+    const operationalSubtask = (draft.operational_subtask ?? getOperationalSubtaskLabel(row) ?? "").trim();
+    const completionDate = draft.completion_date ?? row.completion_date ?? "";
+    const payload = {};
+
+    if (!operationalSubtask) {
+      setErr("Operational subtask cannot be empty.");
       return;
     }
-    if (!payload.subtask) {
-      setErr("Subtask cannot be empty.");
-      return;
+    if (operationalSubtask !== getOperationalSubtaskLabel(row)) {
+      payload.operational_subtask = operationalSubtask;
     }
-    try {
+    if ((completionDate || "") !== (row.completion_date || "")) {
+      payload.completion_date = completionDate || null;
+    }
+    if (!Object.keys(payload).length) return;
+
+    await runInlineSave(`row:${row.id}`, async () => {
       await updateClientTask(row.id, payload);
+      setInlineRowEdits((prev) => {
+        const next = { ...prev };
+        delete next[row.id];
+        return next;
+      });
       await refreshTasks();
-      cancelEditRow(row.id);
-      showToast("Task updated", "success");
-    } catch (e) {
-      const msg = String(e.message || e);
-      setErr(msg);
-      showToast(msg, "error");
+    });
+  }
+
+  async function createInlineSubtask(group) {
+    const draft = newSubtaskRows[group.key] || emptySubtask();
+    const operationalSubtask = (draft.operational_subtask || "").trim();
+    if (!operationalSubtask) {
+      setErr("Operational subtask cannot be empty.");
+      return;
     }
+
+    await runInlineSave(`new-subtask:${group.key}`, async () => {
+      await appendClientTaskSubtask(group.rows[0].id, {
+        operational_subtask: operationalSubtask,
+        completion_date: draft.completion_date || null,
+      });
+      setNewSubtaskRows((prev) => {
+        const next = { ...prev };
+        delete next[group.key];
+        return next;
+      });
+      await refreshTasks();
+      showToast("Subtask added", "success");
+    });
+  }
+
+  async function createInlineDeliverable(workstreamGroup) {
+    const draft = newDeliverableRows[workstreamGroup.key] || emptyInlineWorkplanRow({ workstream: workstreamGroup.workstream });
+    const deliverable = (draft.deliverable || "").trim();
+    const operationalSubtask = (draft.operational_subtask || "").trim();
+    if (!deliverable) {
+      setErr("Deliverable cannot be empty.");
+      return;
+    }
+    if (!operationalSubtask) {
+      setErr("Operational subtask cannot be empty.");
+      return;
+    }
+
+    await runInlineSave(`new-deliverable:${workstreamGroup.key}`, async () => {
+      await createClientTask({
+        client_id: Number(selectedClientId),
+        year: Number(selectedYear),
+        quarter: Number(selectedQuarter),
+        workstream: workstreamGroup.workstream,
+        deliverable,
+        kpi: (draft.kpi || "").trim() || null,
+        operational_subtasks: [
+          {
+            operational_subtask: operationalSubtask,
+            completion_date: draft.completion_date || null,
+          },
+        ],
+      });
+      setNewDeliverableRows((prev) => {
+        const next = { ...prev };
+        delete next[workstreamGroup.key];
+        return next;
+      });
+      await refreshTasks();
+      showToast("Deliverable added", "success");
+    });
+  }
+
+  async function createInlineWorkstream() {
+    const workstream = (newWorkplanRow.workstream || "").trim();
+    const deliverable = (newWorkplanRow.deliverable || "").trim();
+    const operationalSubtask = (newWorkplanRow.operational_subtask || "").trim();
+    if (!workstream) {
+      setErr("Workstream cannot be empty.");
+      return;
+    }
+    if (!deliverable) {
+      setErr("Deliverable cannot be empty.");
+      return;
+    }
+    if (!operationalSubtask) {
+      setErr("Operational subtask cannot be empty.");
+      return;
+    }
+
+    await runInlineSave("new-workstream", async () => {
+      await createClientTask({
+        client_id: Number(selectedClientId),
+        year: Number(selectedYear),
+        quarter: Number(selectedQuarter),
+        workstream,
+        deliverable,
+        kpi: (newWorkplanRow.kpi || "").trim() || null,
+        operational_subtasks: [
+          {
+            operational_subtask: operationalSubtask,
+            completion_date: newWorkplanRow.completion_date || null,
+          },
+        ],
+      });
+      setNewWorkplanRow(emptyInlineWorkplanRow());
+      setShowNewWorkstreamRow(false);
+      await refreshTasks();
+      showToast("Workstream added", "success");
+    });
+  }
+
+  async function handleInlineEnter(event, action, allowMultiline = false) {
+    if (event.key !== "Enter") return;
+    if (allowMultiline && event.shiftKey) return;
+    event.preventDefault();
+    await action();
   }
 
   async function handleExportPdf() {
@@ -1087,13 +1483,15 @@ export default function ClientTaskManagerPage() {
             const key = row.task_group_id || `legacy_${row.id}`;
             if (!groups.has(key)) {
               groups.set(key, {
-                task: row.task,
+                workstream: getWorkstreamLabel(row),
+                deliverable: getDeliverableLabel(row),
+                kpi: getKpiLabel(row),
                 owner: row.user?.name || `User #${row.user_id}`,
                 subtasks: [],
               });
             }
             groups.get(key).subtasks.push({
-              subtask: row.subtask || "",
+              subtask: getOperationalSubtaskLabel(row),
               completion_date: row.completion_date || "",
               completed: !!row.completed,
             });
@@ -1105,7 +1503,9 @@ export default function ClientTaskManagerPage() {
               <tr>
                 <td style="padding:8px;border-top:1px solid #e5e7eb;vertical-align:top;">${escapeHtml(g.owner)}</td>
                 <td style="padding:8px;border-top:1px solid #e5e7eb;vertical-align:top;">
-                  <div style="font-weight:700;margin-bottom:4px;">${escapeHtml(g.task)}</div>
+                  <div style="font-weight:700;margin-bottom:4px;">${escapeHtml(g.workstream)}</div>
+                  <div style="margin-bottom:4px;color:#334155;">Deliverable: ${escapeHtml(g.deliverable || "-")}</div>
+                  ${g.kpi ? `<div style="margin-bottom:4px;color:#475569;">KPI: ${escapeHtml(g.kpi)}</div>` : ""}
                   <ul style="margin:0;padding-left:18px;">
                     ${g.subtasks
                       .map(
@@ -1132,7 +1532,7 @@ export default function ClientTaskManagerPage() {
                 <thead>
                   <tr style="background:#f8fafc;">
                     <th style="text-align:left;padding:8px;">Employee</th>
-                    <th style="text-align:left;padding:8px;">Task & Subtasks</th>
+                    <th style="text-align:left;padding:8px;">Workplan Structure</th>
                   </tr>
                 </thead>
                 <tbody>${rowsHtml}</tbody>
@@ -1221,6 +1621,32 @@ export default function ClientTaskManagerPage() {
     }
   }
 
+  async function handleGenerateAiWorkplanDocument() {
+    setWorkplanGenerating(true);
+    try {
+      const chosenClient = clients.find((c) => c.id === Number(selectedClientId));
+      if (!chosenClient) {
+        showToast("No client selected for workplan generation", "error");
+        return;
+      }
+
+      const report = await getClientWorkplanReport({
+        clientId: Number(chosenClient.id),
+        year: Number(selectedYear),
+        quarter: Number(selectedQuarter),
+        reportKind: "workplan",
+      });
+      setReportPreview(report);
+      showToast("AI workplan ready", "success");
+    } catch (e) {
+      const msg = String(e.message || e);
+      setErr(msg);
+      showToast(msg, "error");
+    } finally {
+      setWorkplanGenerating(false);
+    }
+  }
+
   async function handleOpenSavedReport(reportId) {
     try {
       const report = await getSavedClientWorkplanReport(reportId);
@@ -1298,7 +1724,7 @@ export default function ClientTaskManagerPage() {
       <div className="card" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>Client Task Manager</div>
         <div className="muted">
-          Year -&gt; Client -&gt; Quarter -&gt; Probation Tracker. View Mode is read-only. Edit Mode unlocks create/edit/delete actions.
+          Year -&gt; Client -&gt; Quarter -&gt; Probation Tracker. View Mode is read-only. Edit Mode unlocks create/edit/delete actions. Workplans now follow Workstream, Deliverable, Operational Subtasks, and KPI.
         </div>
       </div>
 
@@ -1588,35 +2014,35 @@ export default function ClientTaskManagerPage() {
       </div>
 
       <div className={`card report-card${reportGenerating ? " is-generating" : ""}`} style={{ marginBottom: 12 }}>
-        <div style={{ fontWeight: 800, marginBottom: 8 }}>6) AI Client Workplan Report</div>
-        <div className="row">
-          <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
-            <label>Report type</label>
-            <select value={reportKind} onChange={(e) => setReportKind(e.target.value)}>
-              <option value="start">Quarter start report</option>
-              <option value="monthly">Monthly progress report</option>
-              <option value="end">Quarter end report</option>
-            </select>
-          </div>
-          <div style={{ alignSelf: "end" }}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleGenerateWorkplanReport}
-              disabled={!selectedClientId || reportGenerating}
-            >
-              {reportGenerating ? "Generating..." : "Generate Report"}
-            </button>
+      <div style={{ fontWeight: 800, marginBottom: 8 }}>6) AI Client Workplan Report</div>
+      <div className="row">
+        <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
+          <label>Report type</label>
+          <select value={reportKind} onChange={(e) => setReportKind(e.target.value)}>
+          <option value="start">Quarter start report</option>
+          <option value="monthly">Monthly progress report</option>
+          <option value="end">Quarter end report</option>
+          </select>
+        </div>
+        <div style={{ alignSelf: "end" }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleGenerateWorkplanReport}
+            disabled={!selectedClientId || anyReportGenerating}
+          >
+            {reportGenerating ? "Generating..." : "Generate Report"}
+          </button>
+        </div>
+      </div>
+      {reportGenerating && (
+        <div className="report-card-overlay" aria-live="polite" aria-busy="true">
+          <div className="report-card-overlay-panel">
+            <LoadingState label="Writing AI report..." compact />
+            <div className="report-card-overlay-text">Turning the client workplan into a polished report and saving it.</div>
           </div>
         </div>
-        {reportGenerating && (
-          <div className="report-card-overlay" aria-live="polite" aria-busy="true">
-            <div className="report-card-overlay-panel">
-              <LoadingState label="Writing AI report..." compact />
-              <div className="report-card-overlay-text">Turning the client workplan into a polished report and saving it.</div>
-            </div>
-          </div>
-        )}
+      )}
       </div>
 
       <div className="card" style={{ marginBottom: 12 }}>
@@ -1675,209 +2101,336 @@ export default function ClientTaskManagerPage() {
         </div>
 
         {isEditMode && (
-          <form onSubmit={handleCreateTask} style={{ marginBottom: 14 }}>
-            <div className="field">
-              <label>Main task</label>
-              <input
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-                placeholder="e.g., Quarterly compliance review"
-                disabled={!selectedClientId}
-              />
-            </div>
-
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Subtasks</div>
-            {subtaskRows.map((row, idx) => (
-              <div key={idx} className="row" style={{ marginBottom: 6 }}>
-                <div className="field" style={{ flex: "1 1 320px", marginBottom: 0 }}>
-                  <label>{`Subtask ${idx + 1}`}</label>
-                  <input
-                    value={row.subtask}
-                    onChange={(e) => updateSubtaskRow(idx, { subtask: e.target.value })}
-                    placeholder="Subtask description"
-                    disabled={!selectedClientId}
-                  />
-                </div>
-                <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
-                  <label>Completion date</label>
-                  <input
-                    type="date"
-                    value={row.completion_date}
-                    onChange={(e) => updateSubtaskRow(idx, { completion_date: e.target.value })}
-                    disabled={!selectedClientId}
-                  />
-                </div>
-                <div style={{ alignSelf: "end", display: "flex", gap: 8 }}>
-                  <button type="button" className="btn" onClick={addSubtaskRow} disabled={!selectedClientId}>
-                    + Subtask
-                  </button>
-                  <button type="button" className="btn btn-danger" onClick={() => removeSubtaskRow(idx)} disabled={!selectedClientId || subtaskRows.length <= 1}>
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-
-            <div style={{ marginTop: 8 }}>
-              <button className="btn btn-primary" type="submit" disabled={!selectedClientId}>
-                Save Task Workplan
-              </button>
-            </div>
-          </form>
+          <div className="muted" style={{ marginBottom: 12 }}>
+            Edit inside the grid. Press Enter on a shaded row to add it.
+          </div>
         )}
 
         <div style={{ width: "100%", overflowX: "auto" }}>
-          <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+          <table className="table" style={workplanTableStyle}>
             <thead>
-              <tr style={{ background: "rgba(255,255,255,0.14)" }}>
-                <th style={{ textAlign: "left", padding: 10 }}>Added By</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Task</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Subtask</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Completion Date</th>
-                <th style={{ textAlign: "left", padding: 10 }}>Completed</th>
-                {isEditMode && <th style={{ textAlign: "left", padding: 10 }}>Actions</th>}
+              <tr>
+                <th style={{ ...workplanHeaderCellStyle, width: "19%" }}>Workstream</th>
+                <th style={{ ...workplanHeaderCellStyle, width: "19%" }}>Deliverable</th>
+                <th style={{ ...workplanHeaderCellStyle, width: "21%" }}>Operational Subtask</th>
+                <th style={{ ...workplanHeaderCellStyle, width: "16%" }}>KPI</th>
+                <th style={{ ...workplanHeaderCellStyle, width: "12%" }}>Completion Date</th>
+                <th style={{ ...workplanHeaderCellStyle, width: "11%" }}>Status</th>
+                <th style={{ ...workplanHeaderCellStyle, width: "12%" }}>Added By</th>
+                {isEditMode && <th style={{ ...workplanHeaderCellStyle, width: "9%" }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {groupedTasks.map((group) => (
-                <React.Fragment key={group.key}>
-                  {group.rows.map((row, rowIdx) => {
-                    const draft = editingRows[row.id];
-                    const isEditing = isEditMode && !!draft;
-                    const canModifyThisRow = canModifyRow(current, row);
-                    const canDeleteThisRow = canDeleteRow(current, row);
-                    const showAddButton = isEditMode && rowIdx === 0 && !isEditing;
+              {workstreamGroups.map((workstreamGroup) => (
+                <React.Fragment key={workstreamGroup.key}>
+                  {workstreamGroup.deliverables.map((group, deliverableIdx) => {
+                    const deliverableDraft = inlineDeliverableEdits[group.key] || {};
+                    const newDeliverableDraft =
+                      newDeliverableRows[workstreamGroup.key] || emptyInlineWorkplanRow({ workstream: workstreamGroup.workstream });
+                    const deliverableRowSpan = group.rows.length + (isEditMode ? 1 : 0);
+
                     return (
-                      <tr key={row.id} style={{ borderTop: "1px solid rgba(255,255,255,0.16)" }}>
-                        <td style={{ padding: 10, verticalAlign: "top" }}>
-                          {row.user?.name || `User #${row.user_id}`}
-                        </td>
-                        {rowIdx === 0 ? (
-                          <td style={{ padding: 10, verticalAlign: "top" }} rowSpan={group.rows.length}>
-                            {isEditing ? (
-                              <input
-                                value={draft.task}
-                                onChange={(e) => patchEditRow(row.id, { task: e.target.value })}
-                                style={{ width: "100%" }}
-                              />
-                            ) : (
-                              <span style={{ fontWeight: 700 }}>{row.task}</span>
-                            )}
-                          </td>
-                        ) : null}
-                        <td style={{ padding: 10 }}>
-                          {isEditing ? (
-                            <input
-                              value={draft.subtask}
-                              onChange={(e) => patchEditRow(row.id, { subtask: e.target.value })}
-                              style={{ width: "100%" }}
-                            />
-                          ) : (
-                            <div>
-                              <div>{row.subtask}</div>
-                              <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
-                                Added by {row.user?.name || `User #${row.user_id}`}
-                              </div>
-                            </div>
-                          )}
-                        </td>
-                        <td style={{ padding: 10 }}>
-                          {isEditing ? (
-                            <input
-                              type="date"
-                              value={draft.completion_date}
-                              onChange={(e) => patchEditRow(row.id, { completion_date: e.target.value })}
-                            />
-                          ) : (
-                            row.completion_date || "-"
-                          )}
-                        </td>
-                        <td style={{ padding: 10 }}>
-                          <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
-                            <input
-                              type="checkbox"
-                              checked={!!row.completed}
-                              onChange={() => handleToggleCompleted(row)}
-                              disabled={!isEditMode || !canModifyThisRow}
-                            />
-                            {row.completed ? "Done" : "Pending"}
-                          </label>
-                        </td>
-                        {isEditMode && (
-                          <td style={{ padding: 10 }}>
-                            {isEditing ? (
-                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                <button className="btn btn-primary" type="button" onClick={() => saveEditRow(row)}>
-                                  Save
-                                </button>
-                                <button className="btn" type="button" onClick={() => cancelEditRow(row.id)}>
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                                <button className="btn" type="button" onClick={() => startEditRow(row)} disabled={!canModifyThisRow}>
-                                  Edit
-                                </button>
-                                <button className="btn btn-danger" type="button" onClick={() => handleDeleteSubtask(row)} disabled={!canDeleteThisRow}>
-                                  Delete
-                                </button>
-                                {showAddButton && (
-                                  <button className="btn" type="button" onClick={() => startAddSubtask(group)} disabled={!canModifyThisRow}>
-                                    + Add subtask
-                                  </button>
+                      <React.Fragment key={group.key}>
+                        {group.rows.map((row, rowIdx) => {
+                          const rowDraft = inlineRowEdits[row.id] || {};
+                          const canModifyThisRow = canModifyRow(current, row);
+                          const canDeleteThisRow = canDeleteRow(current, row);
+
+                          return (
+                            <tr key={row.id}>
+                              {deliverableIdx === 0 && rowIdx === 0 ? (
+                                <td style={{ ...workplanCellStyle, fontWeight: 700 }} rowSpan={workstreamGroup.rowSpan}>
+                                  {isEditMode ? (
+                                    <input
+                                      value={inlineWorkstreamEdits[workstreamGroup.key] ?? workstreamGroup.workstream}
+                                      onChange={(e) => patchInlineWorkstream(workstreamGroup.key, e.target.value)}
+                                      onBlur={() => saveWorkstreamGroup(workstreamGroup)}
+                                      onKeyDown={(e) => handleInlineEnter(e, () => saveWorkstreamGroup(workstreamGroup))}
+                                      style={{ ...workplanInputStyle, fontWeight: 700 }}
+                                      disabled={workplanSavingKey === `workstream:${workstreamGroup.key}`}
+                                    />
+                                  ) : (
+                                    <span style={{ fontWeight: 700 }}>{workstreamGroup.workstream}</span>
+                                  )}
+                                </td>
+                              ) : null}
+                              {rowIdx === 0 ? (
+                                <td style={workplanCellStyle} rowSpan={deliverableRowSpan}>
+                                  {isEditMode ? (
+                                    <input
+                                      value={deliverableDraft.deliverable ?? group.deliverable}
+                                      onChange={(e) => patchInlineDeliverable(group.key, { deliverable: e.target.value })}
+                                      onBlur={() => saveDeliverableGroup(group)}
+                                      onKeyDown={(e) => handleInlineEnter(e, () => saveDeliverableGroup(group))}
+                                      style={workplanInputStyle}
+                                      disabled={workplanSavingKey === `deliverable:${group.key}`}
+                                    />
+                                  ) : (
+                                    <span>{group.deliverable}</span>
+                                  )}
+                                </td>
+                              ) : null}
+                              <td style={workplanCellStyle}>
+                                {isEditMode ? (
+                                  <input
+                                    value={rowDraft.operational_subtask ?? getOperationalSubtaskLabel(row)}
+                                    onChange={(e) => patchInlineRow(row.id, { operational_subtask: e.target.value })}
+                                    onBlur={() => saveInlineRow(row)}
+                                    onKeyDown={(e) => handleInlineEnter(e, () => saveInlineRow(row))}
+                                    style={workplanInputStyle}
+                                    disabled={workplanSavingKey === `row:${row.id}` || !canModifyThisRow}
+                                  />
+                                ) : (
+                                  getOperationalSubtaskLabel(row)
                                 )}
-                              </div>
-                            )}
-                          </td>
+                              </td>
+                              {rowIdx === 0 ? (
+                                <td style={workplanCellStyle} rowSpan={deliverableRowSpan}>
+                                  {isEditMode ? (
+                                    <textarea
+                                      value={deliverableDraft.kpi ?? group.kpi}
+                                      onChange={(e) => patchInlineDeliverable(group.key, { kpi: e.target.value })}
+                                      onBlur={() => saveDeliverableGroup(group)}
+                                      onKeyDown={(e) => handleInlineEnter(e, () => saveDeliverableGroup(group), true)}
+                                      rows={Math.max(2, String(deliverableDraft.kpi ?? group.kpi ?? "").split("\n").length)}
+                                      style={workplanTextareaStyle}
+                                      disabled={workplanSavingKey === `deliverable:${group.key}`}
+                                    />
+                                  ) : (
+                                    <div style={{ whiteSpace: "pre-wrap" }}>{group.kpi || "-"}</div>
+                                  )}
+                                </td>
+                              ) : null}
+                              <td style={workplanCellStyle}>
+                                {isEditMode ? (
+                                  <input
+                                    type="date"
+                                    value={rowDraft.completion_date ?? row.completion_date ?? ""}
+                                    onChange={(e) => patchInlineRow(row.id, { completion_date: e.target.value })}
+                                    onBlur={() => saveInlineRow(row)}
+                                    onKeyDown={(e) => handleInlineEnter(e, () => saveInlineRow(row))}
+                                    style={workplanInputStyle}
+                                    disabled={workplanSavingKey === `row:${row.id}` || !canModifyThisRow}
+                                  />
+                                ) : (
+                                  row.completion_date || "-"
+                                )}
+                              </td>
+                              <td style={workplanCellStyle}>
+                                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 500, flexWrap: "wrap", fontSize: 12, lineHeight: 1.2 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!row.completed}
+                                    onChange={() => handleToggleCompleted(row)}
+                                    disabled={!isEditMode || !canModifyThisRow}
+                                  />
+                                  {row.completed ? "Done" : "Pending"}
+                                </label>
+                              </td>
+                              <td style={workplanCellStyle}>
+                                {row.user?.name || `User #${row.user_id}`}
+                              </td>
+                              {isEditMode && (
+                                <td style={workplanCellStyle}>
+                                  <button className="btn btn-danger" type="button" onClick={() => handleDeleteSubtask(row)} disabled={!canDeleteThisRow} style={{ minWidth: 0 }}>
+                                    Delete
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                        {isEditMode && (
+                          <tr key={`${group.key}-inline-add`} style={{ background: "rgba(241, 245, 249, 0.92)" }}>
+                            <td style={workplanCellStyle}>
+                              <input
+                                value={(newSubtaskRows[group.key] || emptySubtask()).operational_subtask}
+                                onChange={(e) => patchNewSubtaskRow(group.key, { operational_subtask: e.target.value })}
+                                onKeyDown={(e) => handleInlineEnter(e, () => createInlineSubtask(group))}
+                                placeholder=""
+                                style={workplanInputStyle}
+                                disabled={workplanSavingKey === `new-subtask:${group.key}`}
+                              />
+                            </td>
+                            <td style={workplanCellStyle}>
+                              <input
+                                type="date"
+                                value={(newSubtaskRows[group.key] || emptySubtask()).completion_date}
+                                onChange={(e) => patchNewSubtaskRow(group.key, { completion_date: e.target.value })}
+                                onKeyDown={(e) => handleInlineEnter(e, () => createInlineSubtask(group))}
+                                style={workplanInputStyle}
+                                disabled={workplanSavingKey === `new-subtask:${group.key}`}
+                              />
+                            </td>
+                            <td style={workplanCellStyle}></td>
+                            <td style={workplanCellStyle}>{current?.name || ""}</td>
+                            <td style={workplanCellStyle}></td>
+                          </tr>
                         )}
-                      </tr>
+                        {isEditMode && deliverableIdx === workstreamGroup.deliverables.length - 1 && (
+                          <tr key={`${workstreamGroup.key}-new-deliverable`} style={{ background: "rgba(248, 250, 252, 0.96)" }}>
+                            <td style={workplanCellStyle}>
+                              <input
+                                value={newDeliverableDraft.deliverable}
+                                onChange={(e) => patchNewDeliverableRow(workstreamGroup.key, { deliverable: e.target.value })}
+                                onKeyDown={(e) => handleInlineEnter(e, () => createInlineDeliverable(workstreamGroup))}
+                                placeholder=""
+                                style={workplanInputStyle}
+                                disabled={workplanSavingKey === `new-deliverable:${workstreamGroup.key}`}
+                              />
+                            </td>
+                            <td style={workplanCellStyle}>
+                              <input
+                                value={newDeliverableDraft.operational_subtask}
+                                onChange={(e) => patchNewDeliverableRow(workstreamGroup.key, { operational_subtask: e.target.value })}
+                                onKeyDown={(e) => handleInlineEnter(e, () => createInlineDeliverable(workstreamGroup))}
+                                placeholder=""
+                                style={workplanInputStyle}
+                                disabled={workplanSavingKey === `new-deliverable:${workstreamGroup.key}`}
+                              />
+                            </td>
+                            <td style={workplanCellStyle}>
+                              <textarea
+                                value={newDeliverableDraft.kpi}
+                                onChange={(e) => patchNewDeliverableRow(workstreamGroup.key, { kpi: e.target.value })}
+                                onKeyDown={(e) => handleInlineEnter(e, () => createInlineDeliverable(workstreamGroup), true)}
+                                rows={2}
+                                placeholder=""
+                                style={workplanTextareaStyle}
+                                disabled={workplanSavingKey === `new-deliverable:${workstreamGroup.key}`}
+                              />
+                            </td>
+                            <td style={workplanCellStyle}>
+                              <input
+                                type="date"
+                                value={newDeliverableDraft.completion_date}
+                                onChange={(e) => patchNewDeliverableRow(workstreamGroup.key, { completion_date: e.target.value })}
+                                onKeyDown={(e) => handleInlineEnter(e, () => createInlineDeliverable(workstreamGroup))}
+                                style={workplanInputStyle}
+                                disabled={workplanSavingKey === `new-deliverable:${workstreamGroup.key}`}
+                              />
+                            </td>
+                            <td style={workplanCellStyle}></td>
+                            <td style={workplanCellStyle}>{current?.name || ""}</td>
+                            <td style={workplanCellStyle}></td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
-                  {isEditMode && addingSubtask?.groupKey === group.key && (
-                <tr key={`${group.key}-add`} style={{ borderTop: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.08)" }}>
-                      <td colSpan={6} style={{ padding: 12 }}>
-                        <div className="row" style={{ marginBottom: 0, alignItems: "end" }}>
-                          <div className="field" style={{ flex: "1 1 340px", marginBottom: 0 }}>
-                            <label>New subtask</label>
-                            <input
-                              value={addingSubtask.subtask}
-                              onChange={(e) => patchAddSubtask({ subtask: e.target.value })}
-                              placeholder="Describe the additional subtask"
-                            />
-                          </div>
-                          <div className="field" style={{ flex: "1 1 180px", marginBottom: 0 }}>
-                            <label>Completion date</label>
-                            <input
-                              type="date"
-                              value={addingSubtask.completion_date}
-                              onChange={(e) => patchAddSubtask({ completion_date: e.target.value })}
-                            />
-                          </div>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button type="button" className="btn btn-primary" onClick={() => saveAddedSubtask(group)}>
-                              Save
-                            </button>
-                            <button type="button" className="btn" onClick={cancelAddSubtask}>
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
                 </React.Fragment>
               ))}
-              {!groupedTasks.length && (
+              {isEditMode && selectedClientId && showNewWorkstreamRow && (
+                <tr style={{ background: "rgba(226, 232, 240, 0.75)" }}>
+                  <td style={workplanCellStyle}>
+                    <input
+                      value={newWorkplanRow.workstream}
+                      onChange={(e) => setNewWorkplanRow((prev) => ({ ...prev, workstream: e.target.value }))}
+                      onKeyDown={(e) => handleInlineEnter(e, createInlineWorkstream)}
+                      placeholder=""
+                      style={{ ...workplanInputStyle, fontWeight: 700 }}
+                      disabled={workplanSavingKey === "new-workstream"}
+                    />
+                  </td>
+                  <td style={workplanCellStyle}>
+                    <input
+                      value={newWorkplanRow.deliverable}
+                      onChange={(e) => setNewWorkplanRow((prev) => ({ ...prev, deliverable: e.target.value }))}
+                      onKeyDown={(e) => handleInlineEnter(e, createInlineWorkstream)}
+                      placeholder=""
+                      style={workplanInputStyle}
+                      disabled={workplanSavingKey === "new-workstream"}
+                    />
+                  </td>
+                  <td style={workplanCellStyle}>
+                    <input
+                      value={newWorkplanRow.operational_subtask}
+                      onChange={(e) => setNewWorkplanRow((prev) => ({ ...prev, operational_subtask: e.target.value }))}
+                      onKeyDown={(e) => handleInlineEnter(e, createInlineWorkstream)}
+                      placeholder=""
+                      style={workplanInputStyle}
+                      disabled={workplanSavingKey === "new-workstream"}
+                    />
+                  </td>
+                  <td style={workplanCellStyle}>
+                    <textarea
+                      value={newWorkplanRow.kpi}
+                      onChange={(e) => setNewWorkplanRow((prev) => ({ ...prev, kpi: e.target.value }))}
+                      onKeyDown={(e) => handleInlineEnter(e, createInlineWorkstream, true)}
+                      rows={2}
+                      placeholder=""
+                      style={workplanTextareaStyle}
+                      disabled={workplanSavingKey === "new-workstream"}
+                    />
+                  </td>
+                  <td style={workplanCellStyle}>
+                    <input
+                      type="date"
+                      value={newWorkplanRow.completion_date}
+                      onChange={(e) => setNewWorkplanRow((prev) => ({ ...prev, completion_date: e.target.value }))}
+                      onKeyDown={(e) => handleInlineEnter(e, createInlineWorkstream)}
+                      style={workplanInputStyle}
+                      disabled={workplanSavingKey === "new-workstream"}
+                    />
+                  </td>
+                  <td style={workplanCellStyle}></td>
+                  <td style={workplanCellStyle}>{current?.name || ""}</td>
+                  <td style={workplanCellStyle}></td>
+                </tr>
+              )}
+              {!workstreamGroups.length && (
                 <tr>
-                  <td colSpan={isEditMode ? 6 : 5} style={{ padding: 14 }} className="muted">
-                    {busy ? "Loading..." : "No tasks for this year/client/quarter yet."}
+                  <td colSpan={isEditMode ? 8 : 7} style={{ ...workplanCellStyle, color: "#64748b" }}>
+                    {!selectedClientId
+                      ? "Select a client to start building the workplan table."
+                      : busy
+                        ? "Loading..."
+                        : "No tasks for this year/client/quarter yet."}
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        {isEditMode && selectedClientId && (
+          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setShowNewWorkstreamRow((prev) => !prev)}
+            >
+              {showNewWorkstreamRow ? "Cancel new workstream" : "Add workstream"}
+            </button>
+          </div>
+        )}
+      </div>
+
+<div className={`card report-card${workplanGenerating ? " is-generating" : ""}`} style={{ marginBottom: 12 }}>
+      <div style={{ fontWeight: 800, marginBottom: 8 }}>9) AI Generated Workplan</div>
+      <div className="muted" style={{ marginBottom: 10 }}>
+        Generate a planning-style implementation document from the workplan currently in the table.
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={handleGenerateAiWorkplanDocument}
+          disabled={!selectedClientId || anyReportGenerating}
+        >
+          {workplanGenerating ? "Generating..." : "Generate AI Workplan"}
+        </button>
+        <span className="muted" style={{ fontSize: 12 }}>
+          Uses the current client, year, quarter, workstreams, deliverables, KPIs, and subtasks.
+        </span>
+      </div>
+      {workplanGenerating && (
+          <div className="report-card-overlay" aria-live="polite" aria-busy="true">
+            <div className="report-card-overlay-panel">
+              <LoadingState label="Writing AI workplan..." compact />
+              <div className="report-card-overlay-text">Turning the current workplan into a polished implementation document.</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {reportPreview && (

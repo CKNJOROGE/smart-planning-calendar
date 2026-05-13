@@ -1,18 +1,27 @@
 from pathlib import Path
 
-from app.db import engine, Base
+from sqlalchemy import inspect
+
+from app.db import engine
+from app.db import Base
 from app import models  # noqa: F401
 
 
 def main() -> None:
-    # Ensure base tables exist for brand-new databases before incremental SQL migrations.
-    Base.metadata.create_all(bind=engine)
-
     migrations_dir = Path(__file__).parent / "migrations"
     sql_files = sorted(migrations_dir.glob("*.sql"))
 
     if not sql_files:
         print("No SQL migrations found.")
+        return
+
+    inspector = inspect(engine)
+    existing_tables = inspector.get_table_names()
+
+    if not existing_tables:
+        print("Database is empty. Creating schema from SQLAlchemy models ...")
+        Base.metadata.create_all(bind=engine)
+        print("Schema created successfully.")
         return
 
     with engine.begin() as conn:

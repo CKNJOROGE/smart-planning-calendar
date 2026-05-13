@@ -15,10 +15,21 @@ DEFAULT_GEMINI_REPORT_MODELS = (
 )
 
 
+class ClientWorkplanAITableRow(BaseModel):
+    cells: list[str] = []
+
+
+class ClientWorkplanAITable(BaseModel):
+    headers: list[str] = []
+    rows: list[ClientWorkplanAITableRow] = []
+
+
 class ClientWorkplanAISection(BaseModel):
     heading: str
     paragraphs: list[str] = []
     bullets: list[str] = []
+    table: Optional[ClientWorkplanAITable] = None
+    sub_sections: list["ClientWorkplanAISection"] = []
 
 
 class ClientWorkplanAIReport(BaseModel):
@@ -26,6 +37,9 @@ class ClientWorkplanAIReport(BaseModel):
     opening_summary: str
     sections: list[ClientWorkplanAISection] = []
     closing_note: str
+
+
+ClientWorkplanAISection.model_rebuild()
 
 
 class GeminiReportTemporarilyUnavailableError(RuntimeError):
@@ -78,36 +92,103 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
         return None
 
     report_kind = (payload.get("report_kind") or "start").strip().lower()
+
+    shared_rules = (
+        "Write for a business client. Keep the language specific, concrete, and professional. "
+        "Do not mention that you are an AI. "
+        "Use only the supplied data. Do not invent work that is not in the payload. "
+        "Do not include raw JSON. "
+        "Treat the workplan hierarchy as workstream, deliverable, operational subtask, and KPI. "
+        "Use the operational subtasks as the concrete actions that drive progress and reporting detail. "
+        "Use workstreams as the primary organizing structure. Each workstream should appear once in the report instead of being repeated for every deliverable. "
+        "Within each workstream, explain the deliverables and operational subtasks as part of one flowing narrative. "
+        "Write like a story of how the work was or will be carried out, not like a copied task list. "
+        "If there are no completed items, say that clearly. "
+        "Never describe an item from in_progress or pending as completed, and never move an item from completed into a pending status. "
+        "You may include a table in any section where tabular data adds value — for example, a summary of workstreams with their deliverables, KPIs, target dates, and statuses. "
+        "When including a table, set the table field with headers and rows. Each row has a cells array with one string per column. "
+        "You may include sub_sections inside any section to create a deeper hierarchy (e.g., sub-headed content under a main heading). "
+    )
+
     if report_kind == "end":
         instruction = (
             "You are writing a complete end-of-quarter client workplan report. "
-            "Turn the supplied workplan data into a polished client-facing report that reads like a finished document."
+            "Turn the supplied workplan data into a polished client-facing report that reads like a finished consulting document."
+        )
+        kind_rules = (
+            "Focus on completed work, notable outcomes, and what remains pending. "
+            "Return a title, a substantive opening summary (3-5 sentences), 5 to 8 sections, and a closing note. "
+            "Structure the report with these sections: "
+            "1. Executive Summary — high-level overview of the quarter's performance and key outcomes. "
+            "2. Workstream Performance Review — for each workstream, describe what was achieved, with sub-sections per workstream. Include a table summarizing each workstream's deliverable, KPI, target date, and completion status. "
+            "3. Key Achievements — highlight the most significant completions with concrete detail. "
+            "4. Pending and Carried-Over Items — list and explain anything still open, with reasons if available. "
+            "5. Challenges and Risks — identify any blockers or risks encountered. "
+            "6. Recommendations for Next Quarter — forward-looking actions based on what remains. "
+            "7. Value Delivered to the Organization — explain the business impact of the completed work. "
+            "8. Closing Remarks — a professional closing note. "
         )
     elif report_kind == "monthly":
         instruction = (
-            "You are writing a monthly client progress report. "
-            "Turn the supplied workplan data into a polished client-facing progress update that focuses on progress so far, completed work, items still in progress, and next priorities."
+            "You are writing a monthly HR operations progress report. "
+            "Turn the supplied workplan data into a polished client-facing progress update that reads like a professional consulting monthly report."
+        )
+        kind_rules = (
+            "Focus on what has been achieved so far, what is currently in progress, and what should happen next. "
+            "Treat the status_buckets in the payload as authoritative. "
+            "Return a title, a substantive opening summary (3-5 sentences), 5 to 7 sections, and a closing note. "
+            "Structure the report with these sections: "
+            "1. Executive Summary — brief overview of the month's progress, overall completion percentage, and key focus areas. "
+            "2. Completed Activities — detail the work that has been finalized this period, organized by workstream. Include a table of completed items with deliverable, operational subtask, completion date, and KPI. "
+            "3. In-Progress Activities — describe work currently underway, organized by workstream, with expected completion targets. "
+            "4. Pending Activities — list items not yet started, with target dates and any noted blockers. "
+            "5. Workstream Narratives — for each workstream, provide a short narrative paragraph on progress, challenges, and outlook. Use sub-sections for each workstream. "
+            "6. Key Risks and Issues — highlight any risks, delays, or blockers. "
+            "7. Priorities for Next Period — actionable next steps. "
+        )
+    elif report_kind == "workplan":
+        instruction = (
+            "You are writing an HR implementation workplan document for a client. "
+            "Turn the supplied workplan data into a polished, comprehensive, consulting-quality workplan and delivery document."
+        )
+        kind_rules = (
+            "This is a planning document, not a progress report. Focus on the planned scope, approach, timelines, and expected outputs. "
+            "Return a title, a substantive opening summary (4-6 sentences), 6 to 9 sections, and a closing note. "
+            "Structure the document with these sections: "
+            "1. Executive Summary and Strategic Context — set out the purpose of the engagement and the strategic objectives the workplan addresses. "
+            "2. Scope of Work — describe the overall scope, organized by workstream. Include a table listing each workstream, its deliverables, KPIs, and target completion dates. "
+            "3. Key Activities and Timelines — detail the operational subtasks under each workstream with their target dates. Use sub-sections per workstream. Include a table of activities with columns for workstream, deliverable, operational subtask, target date, and KPI. "
+            "4. Implementation Approach — describe the methodology, phasing, and how the work will be executed. "
+            "5. Deliverables to Management — list the tangible outputs that management will receive, with a table of deliverable, description, and target date. "
+            "6. Value to the Organization — explain the business value and expected impact of each workstream's deliverables. "
+            "7. Monitoring, Reporting, and Risk Management — describe how progress will be tracked, reported, and how risks will be managed. "
+            "8. Support Required from Management — list any decisions, resources, or actions needed from the client's management. "
+            "9. Approval and Next Steps — outline the approval process and immediate next actions. "
         )
     else:
         instruction = (
-            "You are writing a complete start-of-quarter client workplan report. "
-            "Turn the supplied workplan data into a polished client-facing report that reads like a finished document."
+            "You are writing a start-of-quarter client workplan report. "
+            "Turn the supplied workplan data into a polished client-facing report that outlines the planned work for the quarter."
+        )
+        kind_rules = (
+            "Focus on the planned work and priorities for the quarter ahead. "
+            "Return a title, a substantive opening summary (3-5 sentences), 4 to 6 sections, and a closing note. "
+            "Structure the report with these sections: "
+            "1. Executive Summary — high-level overview of the quarter's planned scope and priorities. "
+            "2. Planned Workstreams — describe each workstream and its deliverables. Include a table summarizing workstream, deliverable, KPI, and target date. "
+            "3. Key Activities and Milestones — detail the operational subtasks with target dates, organized by workstream. Use sub-sections per workstream. "
+            "4. Implementation Approach — describe how the work will be carried out. "
+            "5. Risks and Mitigation — identify potential risks and how they will be addressed. "
+            "6. Expected Outcomes — describe the value and impact the planned work will deliver. "
         )
 
     prompt = (
         f"{instruction}\n"
-        "Write for a business client. Keep the language specific, concrete, and professional.\n"
-        "Do not mention that you are an AI.\n"
-        "Use only the supplied data. Do not invent work that is not in the payload.\n"
-        "Do not include task tables or raw JSON.\n"
-        "Return a title, a short opening summary, 3 to 5 sections, and a closing note.\n"
-        "Each section should have a heading, 1 to 2 short paragraphs, and bullet points only where they add value.\n"
-        "If there are no completed items, say that clearly.\n"
-        "For monthly reports, treat the status_buckets in the payload as authoritative.\n"
-        "Never describe an item from in_progress or pending as completed, and never move an item from completed into a pending status.\n"
-        "If the report is for the start of a quarter, focus on the planned work and priorities.\n"
-        "If the report is a monthly progress update, focus on what has been achieved so far, what is currently in progress, and what should happen next.\n"
-        "If the report is for the end of a quarter, focus on completed work, notable outcomes, and what remains pending."
+        f"{shared_rules}\n"
+        f"{kind_rules}\n"
+        "Each section should have a heading, 1 to 3 paragraphs of professional narrative prose, and bullet points where they add value. "
+        "Write detailed, substantive paragraphs — each paragraph should be 3 to 6 sentences. Avoid thin or generic statements. "
+        "Be specific: reference actual deliverable names, KPIs, target dates, and operational subtasks from the payload. "
     )
 
     model_input = json.dumps(payload, default=str)

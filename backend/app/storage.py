@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-import boto3
-
 from .config import settings
+
+try:
+    import boto3
+except Exception:  # pragma: no cover - optional dependency for local-only setups
+    boto3 = None
 
 
 class ObjectStorage:
@@ -15,6 +18,12 @@ class ObjectStorage:
 
         if not self.enabled:
             return
+
+        if boto3 is None:
+            raise RuntimeError(
+                "R2/S3 storage is enabled but boto3 is not installed. "
+                "Install backend requirements or disable the R2_* settings."
+            )
 
         self.client = boto3.client(
             "s3",

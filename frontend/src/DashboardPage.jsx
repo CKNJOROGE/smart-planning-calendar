@@ -100,6 +100,22 @@ function currentQuarterFromDate(value = new Date()) {
   return Math.floor(value.getMonth() / 3) + 1;
 }
 
+function getWorkstreamLabel(row) {
+  return row?.workstream || row?.task || "";
+}
+
+function getDeliverableLabel(row) {
+  return row?.deliverable || row?.task || "";
+}
+
+function getOperationalSubtaskLabel(row) {
+  return row?.operational_subtask || row?.subtask || "";
+}
+
+function getKpiLabel(row) {
+  return row?.kpi || "";
+}
+
 function groupClientTasks(items) {
   const groups = new Map();
   for (const item of items || []) {
@@ -107,11 +123,15 @@ function groupClientTasks(items) {
     if (!groups.has(key)) {
       groups.set(key, {
         key,
-        task: item.task || "",
+        workstream: getWorkstreamLabel(item),
+        deliverable: getDeliverableLabel(item),
+        kpi: getKpiLabel(item),
         rows: [],
       });
     }
-    groups.get(key).task = item.task || groups.get(key).task;
+    groups.get(key).workstream = getWorkstreamLabel(item) || groups.get(key).workstream;
+    groups.get(key).deliverable = getDeliverableLabel(item) || groups.get(key).deliverable;
+    groups.get(key).kpi = getKpiLabel(item) || groups.get(key).kpi;
     groups.get(key).rows.push(item);
   }
 
@@ -215,7 +235,7 @@ export default function DashboardPage() {
       group.selectedRows
         .filter((row) => !workplanTaskStatuses.has(Number(row.id)))
         .map((row) => ({
-          activity: `Task: ${group.task || "Untitled task"} - ${row.subtask}`,
+          activity: `${group.workstream || "Untitled workstream"} | ${group.deliverable || "Untitled deliverable"} | ${getOperationalSubtaskLabel(row)}`,
           client_id: Number(selectedWorkplanClientId),
           source_client_task_id: Number(row.id),
         }))
@@ -229,10 +249,12 @@ export default function DashboardPage() {
     groupedWorkplanTasks.forEach((group) => {
       const currentRows = group.selectedRows.filter((row) => !workplanTaskStatuses.has(Number(row.id)));
       if (!currentRows.length) return;
-      lines.push(`Task: ${group.task}`);
+      lines.push(`Workstream: ${group.workstream}`);
+      lines.push(`Deliverable: ${group.deliverable}`);
+      if (group.kpi) lines.push(`KPI: ${group.kpi}`);
       currentRows.forEach((row) => {
         const datePart = row.completion_date ? ` (${formatDate(row.completion_date)})` : "";
-        lines.push(`- ${row.subtask}${datePart}`);
+        lines.push(`- ${getOperationalSubtaskLabel(row)}${datePart}`);
       });
     });
     return lines.join("\n");
@@ -505,12 +527,12 @@ export default function DashboardPage() {
       return;
     }
     if (!selectedWorkplanRows.length) {
-      setErr("Please select at least one task or subtask.");
+      setErr("Please select at least one operational subtask.");
       return;
     }
     const text = selectedWorkplanText.trim();
     if (!text) {
-      setErr("Please select at least one task or subtask.");
+      setErr("Please select at least one operational subtask.");
       return;
     }
     try {
@@ -579,17 +601,19 @@ export default function DashboardPage() {
         {items.map((t) => (
           <div key={t.id} className="dashboard-mini-item">
             <div className="dashboard-mini-head">
-              <div className="dashboard-task-title">{t.task}</div>
+              <div className="dashboard-task-title">{getWorkstreamLabel(t)}</div>
               <span className={`dashboard-status-badge dashboard-status-${dueBadgeClass(t.days_until_due)}`}>
                 {dueBadge(t.days_until_due)}
               </span>
             </div>
-            <div className="dashboard-task-subtitle">{t.subtask}</div>
+            <div className="dashboard-task-subtitle">{getDeliverableLabel(t)}</div>
             <div className="dashboard-mini-meta">
+              <span>{getOperationalSubtaskLabel(t)}</span>
               <span>{t.client_name}</span>
               <span>{t.user_name}</span>
               <span>{formatDate(t.completion_date)}</span>
             </div>
+            {getKpiLabel(t) ? <div className="muted" style={{ marginTop: 6 }}>KPI: {getKpiLabel(t)}</div> : null}
           </div>
         ))}
       </div>
@@ -724,11 +748,11 @@ export default function DashboardPage() {
 
           <div className="dashboard-workplan-body">
             {!selectedWorkplanClientId ? (
-              <div className="muted">Choose a client to load their tasks and subtasks.</div>
+              <div className="muted">Choose a client to load their workplan structure.</div>
             ) : workplanLoading ? (
               <LoadingState label="Loading client tasks..." compact />
             ) : !groupedWorkplanTasks.length ? (
-              <div className="muted">No tasks found for this client, year and quarter yet.</div>
+              <div className="muted">No workplan entries found for this client, year and quarter yet.</div>
             ) : (
               <div className="dashboard-workplan-groups">
                 {groupedWorkplanTasks.map((group) => {
@@ -748,9 +772,12 @@ export default function DashboardPage() {
                             }}
                             onChange={(e) => toggleWorkplanGroup({ ...group, rows: selectableRows }, e.target.checked)}
                           />
-                          <span className="dashboard-workplan-group-title">{group.task || "Untitled task"}</span>
+                          <span className="dashboard-workplan-group-title">{group.deliverable || "Untitled deliverable"}</span>
                         </label>
                         <span className="pill">{group.rows.length} subtask{group.rows.length === 1 ? "" : "s"}</span>
+                      </div>
+                      <div className="dashboard-workplan-subtask-meta" style={{ padding: "0 16px 8px 16px" }}>
+                        Workstream: {group.workstream || "-"}{group.kpi ? ` | KPI: ${group.kpi}` : ""}
                       </div>
                       <div className="dashboard-workplan-subtasks">
                         {group.rows.map((row) => {
@@ -767,7 +794,7 @@ export default function DashboardPage() {
                                 onChange={(e) => toggleWorkplanRow(row.id, e.target.checked)}
                               />
                               <div className="dashboard-workplan-subtask-copy">
-                                <div className="dashboard-workplan-subtask-title">{row.subtask}</div>
+                                <div className="dashboard-workplan-subtask-title">{getOperationalSubtaskLabel(row)}</div>
                                 <div className="dashboard-workplan-subtask-meta">
                                   {row.completion_date ? `Due ${formatDate(row.completion_date)}` : "No due date"}
                                 </div>
@@ -805,7 +832,7 @@ export default function DashboardPage() {
                 {selectedWorkplanClient ? `${selectedWorkplanClient.name} - ${selectedWorkplanYear} Q${selectedWorkplanQuarter}` : "Nothing selected"}
               </div>
               <div className="muted">
-                {selectedWorkplanRows.length ? `${selectedWorkplanRows.length} subtask${selectedWorkplanRows.length === 1 ? "" : "s"} selected` : "Pick at least one task or subtask."}
+                {selectedWorkplanRows.length ? `${selectedWorkplanRows.length} operational subtask${selectedWorkplanRows.length === 1 ? "" : "s"} selected` : "Pick at least one operational subtask."}
               </div>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -1102,16 +1129,16 @@ export default function DashboardPage() {
 
           <div className="card dashboard-panel">
             <div className="dashboard-panel-head">
-              <div className="dashboard-panel-title">Upcoming Tasks</div>
+              <div className="dashboard-panel-title">Upcoming Operational Subtasks</div>
             </div>
-            {renderTaskList(overview.upcoming_subtasks, "No upcoming subtasks in the next 3 days.")}
+            {renderTaskList(overview.upcoming_subtasks, "No upcoming operational subtasks in the next 3 days.")}
           </div>
 
           <div className="card dashboard-panel">
             <div className="dashboard-panel-head">
-              <div className="dashboard-panel-title">Due Tasks</div>
+              <div className="dashboard-panel-title">Due Operational Subtasks</div>
             </div>
-            {renderTaskList(overview.due_subtasks, "No due or overdue subtasks pending completion.", "dashboard-mini-list--tall")}
+            {renderTaskList(overview.due_subtasks, "No due or overdue operational subtasks pending completion.", "dashboard-mini-list--tall")}
           </div>
         </div>
       </div>

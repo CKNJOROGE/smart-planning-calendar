@@ -374,18 +374,28 @@ class ClientTaskCreate(BaseModel):
     client_id: int
     year: int
     quarter: int
-    task: str
+    workstream: Optional[str] = None
+    deliverable: Optional[str] = None
+    kpi: Optional[str] = None
+    operational_subtask: Optional[str] = None
+    task: Optional[str] = None
     subtask: Optional[str] = None
     completion_date: Optional[date] = None
+    operational_subtasks: Optional[list["ClientTaskSubtaskIn"]] = None
     subtasks: Optional[list["ClientTaskSubtaskIn"]] = None
 
 
 class ClientTaskSubtaskIn(BaseModel):
-    subtask: str
+    operational_subtask: Optional[str] = None
+    subtask: Optional[str] = None
     completion_date: Optional[date] = None
 
 
 class ClientTaskUpdate(BaseModel):
+    workstream: Optional[str] = None
+    deliverable: Optional[str] = None
+    kpi: Optional[str] = None
+    operational_subtask: Optional[str] = None
     task: Optional[str] = None
     subtask: Optional[str] = None
     completion_date: Optional[date] = None
@@ -399,6 +409,10 @@ class ClientTaskOut(BaseModel):
     task_group_id: str
     year: int
     quarter: int
+    workstream: str
+    deliverable: str
+    kpi: Optional[str] = None
+    operational_subtask: str
     task: str
     subtask: str
     completion_date: Optional[date] = None
@@ -413,6 +427,7 @@ class ClientTaskOut(BaseModel):
 
 
 class ClientTaskReportSubtaskOut(BaseModel):
+    operational_subtask: str
     subtask: str
     completion_date: Optional[date] = None
     completed: bool
@@ -421,11 +436,18 @@ class ClientTaskReportSubtaskOut(BaseModel):
 
 class ClientTaskReportGroupOut(BaseModel):
     task_group_id: str
+    workstream: str
+    deliverable: str
+    kpi: Optional[str] = None
     task: str
+    total_operational_subtasks: int
     total_subtasks: int
+    completed_operational_subtasks: int
     completed_subtasks: int
+    pending_operational_subtasks: int
     pending_subtasks: int
     status: str
+    operational_subtasks: List[ClientTaskReportSubtaskOut]
     subtasks: List[ClientTaskReportSubtaskOut]
 
 
@@ -437,10 +459,21 @@ class ClientTaskReportTotalsOut(BaseModel):
     completion_percent: float
 
 
+class ClientTaskReportAITableRowOut(BaseModel):
+    cells: List[str] = []
+
+
+class ClientTaskReportAITableOut(BaseModel):
+    headers: List[str] = []
+    rows: List[ClientTaskReportAITableRowOut] = []
+
+
 class ClientTaskReportAISectionOut(BaseModel):
     heading: str
     paragraphs: List[str] = []
     bullets: List[str] = []
+    table: Optional[ClientTaskReportAITableOut] = None
+    sub_sections: List["ClientTaskReportAISectionOut"] = []
 
 
 class ClientTaskReportAIOut(BaseModel):
@@ -453,6 +486,9 @@ class ClientTaskReportAIOut(BaseModel):
     completed_highlights: List[str] = []
     pending_focus: List[str] = []
     recommended_next_steps: List[str] = []
+
+
+ClientTaskReportAISectionOut.model_rebuild()
 
 
 class ClientTaskReportOut(BaseModel):
@@ -564,6 +600,10 @@ class TaskReminderOut(BaseModel):
     user_name: str
     year: int
     quarter: int
+    workstream: str
+    deliverable: str
+    kpi: Optional[str] = None
+    operational_subtask: str
     task: str
     subtask: str
     completion_date: date
