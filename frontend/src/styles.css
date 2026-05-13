@@ -68,85 +68,33 @@ body {
 }
 
 /* Background image classes - applied when body has these classes */
-body.bg-image-1 {
-  background-image: url('/Background/pexels-marek-piwnicki-3907296-12966912.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
-}
-
-body.bg-image-2 {
-  background-image: url('/Background/pexels-photograph-6642762.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
-}
-
-body.bg-image-3 {
-  background-image: url('/Background/pexels-prabhath-jayarathna-3459375-26873010.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
-}
-
-body.bg-image-4 {
-  background-image: url('/Background/pexels-marek-piwnicki-3907296-12489187.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
-}
-
-body.bg-image-5 {
-  background-image: url('/Background/pexels-photograph-6321746.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
-}
-
-body.bg-image-6 {
-  background-image: url('/Background/pexels-photograph-9688283.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
-}
-
-body.bg-image-7 {
-  background-image: url('/Background/pexels-timmossholder-35231163.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
-}
-
-body.bg-image-8 {
-  background-image: url('/Background/pexels-brett-sayles-4508754.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
-}
-
-body.bg-image-9 {
-  background-image: url('/Background/pexels-brett-sayles-4508742.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
-}
-
+body.bg-image-1,
+body.bg-image-2,
+body.bg-image-3,
+body.bg-image-4,
+body.bg-image-5,
+body.bg-image-6,
+body.bg-image-7,
+body.bg-image-8,
+body.bg-image-9,
 body.bg-image-10 {
-  background-image: url('/Background/pexels-pixabay-220118.jpg') !important;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-blend-mode: overlay;
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+  background-blend-mode: overlay !important;
 }
+
+body.bg-image-1 { background-image: url('/Background/pexels-marek-piwnicki-3907296-12966912.jpg') !important; }
+body.bg-image-2 { background-image: url('/Background/pexels-photograph-6642762.jpg') !important; }
+body.bg-image-3 { background-image: url('/Background/pexels-prabhath-jayarathna-3459375-26873010.jpg') !important; }
+body.bg-image-4 { background-image: url('/Background/pexels-marek-piwnicki-3907296-12489187.jpg') !important; }
+body.bg-image-5 { background-image: url('/Background/pexels-photograph-6321746.jpg') !important; }
+body.bg-image-6 { background-image: url('/Background/pexels-photograph-9688283.jpg') !important; }
+body.bg-image-7 { background-image: url('/Background/pexels-timmossholder-35231163.jpg') !important; }
+body.bg-image-8 { background-image: url('/Background/pexels-brett-sayles-4508754.jpg') !important; }
+body.bg-image-9 { background-image: url('/Background/pexels-brett-sayles-4508742.jpg') !important; }
+body.bg-image-10 { background-image: url('/Background/pexels-pixabay-220118.jpg') !important; }
 
 .topbar{
   display:flex; align-items:flex-start; justify-content:space-between;
