@@ -129,13 +129,17 @@ def build_client_workplan_ai_report(payload: dict) -> Optional[ClientWorkplanAIR
             "8. Closing Remarks — a professional closing note. "
         )
     elif report_kind == "monthly":
+        month_names = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June", 7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
+        month_val = payload.get("month")
+        month_name = month_names.get(month_val) if month_val else None
+        month_ref = f" for {month_name}" if month_name else ""
         instruction = (
-            "You are writing a monthly HR operations progress report. "
+            f"You are writing a monthly HR operations progress report{month_ref}. "
             "Turn the supplied workplan data into a polished client-facing progress update that reads like a professional consulting monthly report."
         )
         kind_rules = (
-            "Focus on what has been achieved so far, what is currently in progress, and what should happen next. "
-            "Treat the status_buckets in the payload as authoritative. "
+            f"Focus on what has been achieved{month_ref}, what is currently in progress, and what should happen next. "
+            "Treat the status_buckets in the payload as authoritative — the completed list only contains items finalized in the reporting month, while in_progress and pending items represent the remaining workload. "
             "Return a title, a substantive opening summary (3-5 sentences), 5 to 7 sections, and a closing note. "
             "Structure the report with these sections: "
             "1. Executive Summary — brief overview of the month's progress, overall completion percentage, and key focus areas. "

@@ -106,6 +106,29 @@ function getReportKindLabel(kind) {
   return "Start of Quarter";
 }
 
+const QUARTER_MONTHS = {
+  1: [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+  ],
+  2: [
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+  ],
+  3: [
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+  ],
+  4: [
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" },
+  ],
+};
+
 async function loadLogoAsBase64() {
   try {
     const response = await fetch("/logo.png");
@@ -752,6 +775,7 @@ export default function ClientTaskManagerPage() {
   const [probationBusy, setProbationBusy] = useState(false);
   const [exportPeriodScope, setExportPeriodScope] = useState("quarter");
   const [reportKind, setReportKind] = useState("start");
+  const [reportMonth, setReportMonth] = useState(null);
   const [reportHistory, setReportHistory] = useState([]);
   const [reportGenerating, setReportGenerating] = useState(false);
   const [workplanGenerating, setWorkplanGenerating] = useState(false);
@@ -1604,12 +1628,13 @@ export default function ClientTaskManagerPage() {
         return;
       }
 
-      const report = await getClientWorkplanReport({
-        clientId: Number(chosenClient.id),
-        year: Number(selectedYear),
-        quarter: Number(selectedQuarter),
-        reportKind,
-      });
+        const report = await getClientWorkplanReport({
+          clientId: Number(chosenClient.id),
+          year: Number(selectedYear),
+          quarter: Number(selectedQuarter),
+          reportKind,
+          month: reportKind === "monthly" ? reportMonth : null,
+        });
       setReportPreview(report);
       showToast("AI report ready", "success");
     } catch (e) {
@@ -1832,7 +1857,7 @@ export default function ClientTaskManagerPage() {
             <button
               key={q}
               className={`btn task-choice-btn ${Number(selectedQuarter) === q ? "task-choice-active" : ""}`}
-              onClick={() => setSelectedQuarter(q)}
+              onClick={() => { setSelectedQuarter(q); setReportMonth(null); }}
               disabled={!selectedClientId}
             >
               Q{q}
@@ -2013,23 +2038,34 @@ export default function ClientTaskManagerPage() {
         </div>
       </div>
 
-      <div className={`card report-card${reportGenerating ? " is-generating" : ""}`} style={{ marginBottom: 12 }}>
+<div className={`card report-card${reportGenerating ? " is-generating" : ""}`} style={{ marginBottom: 12 }}>
       <div style={{ fontWeight: 800, marginBottom: 8 }}>6) AI Client Workplan Report</div>
       <div className="row">
         <div className="field" style={{ flex: "1 1 220px", marginBottom: 0 }}>
           <label>Report type</label>
-          <select value={reportKind} onChange={(e) => setReportKind(e.target.value)}>
-          <option value="start">Quarter start report</option>
-          <option value="monthly">Monthly progress report</option>
-          <option value="end">Quarter end report</option>
+          <select value={reportKind} onChange={(e) => { setReportKind(e.target.value); if (e.target.value !== "monthly") setReportMonth(null); }}>
+            <option value="start">Quarter start report</option>
+            <option value="monthly">Monthly progress report</option>
+            <option value="end">Quarter end report</option>
           </select>
         </div>
+        {reportKind === "monthly" && (
+          <div className="field" style={{ flex: "1 1 160px", marginBottom: 0 }}>
+            <label>Month</label>
+            <select value={reportMonth ?? ""} onChange={(e) => setReportMonth(Number(e.target.value) || null)}>
+              <option value="">Select month...</option>
+              {(QUARTER_MONTHS[selectedQuarter] || []).map((m) => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div style={{ alignSelf: "end" }}>
           <button
             type="button"
             className="btn btn-primary"
             onClick={handleGenerateWorkplanReport}
-            disabled={!selectedClientId || anyReportGenerating}
+            disabled={!selectedClientId || anyReportGenerating || (reportKind === "monthly" && !reportMonth)}
           >
             {reportGenerating ? "Generating..." : "Generate Report"}
           </button>
@@ -2063,7 +2099,7 @@ export default function ClientTaskManagerPage() {
                 <div>
                   <div style={{ fontWeight: 800 }}>{row.title}</div>
                   <div className="muted" style={{ fontSize: 12 }}>
-                    {row.client_name} - {row.year} Q{row.quarter} - {getReportKindLabel(row.report_kind)} -{" "}
+                    {row.client_name} - {row.year} Q{row.quarter}{row.month ? ` ${QUARTER_MONTHS[row.quarter]?.find((m) => m.value === row.month)?.label || `M${row.month}`}` : ""} - {getReportKindLabel(row.report_kind)} -{" "}
                     {new Date(row.created_at).toLocaleString()}
                   </div>
                   <div style={{ marginTop: 6 }}>

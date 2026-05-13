@@ -496,6 +496,7 @@ class ClientTaskReportOut(BaseModel):
     year: int
     quarter: int
     report_kind: str
+    month: Optional[int] = None
     generated_at: datetime
     title: str
     overview: str
@@ -517,6 +518,7 @@ class ClientTaskReportHistoryOut(BaseModel):
     year: int
     quarter: int
     report_kind: str
+    month: Optional[int] = None
     title: str
     created_at: datetime
 

@@ -487,13 +487,14 @@ export function listClientTasks({ year, clientId, quarter }) {
   return request(`/task-manager/tasks?${qs.toString()}`);
 }
 
-export function getClientWorkplanReport({ clientId, year, quarter, reportKind = "start" }) {
+export function getClientWorkplanReport({ clientId, year, quarter, reportKind = "start", month = null }) {
   const qs = new URLSearchParams({
     client_id: String(clientId),
     year: String(year),
     quarter: String(quarter),
     report_kind: reportKind,
   });
+  if (month != null) qs.set("month", String(month));
   return request(`/task-manager/reports/workplan?${qs.toString()}`);
 }
 

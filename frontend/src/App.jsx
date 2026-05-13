@@ -33,6 +33,19 @@ const THEME_OPTIONS = [
   { value: "cocoa", label: "Cocoa Cream" },
 ];
 
+const BACKGROUND_OPTIONS = [
+  { value: "bg-image-1", label: "City Lights", image: "/Background/pexels-marek-piwnicki-3907296-12966912.jpg" },
+  { value: "bg-image-2", label: "Mountain Lake", image: "/Background/pexels-photograph-6642762.jpg" },
+  { value: "bg-image-3", label: "Coastal Sunset", image: "/Background/pexels-prabhath-jayarathna-3459375-26873010.jpg" },
+  { value: "bg-image-4", label: "Frost Bridge", image: "/Background/pexels-marek-piwnicki-3907296-12489187.jpg" },
+  { value: "bg-image-5", label: "Forest Path", image: "/Background/pexels-photograph-6321746.jpg" },
+  { value: "bg-image-6", label: "Golden Hour", image: "/Background/pexels-photograph-9688283.jpg" },
+  { value: "bg-image-7", label: "Bloom Field", image: "/Background/pexels-timmossholder-35231163.jpg" },
+  { value: "bg-image-8", label: "Sky Ridges", image: "/Background/pexels-brett-sayles-4508754.jpg" },
+  { value: "bg-image-9", label: "Misty Peaks", image: "/Background/pexels-brett-sayles-4508742.jpg" },
+  { value: "bg-image-10", label: "Silhouette", image: "/Background/pexels-pixabay-220118.jpg" },
+];
+
 const VALID_THEMES = new Set(THEME_OPTIONS.map((option) => option.value));
 
 function getInitialTheme() {
@@ -44,7 +57,7 @@ function normalizeTheme(theme) {
   return VALID_THEMES.has(theme) ? theme : null;
 }
 
-function Shell({ onLogout, theme, setTheme }) {
+function Shell({ onLogout, theme, setTheme, background, setBackground }) {
   const [user, setUser] = useState(null);
   const [financeAttentionTotal, setFinanceAttentionTotal] = useState(0);
   const [payrollAttentionTotal, setPayrollAttentionTotal] = useState(0);
@@ -354,41 +367,70 @@ function Shell({ onLogout, theme, setTheme }) {
           >
             {theme === "dark" ? "Light mode" : "Dark mode"}
           </button>
-          {canManageThemePalette && (
-            <div className="theme-picker" aria-label="Theme picker">
-              <div className="theme-picker-header">
-                <div className="theme-picker-label">Theme Palette</div>
-                <button
-                  type="button"
-                  className="btn theme-picker-toggle-btn"
-                  onClick={() => setThemePaletteOpen((open) => !open)}
-                  aria-expanded={themePaletteOpen}
-                  aria-controls="theme-swatch-list"
-                >
-                  {themePaletteOpen ? "Hide" : "Show"}
-                </button>
-              </div>
-              <div
-                id="theme-swatch-list"
-                className={`theme-swatch-list${themePaletteOpen ? " open" : ""}`}
-                aria-hidden={!themePaletteOpen}
-              >
-                {THEME_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={`theme-swatch-btn${theme === option.value ? " active" : ""}`}
-                    onClick={() => handleThemeChange(option.value)}
-                    aria-pressed={theme === option.value}
-                    title={`Switch theme to ${option.label}`}
+              {canManageThemePalette && (
+                <div className="theme-picker" aria-label="Theme picker">
+                  <div className="theme-picker-header">
+                    <div className="theme-picker-label">Theme Palette</div>
+                    <button
+                      type="button"
+                      className="btn theme-picker-toggle-btn"
+                      onClick={() => setThemePaletteOpen((open) => !open)}
+                      aria-expanded={themePaletteOpen}
+                      aria-controls="theme-swatch-list"
+                    >
+                      {themePaletteOpen ? "Hide" : "Show"}
+                    </button>
+                  </div>
+                  <div
+                    id="theme-swatch-list"
+                    className={`theme-swatch-list${themePaletteOpen ? " open" : ""}`}
+                    aria-hidden={!themePaletteOpen}
                   >
-                    <span className={`theme-swatch theme-${option.value}`} aria-hidden="true" />
-                    <span className="theme-swatch-text">{option.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+                    <div className="theme-swatch-section-label">Colors</div>
+                    {THEME_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+className={`theme-swatch-btn${theme === option.value ? " active" : ""}`}
+          onClick={() => { handleThemeChange(option.value); }}
+          aria-pressed={theme === option.value}
+                        title={`Switch theme to ${option.label}`}
+                      >
+                        <span className={`theme-swatch theme-${option.value}`} aria-hidden="true" />
+                        <span className="theme-swatch-text">{option.label}</span>
+                      </button>
+                    ))}
+                    <div className="theme-swatch-section-label">Backgrounds</div>
+                    <button
+                      type="button"
+                      className={`theme-swatch-btn${background === "default" ? " active" : ""}`}
+                      onClick={() => setBackground("default")}
+                      aria-pressed={background === "default"}
+                      title="No background image"
+                    >
+                      <span className="theme-swatch theme-none" aria-hidden="true" />
+                      <span className="theme-swatch-text">None</span>
+                    </button>
+                    {BACKGROUND_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`theme-swatch-btn${background === option.value ? " active" : ""}`}
+                        onClick={() => setBackground(option.value)}
+                        aria-pressed={background === option.value}
+                        title={`Set background to ${option.label}`}
+                      >
+                        <span
+                          className="theme-swatch theme-bg-swatch"
+                          style={{ backgroundImage: `url(${option.image})` }}
+                          aria-hidden="true"
+                        />
+                        <span className="theme-swatch-text">{option.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
           <button className="btn sidebar-logout-btn" onClick={() => { onLogout(); nav("/login"); }}>
             Logout
           </button>
@@ -426,12 +468,22 @@ function Shell({ onLogout, theme, setTheme }) {
 export default function App() {
   const [authState, setAuthState] = useState("checking");
   const [theme, setTheme] = useState(getInitialTheme);
+  const [background, setBackground] = useState(() => localStorage.getItem("bgPreference") || "default");
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
     document.documentElement.style.colorScheme = theme === "dark" ? "dark" : "light";
     localStorage.setItem("theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    const allBgClasses = BACKGROUND_OPTIONS.map((o) => o.value);
+    allBgClasses.forEach((cls) => document.body.classList.remove(cls));
+    if (background !== "default") {
+      document.body.classList.add(background);
+    }
+    localStorage.setItem("bgPreference", background);
+  }, [background]);
 
   useEffect(() => {
     (async () => {
@@ -478,7 +530,7 @@ export default function App() {
             </>
           ) : (
             <>
-              <Route path="/*" element={<Shell onLogout={handleLogout} theme={theme} setTheme={setTheme} />} />
+              <Route path="/*" element={<Shell onLogout={handleLogout} theme={theme} setTheme={setTheme} background={background} setBackground={setBackground} />} />
             </>
           )}
         </Routes>

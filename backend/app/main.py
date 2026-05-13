@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from starlette.middleware.base import BaseHTTPMiddleware
 from jose import jwt
-from sqlalchemy import func, or_, text
+from sqlalchemy import func, or_, and_, text
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
@@ -333,6 +333,11 @@ def _run_startup_migrations():
         conn.execute(text("UPDATE client_tasks SET deliverable = COALESCE(NULLIF(deliverable, ''), NULLIF(task, ''), NULLIF(subtask, ''), 'Legacy Deliverable') WHERE deliverable IS NULL OR deliverable = ''"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_tasks_workstream ON client_tasks(workstream)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_tasks_deliverable ON client_tasks(deliverable)"))
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE client_task_reports ADD COLUMN IF NOT EXISTS month INTEGER"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_task_reports_month ON client_task_reports(month)"))
     except Exception:
         pass
 
@@ -3251,14 +3256,31 @@ def _build_client_task_workplan_report(
     year: int,
     quarter: int,
     report_kind: str,
+    month: Optional[int] = None,
 ) -> ClientTaskReportOut:
+    filters = [
+        ClientTask.client_id == client.id,
+        ClientTask.year == year,
+        ClientTask.quarter == quarter,
+    ]
+    if month is not None and report_kind == "monthly":
+        month_start = date(year, month, 1)
+        if month == 12:
+            month_end = date(year + 1, 1, 1)
+        else:
+            month_end = date(year, month + 1, 1)
+        filters.append(
+            or_(
+                ClientTask.completed_at == None,
+                and_(
+                    ClientTask.completed_at >= month_start,
+                    ClientTask.completed_at < month_end,
+                ),
+            )
+        )
     rows = (
         db.query(ClientTask)
-        .filter(
-            ClientTask.client_id == client.id,
-            ClientTask.year == year,
-            ClientTask.quarter == quarter,
-        )
+        .filter(*filters)
         .order_by(
             ClientTask.task_group_id.asc(),
             ClientTask.completion_date.asc().nulls_last(),
@@ -3347,10 +3369,12 @@ def _build_client_task_workplan_report(
             f"showing what has been completed and what remains pending."
         )
     elif report_kind == "monthly":
-        title = f"Monthly Progress Report - {client.name} - {year} Q{quarter}"
+        month_names = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June", 7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
+        month_label = month_names.get(month, f"Q{quarter}") if month else f"Q{quarter}"
+        title = f"Monthly Progress Report - {client.name} - {month_label} {year}"
         overview = (
-            f"This report captures monthly progress for {client.name} within {year} Q{quarter}, "
-            f"showing progress so far, items in progress, and what remains to be done."
+            f"This report captures monthly progress for {client.name} for {month_label} {year}, "
+            f"showing items completed in the period, work in progress, and what remains to be done."
         )
     elif report_kind == "workplan":
         title = f"Implementation Workplan - {client.name} - {year} Q{quarter}"
@@ -3370,6 +3394,7 @@ def _build_client_task_workplan_report(
         year=year,
         quarter=quarter,
         report_kind=report_kind,
+        month=month,
         generated_at=datetime.utcnow(),
         title=title,
         overview=overview,
@@ -3466,7 +3491,8 @@ def _describe_monthly_workstream(task: str) -> str:
     return value
 
 
-def _build_monthly_report_status_buckets(report: ClientTaskReportOut) -> dict[str, object]:
+def _build_monthly_report_status_buckets(report: ClientTaskReportOut, month: Optional[int] = None) -> dict[str, object]:
+    month_names = {1: "January", 2: "February", 3: "March", 4: "April", 5: "May", 6: "June", 7: "July", 8: "August", 9: "September", 10: "October", 11: "November", 12: "December"}
     completed_items: list[dict[str, Optional[str]]] = []
     in_progress_items: list[dict[str, Optional[str]]] = []
     pending_items: list[dict[str, Optional[str]]] = []
@@ -3493,6 +3519,9 @@ def _build_monthly_report_status_buckets(report: ClientTaskReportOut) -> dict[st
                 "completed_at": subtask.completed_at.isoformat() if subtask.completed_at else None,
             }
             if subtask.completed:
+                if month is not None and subtask.completed_at is not None:
+                    if subtask.completed_at.month != month or subtask.completed_at.year != report.year:
+                        continue
                 completed_items.append(item)
             elif group.status == "in_progress":
                 in_progress_items.append(item)
@@ -3508,6 +3537,8 @@ def _build_monthly_report_status_buckets(report: ClientTaskReportOut) -> dict[st
             "in_progress_groups": in_progress_groups,
             "pending_groups": pending_groups,
         },
+        "month": month,
+        "month_name": month_names.get(month) if month else None,
     }
 
 
@@ -3661,6 +3692,7 @@ def _persist_client_task_workplan_report(
         year=report.year,
         quarter=report.quarter,
         report_kind=report.report_kind,
+        month=report.month,
         title=report.title,
         overview=report.overview,
         report_json=json.dumps(payload),
@@ -3709,6 +3741,7 @@ def _row_to_client_task_report_history(row: ClientTaskReport) -> ClientTaskRepor
         year=row.year,
         quarter=row.quarter,
         report_kind=row.report_kind,
+        month=row.month,
         title=row.title,
         created_at=row.created_at,
     )
@@ -3720,6 +3753,7 @@ def get_client_task_workplan_report(
     year: int,
     quarter: int,
     report_kind: str = Query(default="start"),
+    month: Optional[int] = Query(default=None),
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ):
@@ -3728,20 +3762,24 @@ def get_client_task_workplan_report(
     normalized_kind = (report_kind or "").strip().lower()
     if normalized_kind not in {"start", "monthly", "end", "workplan"}:
         raise HTTPException(status_code=400, detail="report_kind must be start, monthly, end, or workplan")
+    quarter_months = {1: {1, 2, 3}, 2: {4, 5, 6}, 3: {7, 8, 9}, 4: {10, 11, 12}}
+    if month is not None and month not in quarter_months.get(quarter, set()):
+        raise HTTPException(
+            status_code=400,
+            detail=f"month {month} is not valid for Q{quarter}. Valid months: {sorted(quarter_months.get(quarter, set()))}",
+        )
 
     client = db.query(ClientAccount).filter(ClientAccount.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-    report = _build_client_task_workplan_report(db, client, year, quarter, normalized_kind)
-    monthly_status_buckets = _build_monthly_report_status_buckets(report) if normalized_kind == "monthly" else None
+    report = _build_client_task_workplan_report(db, client, year, quarter, normalized_kind, month=month)
+    monthly_status_buckets = _build_monthly_report_status_buckets(report, month=month) if normalized_kind == "monthly" else None
     ai_payload = {
-        "client": {
-            "id": report.client.id,
-            "name": report.client.name,
-        },
+        "client": { "id": report.client.id, "name": report.client.name },
         "year": report.year,
         "quarter": report.quarter,
         "report_kind": report.report_kind,
+        "month": report.month,
         "totals": {
             "total_groups": report.totals.total_groups,
             "total_subtasks": report.totals.total_subtasks,

@@ -215,6 +215,7 @@ class ClientTaskReport(Base):
     year = Column(Integer, nullable=False, index=True)
     quarter = Column(Integer, nullable=False, index=True)
     report_kind = Column(String(20), nullable=False, index=True)
+    month = Column(Integer, nullable=True, index=True)
     title = Column(String(255), nullable=False)
     overview = Column(Text, nullable=False)
     report_json = Column(Text, nullable=False, default="{}")
