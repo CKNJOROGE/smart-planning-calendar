@@ -615,7 +615,6 @@ border-left: 4px solid var(--event-accent);
   z-index: 1;
 }
 
-.app-shell .topbar,
 .app-shell .card,
 .app-shell .btn,
 .app-shell input,
