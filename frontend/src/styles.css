@@ -2532,14 +2532,16 @@ overflow-x: auto;
 
 .dashboard-workplan-body {
   border-radius: 16px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(247, 250, 255, 0.84));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(33px);
+  -webkit-backdrop-filter: blur(33px);
   padding: 12px;
-  color: var(--text);
+  color: #e2e8f0;
 }
 
 .dashboard-workplan-body .muted {
-  color: var(--text);
+  color: var(--muted);
 }
 
 .dashboard-workplan-groups {
@@ -2553,7 +2555,8 @@ overflow-x: auto;
 .dashboard-workplan-group {
   padding: 12px;
   border-radius: 14px;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88), rgba(244, 248, 255, 0.76));
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .dashboard-workplan-group-head {
@@ -2591,13 +2594,13 @@ overflow-x: auto;
   align-items: flex-start;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(226, 232, 240, 0.72);
-  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .dashboard-workplan-subtask.is-selected {
-  border-color: rgba(100, 2, 119, 0.3);
-  background: rgba(250, 245, 255, 0.9);
+  border-color: rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.12);
 }
 
 .dashboard-workplan-subtask.is-disabled {
@@ -2633,8 +2636,10 @@ overflow-x: auto;
   align-items: center;
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(247, 250, 255, 0.82));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(33px);
+  -webkit-backdrop-filter: blur(33px);
 }
 
 .dashboard-workplan-summary-label {
@@ -2652,8 +2657,10 @@ overflow-x: auto;
 
 .dashboard-workplan-preview {
   border-radius: 14px;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(33px);
+  -webkit-backdrop-filter: blur(33px);
   padding: 12px 14px;
 }
 
@@ -3690,8 +3697,7 @@ overflow-x: auto;
 [data-theme="dark"] .dashboard-workplan-group,
 [data-theme="dark"] .dashboard-workplan-summary,
 [data-theme="dark"] .dashboard-workplan-preview {
-  border-color: rgba(71, 85, 105, 0.84);
-  background: linear-gradient(145deg, rgba(15, 23, 42, 0.9), rgba(17, 24, 39, 0.82));
+  border-color: rgba(71, 85, 105, 0.48);
 }
 
 [data-theme="dark"] .dashboard-workplan-toolbar .field label,
