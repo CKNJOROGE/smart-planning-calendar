@@ -3700,11 +3700,16 @@ overflow-x: auto;
   border-color: rgba(71, 85, 105, 0.48);
 }
 
-[data-theme="dark"] .dashboard-workplan-toolbar .field label,
-[data-theme="dark"] .dashboard-workplan-group-title,
-[data-theme="dark"] .dashboard-workplan-summary-value,
-[data-theme="dark"] .dashboard-workplan-preview-text {
-  color: var(--text);
+.dashboard-workplan-body,
+.dashboard-workplan-body label,
+.dashboard-workplan-body .dashboard-workplan-group-title,
+.dashboard-workplan-body .dashboard-workplan-subtask-title,
+.dashboard-workplan-body .dashboard-workplan-subtask-meta,
+.dashboard-workplan-body .dashboard-workplan-summary-label,
+.dashboard-workplan-body .dashboard-workplan-summary-value,
+.dashboard-workplan-body .dashboard-workplan-preview-text,
+.dashboard-workplan-body .muted {
+  color: #e2e8f0 !important;
 }
 
 [data-theme="dark"] .dashboard-quarter-btn {
@@ -4178,7 +4183,7 @@ overflow-x: auto;
   background: transparent !important;
 }
 
-:is(.dashboard-page .card, .dashboard-page .dashboard-hero, .dashboard-page .dashboard-mini-item, .dashboard-page .dashboard-workplan-body, .dashboard-page .dashboard-workplan-group, .dashboard-page .dashboard-workplan-summary, .dashboard-page .dashboard-workplan-preview, .calendar-page .card, .calendar-page .profile-card, .calendar-page .dashboard-hero, .profile-page .card, .profile-page .profile-card, .library-page .card, .client-task-page .card, .users-page .card, .approvals-page .card, .payroll-page .card, .finance-page .card, .performance-page .card, .goals-page .card, .finance-page .reimbursement-request-card, .finance-page .reimbursement-request-items, .page-wrap .card) {
+:is(.dashboard-page .card, .dashboard-page .dashboard-hero, .dashboard-page .dashboard-mini-item, .dashboard-page .dashboard-workplan-body, .dashboard-page .dashboard-workplan-group, .dashboard-page .dashboard-workplan-subtask, .dashboard-page .dashboard-workplan-summary, .dashboard-page .dashboard-workplan-preview, .calendar-page .card, .calendar-page .profile-card, .calendar-page .dashboard-hero, .profile-page .card, .profile-page .profile-card, .library-page .card, .client-task-page .card, .users-page .card, .approvals-page .card, .payroll-page .card, .finance-page .card, .performance-page .card, .goals-page .card, .finance-page .reimbursement-request-card, .finance-page .reimbursement-request-items, .page-wrap .card) {
   border-color: rgba(255, 255, 255, 0.24) !important;
   background: rgba(255, 255, 255, 0.12) !important;
   box-shadow:
