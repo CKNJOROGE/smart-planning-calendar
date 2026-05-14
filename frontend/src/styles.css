@@ -2535,6 +2535,11 @@ overflow-x: auto;
   border: 1px solid rgba(226, 232, 240, 0.9);
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(247, 250, 255, 0.84));
   padding: 12px;
+  color: var(--text);
+}
+
+.dashboard-workplan-body .muted {
+  color: var(--text);
 }
 
 .dashboard-workplan-groups {
