@@ -108,6 +108,7 @@ class CompanyDocument(Base):
     id = Column(Integer, primary_key=True)
     title = Column(String(255), nullable=False)
     category = Column(String(80), nullable=False, index=True)
+    subcategory = Column(String(80), nullable=True, index=True)
     file_url = Column(String(500), nullable=False)
     uploaded_by_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -120,6 +121,18 @@ class LibraryCategory(Base):
 
     id = Column(Integer, primary_key=True)
     name = Column(String(80), nullable=False, unique=True, index=True)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    created_by = relationship("User", foreign_keys=[created_by_id])
+
+
+class LibrarySubcategory(Base):
+    __tablename__ = "library_subcategories"
+
+    id = Column(Integer, primary_key=True)
+    category_name = Column(String(80), nullable=False, index=True)
+    name = Column(String(80), nullable=False, index=True)
     created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

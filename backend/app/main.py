@@ -26,6 +26,7 @@ from .models import (
     Event,
     CompanyDocument,
     LibraryCategory,
+    LibrarySubcategory,
     SharedNotebook,
     Department,
     Designation,
@@ -73,6 +74,7 @@ from .schemas import (
     CompanyDocumentOut,
     LibraryCategoryCreate,
     LibraryCategoryOut,
+    LibraryCategoryTreeOut,
     SharedNotebookOut,
     SharedNotebookUpdateIn,
     DepartmentCreate,
@@ -307,6 +309,27 @@ def _run_startup_migrations():
             pass
         try:
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(20)"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE company_documents ADD COLUMN IF NOT EXISTS subcategory VARCHAR(80)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_company_documents_subcategory ON company_documents(subcategory)"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS library_subcategories (
+                    id SERIAL PRIMARY KEY,
+                    category_name VARCHAR(80) NOT NULL,
+                    name VARCHAR(80) NOT NULL,
+                    created_by_id INTEGER REFERENCES users(id),
+                    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+                )
+            """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_library_subcategories_category_name ON library_subcategories(category_name)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_library_subcategories_name ON library_subcategories(name)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_library_subcategories_created_by_id ON library_subcategories(created_by_id)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_library_subcategories_created_at ON library_subcategories(created_at)"))
         except Exception:
             pass
         try:
@@ -2962,12 +2985,70 @@ def _library_category_names(db: Session) -> set[str]:
     return names
 
 
-@app.get("/library/categories", response_model=List[str])
+def _library_subcategory_map(db: Session) -> dict[str, dict[str, LibraryCategoryOut]]:
+    grouped: dict[str, dict[str, LibraryCategoryOut]] = {}
+    rows = db.query(LibrarySubcategory).order_by(LibrarySubcategory.category_name.asc(), LibrarySubcategory.name.asc()).all()
+    for row in rows:
+        category_name = _normalize_library_category_name(row.category_name)
+        subcategory_name = _normalize_library_category_name(row.name)
+        if not category_name or not subcategory_name:
+            continue
+        grouped.setdefault(category_name, {})
+        grouped[category_name][subcategory_name.lower()] = LibraryCategoryOut(
+            id=row.id,
+            name=subcategory_name,
+            kind="subcategory",
+            parent_category=category_name,
+            created_by_id=row.created_by_id,
+            created_at=row.created_at,
+        )
+
+    distinct_rows = db.query(CompanyDocument.category, CompanyDocument.subcategory).distinct().all()
+    for category_value, subcategory_value in distinct_rows:
+        category_name = _normalize_library_category_name(category_value)
+        subcategory_name = _normalize_library_category_name(subcategory_value)
+        if not category_name or not subcategory_name:
+            continue
+        grouped.setdefault(category_name, {})
+        grouped[category_name].setdefault(
+            subcategory_name.lower(),
+            LibraryCategoryOut(
+                id=None,
+                name=subcategory_name,
+                kind="subcategory",
+                parent_category=category_name,
+                created_by_id=None,
+                created_at=None,
+            ),
+        )
+    return grouped
+
+
+def _library_subcategory_exists(db: Session, category_name: str, subcategory_name: str) -> bool:
+    normalized_category = _normalize_library_category_name(category_name)
+    normalized_subcategory = _normalize_library_category_name(subcategory_name)
+    if not normalized_category or not normalized_subcategory:
+        return False
+    category_children = _library_subcategory_map(db).get(normalized_category, {})
+    return normalized_subcategory.lower() in category_children
+
+
+def _library_category_tree(db: Session) -> List[LibraryCategoryTreeOut]:
+    subcategory_map = _library_subcategory_map(db)
+    items = []
+    for category_name in sorted(_library_category_names(db), key=lambda x: x.lower()):
+        children = list(subcategory_map.get(category_name, {}).values())
+        children.sort(key=lambda child: child.name.lower())
+        items.append(LibraryCategoryTreeOut(name=category_name, children=children))
+    return items
+
+
+@app.get("/library/categories", response_model=List[LibraryCategoryTreeOut])
 def list_library_categories(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    return sorted(_library_category_names(db), key=lambda x: x.lower())
+    return _library_category_tree(db)
 
 
 @app.post("/library/categories", response_model=LibraryCategoryOut)
@@ -2977,10 +3058,30 @@ def create_library_category(
     admin: User = Depends(require_admin),
 ):
     name = _normalize_library_category_name(payload.name)
+    parent_category = _normalize_library_category_name(payload.parent_category)
     if not name:
         raise HTTPException(status_code=400, detail="Category name is required")
     if len(name) > 80:
         raise HTTPException(status_code=400, detail="Category name must be <= 80 characters")
+
+    if parent_category:
+        if parent_category not in _library_category_names(db):
+            raise HTTPException(status_code=400, detail="Parent category does not exist")
+        if _library_subcategory_exists(db, parent_category, name):
+            raise HTTPException(status_code=400, detail="Subcategory already exists in this category")
+        row = LibrarySubcategory(category_name=parent_category, name=name, created_by_id=admin.id)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return {
+            "id": row.id,
+            "name": name,
+            "kind": "subcategory",
+            "parent_category": parent_category,
+            "created_by_id": row.created_by_id,
+            "created_at": row.created_at,
+        }
+
     if any(existing.lower() == name.lower() for existing in _library_category_names(db)):
         raise HTTPException(status_code=400, detail="Category already exists")
 
@@ -2988,7 +3089,14 @@ def create_library_category(
     db.add(row)
     db.commit()
     db.refresh(row)
-    return row
+    return {
+        "id": row.id,
+        "name": row.name,
+        "kind": "category",
+        "parent_category": None,
+        "created_by_id": row.created_by_id,
+        "created_at": row.created_at,
+    }
 
 
 @app.get("/library/documents", response_model=List[CompanyDocumentOut])
@@ -3011,16 +3119,20 @@ async def upload_company_document(
     request: Request,
     title: str = Form(...),
     category: str = Form(...),
+    subcategory: Optional[str] = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
     normalized_title = (title or "").strip()
     normalized_category = _normalize_library_category_name(category)
+    normalized_subcategory = _normalize_library_category_name(subcategory)
     if not normalized_title:
         raise HTTPException(status_code=400, detail="Title is required")
     if normalized_category not in _library_category_names(db):
         raise HTTPException(status_code=400, detail="Invalid library category")
+    if normalized_subcategory and not _library_subcategory_exists(db, normalized_category, normalized_subcategory):
+        raise HTTPException(status_code=400, detail="Invalid library subcategory")
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing file")
 
@@ -3058,6 +3170,7 @@ async def upload_company_document(
     doc = CompanyDocument(
         title=normalized_title,
         category=normalized_category,
+        subcategory=normalized_subcategory or None,
         file_url=url,
         uploaded_by_id=admin.id,
     )

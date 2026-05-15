@@ -397,10 +397,10 @@ export function listLibraryCategories() {
   return request("/library/categories");
 }
 
-export function createLibraryCategory(name) {
+export function createLibraryCategory(name, parentCategory = "") {
   return request("/library/categories", {
     method: "POST",
-    body: { name },
+    body: { name, parent_category: parentCategory || null },
   });
 }
 
@@ -415,10 +415,13 @@ export function updateSharedNotebook(content) {
   });
 }
 
-export async function uploadLibraryDocument({ title, category, file }) {
+export async function uploadLibraryDocument({ title, category, subcategory, file }) {
   const form = new FormData();
   form.append("title", title);
   form.append("category", category);
+  if (subcategory) {
+    form.append("subcategory", subcategory);
+  }
   form.append("file", file);
 
   const res = await fetchWithAuth(`${API_BASE}/library/documents`, {

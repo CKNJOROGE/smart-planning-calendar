@@ -279,6 +279,7 @@ class CompanyDocumentOut(BaseModel):
     id: int
     title: str
     category: str
+    subcategory: Optional[str] = None
     file_url: str
     uploaded_by_id: int
     created_at: datetime
@@ -290,16 +291,24 @@ class CompanyDocumentOut(BaseModel):
 
 class LibraryCategoryCreate(BaseModel):
     name: str
+    parent_category: Optional[str] = None
 
 
 class LibraryCategoryOut(BaseModel):
-    id: int
+    id: Optional[int] = None
     name: str
+    kind: str = "category"
+    parent_category: Optional[str] = None
     created_by_id: Optional[int] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+
+class LibraryCategoryTreeOut(BaseModel):
+    name: str
+    children: List[LibraryCategoryOut] = Field(default_factory=list)
 
 
 class SharedNotebookOut(BaseModel):
