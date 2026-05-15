@@ -678,6 +678,9 @@ def _attach_user_theme_metadata(user_obj: Optional[User]) -> None:
     normalized_theme = _normalize_theme(getattr(user_obj, "theme_preference", None))
     setattr(user_obj, "theme_preference", normalized_theme)
     setattr(user_obj, "effective_theme", normalized_theme or DEFAULT_THEME)
+    # Attach background preference
+    background_pref = getattr(user_obj, "background_preference", None)
+    setattr(user_obj, "background_preference", background_pref)
 
 
 def _attach_user_supervisor_metadata(db: Session, user_obj: Optional[User]) -> None:
@@ -2380,13 +2383,19 @@ def update_my_theme(
 ):
     theme = _require_theme(payload.theme)
     apply_to_all = bool(payload.apply_to_all)
+    background = payload.background
 
     if apply_to_all:
         if not _is_admin_like(current.role):
             raise HTTPException(status_code=403, detail="Only admin/ceo can apply theme to all users")
         db.query(User).update({User.theme_preference: theme}, synchronize_session=False)
+        # If background is provided, apply it to all users too
+        if background is not None:
+            db.query(User).update({User.background_preference: background}, synchronize_session=False)
     else:
         current.theme_preference = theme
+        if background is not None:
+            current.background_preference = background
         db.add(current)
 
     db.commit()

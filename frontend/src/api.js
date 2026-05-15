@@ -153,10 +153,10 @@ export function me() {
   return request("/me");
 }
 
-export function updateTheme(theme, applyToAll = false) {
+export function updateTheme(theme, background = null, applyToAll = false) {
   return request("/me/theme", {
     method: "PATCH",
-    body: { theme, apply_to_all: !!applyToAll },
+    body: { theme, background, apply_to_all: !!applyToAll },
   });
 }
 

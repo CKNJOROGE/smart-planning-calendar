@@ -62,10 +62,12 @@ class UserOut(BaseModel):
 class MeOut(UserOut):
     theme_preference: Optional[str] = None
     effective_theme: str = "light"
+    background_preference: Optional[str] = None
 
 
 class ThemeUpdateIn(BaseModel):
     theme: str
+    background: Optional[str] = None
     apply_to_all: bool = False
 
 

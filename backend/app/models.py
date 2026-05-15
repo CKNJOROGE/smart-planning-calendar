@@ -17,6 +17,7 @@ class User(Base):
     employment_type = Column(String(20), nullable=False, default="employee")
     avatar_url = Column(String(500), nullable=True)
     theme_preference = Column(String(20), nullable=True)
+    background_preference = Column(String(50), nullable=True)
 
     # profile fields
     phone = Column(String(50), nullable=True)
