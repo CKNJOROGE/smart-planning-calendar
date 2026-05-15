@@ -499,8 +499,12 @@ export default function App() {
 
   useEffect(() => {
     const allBgClasses = BACKGROUND_OPTIONS.map((o) => o.value);
-    allBgClasses.forEach((cls) => document.body.classList.remove(cls));
+    allBgClasses.forEach((cls) => {
+      document.documentElement.classList.remove(cls);
+      document.body.classList.remove(cls);
+    });
     if (background !== "default") {
+      document.documentElement.classList.add(background);
       document.body.classList.add(background);
     }
     localStorage.setItem("bgPreference", background);

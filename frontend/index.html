@@ -5,6 +5,39 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SustainFlow</title>
+    <script>
+      (function applyStoredAppearance() {
+        var backgroundMap = {
+          "bg-image-1": "/Background/pexels-marek-piwnicki-3907296-12966912.jpg",
+          "bg-image-2": "/Background/pexels-photograph-6642762.jpg",
+          "bg-image-3": "/Background/pexels-prabhath-jayarathna-3459375-26873010.jpg",
+          "bg-image-4": "/Background/pexels-marek-piwnicki-3907296-12489187.jpg",
+          "bg-image-5": "/Background/pexels-photograph-6321746.jpg",
+          "bg-image-6": "/Background/pexels-photograph-9688283.jpg",
+          "bg-image-7": "/Background/pexels-timmossholder-35231163.jpg",
+          "bg-image-8": "/Background/pexels-brett-sayles-4508754.jpg",
+          "bg-image-9": "/Background/pexels-brett-sayles-4508742.jpg",
+          "bg-image-10": "/Background/pexels-pixabay-220118.jpg"
+        };
+
+        var storedTheme = localStorage.getItem("theme");
+        if (storedTheme) {
+          document.documentElement.setAttribute("data-theme", storedTheme);
+          document.documentElement.style.colorScheme = storedTheme === "dark" ? "dark" : "light";
+        }
+
+        var storedBackground = localStorage.getItem("bgPreference");
+        var backgroundUrl = backgroundMap[storedBackground];
+        if (backgroundUrl) {
+          document.documentElement.classList.add(storedBackground);
+          var preloadLink = document.createElement("link");
+          preloadLink.rel = "preload";
+          preloadLink.as = "image";
+          preloadLink.href = backgroundUrl;
+          document.head.appendChild(preloadLink);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

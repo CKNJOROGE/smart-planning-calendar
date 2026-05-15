@@ -68,6 +68,16 @@ body {
 }
 
 /* Background image classes - applied when body has these classes */
+html.bg-image-1 body,
+html.bg-image-2 body,
+html.bg-image-3 body,
+html.bg-image-4 body,
+html.bg-image-5 body,
+html.bg-image-6 body,
+html.bg-image-7 body,
+html.bg-image-8 body,
+html.bg-image-9 body,
+html.bg-image-10 body,
 body.bg-image-1,
 body.bg-image-2,
 body.bg-image-3,
@@ -85,16 +95,16 @@ body.bg-image-10 {
   background-blend-mode: overlay !important;
 }
 
-body.bg-image-1 { background-image: url('/Background/pexels-marek-piwnicki-3907296-12966912.jpg') !important; }
-body.bg-image-2 { background-image: url('/Background/pexels-photograph-6642762.jpg') !important; }
-body.bg-image-3 { background-image: url('/Background/pexels-prabhath-jayarathna-3459375-26873010.jpg') !important; }
-body.bg-image-4 { background-image: url('/Background/pexels-marek-piwnicki-3907296-12489187.jpg') !important; }
-body.bg-image-5 { background-image: url('/Background/pexels-photograph-6321746.jpg') !important; }
-body.bg-image-6 { background-image: url('/Background/pexels-photograph-9688283.jpg') !important; }
-body.bg-image-7 { background-image: url('/Background/pexels-timmossholder-35231163.jpg') !important; }
-body.bg-image-8 { background-image: url('/Background/pexels-brett-sayles-4508754.jpg') !important; }
-body.bg-image-9 { background-image: url('/Background/pexels-brett-sayles-4508742.jpg') !important; }
-body.bg-image-10 { background-image: url('/Background/pexels-pixabay-220118.jpg') !important; }
+html.bg-image-1 body, body.bg-image-1 { background-image: url('/Background/pexels-marek-piwnicki-3907296-12966912.jpg') !important; }
+html.bg-image-2 body, body.bg-image-2 { background-image: url('/Background/pexels-photograph-6642762.jpg') !important; }
+html.bg-image-3 body, body.bg-image-3 { background-image: url('/Background/pexels-prabhath-jayarathna-3459375-26873010.jpg') !important; }
+html.bg-image-4 body, body.bg-image-4 { background-image: url('/Background/pexels-marek-piwnicki-3907296-12489187.jpg') !important; }
+html.bg-image-5 body, body.bg-image-5 { background-image: url('/Background/pexels-photograph-6321746.jpg') !important; }
+html.bg-image-6 body, body.bg-image-6 { background-image: url('/Background/pexels-photograph-9688283.jpg') !important; }
+html.bg-image-7 body, body.bg-image-7 { background-image: url('/Background/pexels-timmossholder-35231163.jpg') !important; }
+html.bg-image-8 body, body.bg-image-8 { background-image: url('/Background/pexels-brett-sayles-4508754.jpg') !important; }
+html.bg-image-9 body, body.bg-image-9 { background-image: url('/Background/pexels-brett-sayles-4508742.jpg') !important; }
+html.bg-image-10 body, body.bg-image-10 { background-image: url('/Background/pexels-pixabay-220118.jpg') !important; }
 
 .topbar{
   display:flex; align-items:flex-start; justify-content:space-between;
