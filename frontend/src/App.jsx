@@ -80,38 +80,51 @@ function Shell({ onLogout, theme, setTheme, background, setBackground }) {
       .catch(() => setUser(null));
   }, [setTheme]);
 
-   async function handleThemeChange(nextTheme) {
-     const normalizedTheme = normalizeTheme(nextTheme);
-     if (!normalizedTheme) return;
-     const applyToAll = canManageThemePalette;
-     setTheme(normalizedTheme);
-     try {
-       const payload = await updateTheme(normalizedTheme, background, applyToAll);
-       setUser(payload);
-       setTheme(normalizeTheme(payload?.effective_theme) || normalizedTheme);
-       // Update background if it was applied
-       if (payload?.background_preference) {
-         setBackground(payload.background_preference);
-       }
-       showToast(applyToAll ? "Theme applied to all users" : "Theme synced to your account", "success");
-     } catch (err) {
-       showToast(String(err?.message || err), "error");
-       try {
-         const refreshed = await me();
-         setUser(refreshed);
-         const refreshedTheme = normalizeTheme(refreshed?.effective_theme);
-         if (refreshedTheme) {
-           setTheme(refreshedTheme);
-         }
-         const refreshedBackground = refreshed?.background_preference || "default";
-         if (refreshedBackground) {
-           setBackground(refreshedBackground);
-         }
-       } catch {
-         // keep current local value when refresh fails
-       }
-     }
-   }
+  async function persistThemePreferences(nextTheme, nextBackground, successMessage) {
+    const normalizedTheme = normalizeTheme(nextTheme);
+    if (!normalizedTheme) return;
+    const applyToAll = canManageThemePalette;
+    try {
+      const payload = await updateTheme(normalizedTheme, nextBackground, applyToAll);
+      setUser(payload);
+      setTheme(normalizeTheme(payload?.effective_theme) || normalizedTheme);
+      setBackground(payload?.background_preference || "default");
+      showToast(successMessage(applyToAll), "success");
+    } catch (err) {
+      showToast(String(err?.message || err), "error");
+      try {
+        const refreshed = await me();
+        setUser(refreshed);
+        const refreshedTheme = normalizeTheme(refreshed?.effective_theme);
+        if (refreshedTheme) {
+          setTheme(refreshedTheme);
+        }
+        setBackground(refreshed?.background_preference || "default");
+      } catch {
+        // keep current local values when refresh fails
+      }
+    }
+  }
+
+  async function handleThemeChange(nextTheme) {
+    const normalizedTheme = normalizeTheme(nextTheme);
+    if (!normalizedTheme) return;
+    setTheme(normalizedTheme);
+    await persistThemePreferences(
+      normalizedTheme,
+      background,
+      (applyToAll) => applyToAll ? "Theme applied to all users" : "Theme synced to your account",
+    );
+  }
+
+  async function handleBackgroundChange(nextBackground) {
+    setBackground(nextBackground);
+    await persistThemePreferences(
+      theme,
+      nextBackground,
+      (applyToAll) => applyToAll ? "Background applied to all users" : "Background synced to your account",
+    );
+  }
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -412,7 +425,7 @@ className={`theme-swatch-btn${theme === option.value ? " active" : ""}`}
                     <button
                       type="button"
                       className={`theme-swatch-btn${background === "default" ? " active" : ""}`}
-                      onClick={() => setBackground("default")}
+                      onClick={() => { handleBackgroundChange("default"); }}
                       aria-pressed={background === "default"}
                       title="No background image"
                     >
@@ -424,7 +437,7 @@ className={`theme-swatch-btn${theme === option.value ? " active" : ""}`}
                         key={option.value}
                         type="button"
                         className={`theme-swatch-btn${background === option.value ? " active" : ""}`}
-                        onClick={() => setBackground(option.value)}
+                        onClick={() => { handleBackgroundChange(option.value); }}
                         aria-pressed={background === option.value}
                         title={`Set background to ${option.label}`}
                       >
