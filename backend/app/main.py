@@ -342,28 +342,28 @@ def _run_startup_migrations():
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_daily_activities_continued_to_activity_id ON daily_activities(continued_to_activity_id)"))
         except Exception:
             pass
-    try:
-        conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS series_id VARCHAR(40)"))
-        conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_type VARCHAR(20)"))
-        conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_until DATE"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_series_id ON events(series_id)"))
-    except Exception:
-        pass
-    try:
-        conn.execute(text("ALTER TABLE client_tasks ADD COLUMN IF NOT EXISTS workstream VARCHAR(255)"))
-        conn.execute(text("ALTER TABLE client_tasks ADD COLUMN IF NOT EXISTS deliverable VARCHAR(255)"))
-        conn.execute(text("ALTER TABLE client_tasks ADD COLUMN IF NOT EXISTS kpi TEXT"))
-        conn.execute(text("UPDATE client_tasks SET workstream = COALESCE(NULLIF(workstream, ''), NULLIF(task, ''), 'Legacy Workstream') WHERE workstream IS NULL OR workstream = ''"))
-        conn.execute(text("UPDATE client_tasks SET deliverable = COALESCE(NULLIF(deliverable, ''), NULLIF(task, ''), NULLIF(subtask, ''), 'Legacy Deliverable') WHERE deliverable IS NULL OR deliverable = ''"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_tasks_workstream ON client_tasks(workstream)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_tasks_deliverable ON client_tasks(deliverable)"))
-    except Exception:
-        pass
-    try:
-        conn.execute(text("ALTER TABLE client_task_reports ADD COLUMN IF NOT EXISTS month INTEGER"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_task_reports_month ON client_task_reports(month)"))
-    except Exception:
-        pass
+        try:
+            conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS series_id VARCHAR(40)"))
+            conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_type VARCHAR(20)"))
+            conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_until DATE"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_events_series_id ON events(series_id)"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE client_tasks ADD COLUMN IF NOT EXISTS workstream VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE client_tasks ADD COLUMN IF NOT EXISTS deliverable VARCHAR(255)"))
+            conn.execute(text("ALTER TABLE client_tasks ADD COLUMN IF NOT EXISTS kpi TEXT"))
+            conn.execute(text("UPDATE client_tasks SET workstream = COALESCE(NULLIF(workstream, ''), NULLIF(task, ''), 'Legacy Workstream') WHERE workstream IS NULL OR workstream = ''"))
+            conn.execute(text("UPDATE client_tasks SET deliverable = COALESCE(NULLIF(deliverable, ''), NULLIF(task, ''), NULLIF(subtask, ''), 'Legacy Deliverable') WHERE deliverable IS NULL OR deliverable = ''"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_tasks_workstream ON client_tasks(workstream)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_tasks_deliverable ON client_tasks(deliverable)"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE client_task_reports ADD COLUMN IF NOT EXISTS month INTEGER"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_client_task_reports_month ON client_task_reports(month)"))
+        except Exception:
+            pass
 
 
 @app.get("/healthz")
