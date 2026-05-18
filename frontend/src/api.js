@@ -957,6 +957,10 @@ export function savePayrollRun(payload) {
   return request("/payroll/runs", { method: "POST", body: payload });
 }
 
+export function bulkSubmitPayrollRuns(payload) {
+  return request("/payroll/runs/bulk-submit", { method: "POST", body: payload });
+}
+
 export function listPayrollRuns({ employeeId, payrollMonth } = {}) {
   const qs = new URLSearchParams();
   if (employeeId != null) qs.set("employee_id", String(employeeId));

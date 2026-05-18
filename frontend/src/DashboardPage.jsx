@@ -159,6 +159,7 @@ export default function DashboardPage() {
   const [workplanLoading, setWorkplanLoading] = useState(false);
   const [historyFilters, setHistoryFilters] = useState({ user_query: "", start_date: "", end_date: "", client_id: "" });
   const [historyDraft, setHistoryDraft] = useState({ user_query: "", start_date: "", end_date: "", client_id: "" });
+  const [expandedTodayPosts, setExpandedTodayPosts] = useState({});
   const [overview, setOverview] = useState({
     today: "",
     todays_activities: [],
@@ -274,6 +275,18 @@ export default function DashboardPage() {
       }),
     [overview.todays_activities]
   );
+
+  useEffect(() => {
+    setExpandedTodayPosts((prev) => {
+      const next = {};
+      for (const post of groupedTodayPosts) {
+        if (prev[post.key]) {
+          next[post.key] = true;
+        }
+      }
+      return next;
+    });
+  }, [groupedTodayPosts]);
 
   const historyByDate = useMemo(() => {
     const groupsByDate = new Map();
@@ -578,6 +591,13 @@ export default function DashboardPage() {
     }
   }
 
+  function handleToggleTodayPost(postKey) {
+    setExpandedTodayPosts((prev) => ({
+      ...prev,
+      [postKey]: !prev[postKey],
+    }));
+  }
+
   async function handleContinueActivity(item) {
     const id = Number(item.id);
     if (!id || togglingIds.includes(id)) return;
@@ -864,36 +884,61 @@ export default function DashboardPage() {
               <div className="muted">No to-do items posted yet today.</div>
             ) : (
               <div className="dashboard-feed" role="list" aria-label="Today's To-Do List">
-                {groupedTodayPosts.map((post) => (
-                  <div key={post.key} className="dashboard-feed-item" role="listitem">
-                    <div className="dashboard-feed-author-row">
-                      <div className="dashboard-feed-author">{post.user?.name || `User #${post.user_id}`}</div>
-                      <div className="dashboard-feed-date">{formatDate(post.created_at)}</div>
-                    </div>
-                    <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-                      {post.items.map((item) => (
-                        <label key={item.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                          <input
-                            type="checkbox"
-                            checked={!!item.completed}
-                            onChange={() => handleToggleActivity(item)}
-                            disabled={togglingIds.includes(Number(item.id))}
-                            style={{ marginTop: 4 }}
-                          />
-                          <div
-                            className="dashboard-feed-text"
-                            style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
-                          >
-                            {item.activity}
-                            {item.client_name ? (
-                              <div className="muted" style={{ marginTop: 2, fontSize: 12 }}>Client: {item.client_name}</div>
-                            ) : null}
+                {groupedTodayPosts.map((post) => {
+                  const isExpanded = !!expandedTodayPosts[post.key];
+                  const authorName = post.user?.name || `User #${post.user_id}`;
+                  const panelId = `dashboard-today-post-${String(post.key).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+
+                  return (
+                    <div
+                      key={post.key}
+                      className={`dashboard-feed-item ${isExpanded ? "is-expanded" : "is-collapsed"}`}
+                      role="listitem"
+                    >
+                      <button
+                        type="button"
+                        className="dashboard-feed-toggle"
+                        onClick={() => handleToggleTodayPost(post.key)}
+                        aria-expanded={isExpanded}
+                        aria-controls={panelId}
+                      >
+                        <span className="dashboard-feed-toggle-copy">
+                          <span className="dashboard-feed-author">{authorName}</span>
+                        </span>
+                        <span className="dashboard-feed-toggle-icon" aria-hidden="true">
+                          &gt;
+                        </span>
+                      </button>
+                      {isExpanded ? (
+                        <div id={panelId} className="dashboard-feed-details">
+                          <div className="dashboard-feed-date">{formatDate(post.created_at)}</div>
+                          <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                            {post.items.map((item) => (
+                              <label key={item.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={!!item.completed}
+                                  onChange={() => handleToggleActivity(item)}
+                                  disabled={togglingIds.includes(Number(item.id))}
+                                  style={{ marginTop: 4 }}
+                                />
+                                <div
+                                  className="dashboard-feed-text"
+                                  style={{ textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.7 : 1 }}
+                                >
+                                  {item.activity}
+                                  {item.client_name ? (
+                                    <div className="muted" style={{ marginTop: 2, fontSize: 12 }}>Client: {item.client_name}</div>
+                                  ) : null}
+                                </div>
+                              </label>
+                            ))}
                           </div>
-                        </label>
-                      ))}
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

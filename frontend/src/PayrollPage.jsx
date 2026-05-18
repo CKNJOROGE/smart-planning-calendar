@@ -12,6 +12,7 @@ import {
   updatePayrollProfile,
   previewPayrollRun,
   savePayrollRun,
+  bulkSubmitPayrollRuns,
   listPayrollRuns,
   markPayrollRunPaid,
   getEmployeesWithConfirmedPending,
@@ -80,6 +81,14 @@ function payrollDetailRows(run, employmentType) {
     ["Other deductions", run.other_deductions],
     ["Net pay", run.net_pay],
   ];
+}
+
+function payrollStatusBadgeClass(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "paid") return "dashboard-status-ok";
+  if (normalized === "approved") return "dashboard-status-info";
+  if (normalized === "hold") return "dashboard-status-danger";
+  return "dashboard-status-pending";
 }
 
 function monthStartToday() {
@@ -459,6 +468,19 @@ export default function PayrollPage() {
     );
   }, [adminOverviewRows, employeeSearch]);
 
+  const bulkSubmittableRows = useMemo(
+    () => (adminOverviewRows || []).filter((row) => {
+      const status = String(row?.payroll_run?.status || "").toLowerCase();
+      return !row.has_saved_run || status === "draft";
+    }),
+    [adminOverviewRows]
+  );
+
+  const heldOverviewCount = useMemo(
+    () => (adminOverviewRows || []).filter((row) => String(row?.payroll_run?.status || "").toLowerCase() === "hold").length,
+    [adminOverviewRows]
+  );
+
   const filteredRuns = useMemo(() => {
     const query = runsFilter.trim().toLowerCase();
     if (!query) return runs;
@@ -608,6 +630,61 @@ export default function PayrollPage() {
       }
       await refreshPayrollOverview();
       showToast("Payroll submitted from table", "success");
+    } catch (e) {
+      const text = String(e.message || e);
+      setErr(text);
+      showToast(text, "error");
+    } finally {
+      setSavingRun(false);
+    }
+  }
+
+  async function handleSetHoldFromOverview(employeeId, shouldHold) {
+    setSavingRun(true);
+    setErr("");
+    try {
+      await savePayrollRun({
+        employee_id: Number(employeeId),
+        payroll_month: overviewMonth,
+        status: shouldHold ? "hold" : "draft",
+      });
+      if (Number(selectedEmployeeId) === Number(employeeId)) {
+        const updatedRuns = await listPayrollRuns({ employeeId: Number(employeeId) });
+        setRuns(updatedRuns || []);
+      }
+      await refreshPayrollOverview();
+      showToast(shouldHold ? "Payroll placed on hold" : "Payroll removed from hold", "success");
+    } catch (e) {
+      const text = String(e.message || e);
+      setErr(text);
+      showToast(text, "error");
+    } finally {
+      setSavingRun(false);
+    }
+  }
+
+  async function handleBulkSubmitAll() {
+    if (!bulkSubmittableRows.length) return;
+    setSavingRun(true);
+    setErr("");
+    try {
+      const employeeIds = bulkSubmittableRows.map((row) => Number(row.employee?.id)).filter(Boolean);
+      const result = await bulkSubmitPayrollRuns({
+        payroll_month: overviewMonth,
+        employee_ids: employeeIds,
+      });
+      if (selectedEmployeeId && employeeIds.includes(Number(selectedEmployeeId))) {
+        const updatedRuns = await listPayrollRuns({ employeeId: Number(selectedEmployeeId) });
+        setRuns(updatedRuns || []);
+      }
+      await refreshPayrollOverview();
+      const submittedCount = Array.isArray(result) ? result.length : 0;
+      showToast(
+        submittedCount
+          ? `Submitted ${submittedCount} payroll${submittedCount === 1 ? "" : "s"}. Held payrolls were skipped.`
+          : "No payrolls were submitted. Held, approved, or paid payrolls were skipped.",
+        "success"
+      );
     } catch (e) {
       const text = String(e.message || e);
       setErr(text);
@@ -915,6 +992,14 @@ export default function PayrollPage() {
                 <label>Search employees</label>
                 <input value={employeeSearch} onChange={(e) => setEmployeeSearch(e.target.value)} placeholder="Name, department, role..." />
               </div>
+              <div style={{ display: "grid", gap: 4 }}>
+                <button className="btn btn-primary" type="button" disabled={savingRun || !bulkSubmittableRows.length} onClick={handleBulkSubmitAll}>
+                  {savingRun ? "Working..." : `Submit All Ready Payrolls (${bulkSubmittableRows.length})`}
+                </button>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  Skips held, approved, and paid payrolls. {heldOverviewCount ? `${heldOverviewCount} currently on hold.` : "Nothing is on hold right now."}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -947,6 +1032,7 @@ export default function PayrollPage() {
                   const active = Number(selectedEmployeeId) === Number(employee.id);
                   const employmentType = String(employee.employment_type || "employee").toLowerCase();
                   const runStatus = row.has_saved_run ? payrollRun.status : "not_submitted";
+                  const isHeldRow = runStatus === "hold";
                   const canSubmitRow = !row.has_saved_run || payrollRun.status === "draft";
                   const canMarkPaidRow = payrollRun.status === "approved" && payrollRun.employee_confirmed;
                   return (
@@ -985,7 +1071,7 @@ export default function PayrollPage() {
                       <td style={{ padding: 10 }}>{fmtCurrency(payrollRun.other_deductions)}</td>
                       <td style={{ padding: 10, fontWeight: 800 }}>{fmtCurrency(payrollRun.net_pay)}</td>
                       <td style={{ padding: 10 }}>
-                        <span className={`dashboard-status-badge ${runStatus === "paid" ? "dashboard-status-ok" : runStatus === "approved" ? "dashboard-status-info" : runStatus === "draft" ? "dashboard-status-pending" : ""}`}>
+                        <span className={`dashboard-status-badge ${payrollStatusBadgeClass(runStatus)}`}>
                           {runStatus.replaceAll("_", " ")}
                         </span>
                       </td>
@@ -995,7 +1081,16 @@ export default function PayrollPage() {
                             Edit
                           </button>
                           <button className="btn" type="button" disabled={savingRun || !canSubmitRow} onClick={() => handleSubmitFromOverview(employee.id)}>
-                            {row.has_saved_run && payrollRun.status === "draft" ? "Submit Draft" : "Submit"}
+                            {isHeldRow ? "On Hold" : row.has_saved_run && payrollRun.status === "draft" ? "Submit Draft" : "Submit"}
+                          </button>
+                          <button
+                            className={`btn${isHeldRow ? " btn-danger" : ""}`}
+                            type="button"
+                            disabled={savingRun || runStatus === "paid"}
+                            onClick={() => handleSetHoldFromOverview(employee.id, !isHeldRow)}
+                            title={runStatus === "paid" ? "Paid payrolls cannot be put on hold" : ""}
+                          >
+                            {isHeldRow ? "Release Hold" : "Hold"}
                           </button>
                           {canMarkPaidRow && (
                             <button className="btn btn-primary" type="button" disabled={savingRun} onClick={() => handleMarkPaidFromOverview(payrollRun.id, employee.id)}>
@@ -1243,7 +1338,7 @@ export default function PayrollPage() {
                             <tr>
                               <td style={{ padding: 10 }}>{row.payroll_month}</td>
                               <td style={{ padding: 10 }}>
-                                <span className={`dashboard-status-badge ${row.status === "paid" ? "dashboard-status-ok" : row.status === "approved" ? "dashboard-status-info" : "dashboard-status-pending"}`}>
+                                <span className={`dashboard-status-badge ${payrollStatusBadgeClass(row.status)}`}>
                                   {row.status}
                                 </span>
                               </td>

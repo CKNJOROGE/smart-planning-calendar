@@ -1005,6 +1005,11 @@ class PayrollRunPreviewIn(PayrollRunInputIn):
     employee_id: int
 
 
+class PayrollBulkSubmitIn(BaseModel):
+    payroll_month: date
+    employee_ids: Optional[list[int]] = None
+
+
 class PayrollStatutoryConfigBase(BaseModel):
     effective_from: date
     effective_to: Optional[date] = None

@@ -133,6 +133,7 @@ from .schemas import (
     PayrollStatutoryConfigCreateIn,
     PayrollStatutoryConfigUpdateIn,
     PayrollStatutoryConfigOut,
+    PayrollBulkSubmitIn,
     PayrollRunPreviewIn,
     PayrollRunInputIn,
     PayrollRunOut,
@@ -791,7 +792,7 @@ def _validate_designation_exists_for_department(
 
 
 PAYROLL_ALLOWED_ROLES = {"finance", "admin", "ceo"}
-PAYROLL_PAYOUT_STATUSES = {"draft", "approved", "paid"}
+PAYROLL_PAYOUT_STATUSES = {"draft", "hold", "approved", "paid"}
 PAYROLL_PAYMENT_METHODS = {"bank_transfer", "cash", "mobile_money"}
 PAYROLL_PAYER_REVIEW_ROLES = {"finance", "admin", "ceo"}
 PAYROLL_DEFAULT_EFFECTIVE_FROM = date(2026, 2, 18)
@@ -880,7 +881,7 @@ def _normalize_payroll_month(raw_value: date) -> date:
 def _normalize_payroll_status(raw_status: Optional[str]) -> str:
     value = (raw_status or "draft").strip().lower()
     if value not in PAYROLL_PAYOUT_STATUSES:
-        raise HTTPException(status_code=400, detail="status must be one of: draft, approved, paid")
+        raise HTTPException(status_code=400, detail="status must be one of: draft, hold, approved, paid")
     return value
 
 
@@ -5992,6 +5993,101 @@ def save_payroll_run(
     db.refresh(row)
     _ = row.employee
     return _serialize_payroll_run(db, row)
+
+
+@app.post("/payroll/runs/bulk-submit", response_model=List[PayrollRunOut])
+def bulk_submit_payroll_runs(
+    payload: PayrollBulkSubmitIn,
+    db: Session = Depends(get_db),
+    current: User = Depends(get_current_user),
+):
+    _require_payroll_access(current)
+    payroll_month = _normalize_payroll_month(payload.payroll_month)
+    statutory_row = _get_effective_payroll_statutory_config(db, payroll_month)
+
+    q = db.query(User)
+    if payload.employee_ids:
+        q = q.filter(User.id.in_(payload.employee_ids))
+    employees = q.order_by(User.name.asc()).all()
+    if not employees:
+        return []
+
+    existing_runs = (
+        db.query(PayrollRun)
+        .filter(PayrollRun.payroll_month == payroll_month, PayrollRun.employee_id.in_([u.id for u in employees]))
+        .all()
+    )
+    existing_by_employee_id = {row.employee_id: row for row in existing_runs}
+
+    saved_rows: list[PayrollRun] = []
+    skipped_names: list[str] = []
+    for employee in employees:
+        existing_row = existing_by_employee_id.get(employee.id)
+        if existing_row and existing_row.status == "hold":
+            skipped_names.append(employee.name or f"Employee #{employee.id}")
+            continue
+        if existing_row and existing_row.status in {"approved", "paid"}:
+            continue
+
+        profile = _get_or_create_payroll_profile(db, employee.id)
+        _ = profile.user
+        computed = _calculate_payroll_breakdown(
+            employee,
+            profile,
+            PayrollRunInputIn(payroll_month=payroll_month),
+            statutory_row,
+            db,
+            payroll_month,
+        )
+        if not existing_row:
+            row = PayrollRun(employee_id=employee.id, payroll_month=payroll_month, created_by_id=current.id, updated_by_id=current.id)
+            db.add(row)
+        else:
+            row = existing_row
+
+        row.employee_confirmed = False
+        row.employee_confirmed_at = None
+        row.status = "approved"
+        row.pay_date = computed["pay_date"]
+        row.gross_cash_pay = computed["gross_cash_pay"]
+        row.taxable_non_cash_benefits = computed["taxable_non_cash_benefits"]
+        row.gross_taxable_pay = computed["gross_taxable_pay"]
+        row.tax_exempt_allowance = computed["tax_exempt_allowance"]
+        row.taxable_income = computed["taxable_income"]
+        row.nssf_employee = computed["nssf_employee"]
+        row.nssf_employer = computed["nssf_employer"]
+        row.shif_employee = computed["shif_employee"]
+        row.ahl_employee = computed["ahl_employee"]
+        row.ahl_employer = computed["ahl_employer"]
+        row.pension_employee = computed["pension_employee"]
+        row.pension_employer = computed["pension_employer"]
+        row.other_deductions = computed["other_deductions"]
+        row.personal_relief = computed["personal_relief"]
+        row.insurance_relief = computed["insurance_relief"]
+        row.owner_occupier_interest_relief = computed["owner_occupier_interest_relief"]
+        row.paye_before_reliefs = computed["paye_before_reliefs"]
+        row.paye_after_reliefs = computed["paye_after_reliefs"]
+        row.net_pay = computed["net_pay"]
+        row.employer_total_cost = computed["employer_total_cost"]
+        row.breakdown_json = json.dumps(computed["breakdown"])
+        row.notes = computed["notes"]
+        row.updated_by_id = current.id
+        row.updated_at = datetime.utcnow()
+        saved_rows.append(row)
+
+    db.commit()
+
+    for row in saved_rows:
+        db.refresh(row)
+        _ = row.employee
+
+    if skipped_names:
+        detail = ", ".join(skipped_names[:8])
+        if len(skipped_names) > 8:
+            detail += f" and {len(skipped_names) - 8} more"
+        logger.info("Bulk payroll submit skipped held payrolls for %s", detail)
+
+    return [_serialize_payroll_run(db, row) for row in saved_rows]
 
 
 @app.get("/payroll/runs", response_model=List[PayrollRunOut])
