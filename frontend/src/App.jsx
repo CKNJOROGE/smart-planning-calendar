@@ -44,6 +44,7 @@ const BACKGROUND_OPTIONS = [
   { value: "bg-image-8", label: "Sky Ridges", image: "/Background/pexels-brett-sayles-4508754.jpg" },
   { value: "bg-image-9", label: "Misty Peaks", image: "/Background/pexels-brett-sayles-4508742.jpg" },
   { value: "bg-image-10", label: "Silhouette", image: "/Background/pexels-pixabay-220118.jpg" },
+  { value: "bg-image-11", label: "Aurora Mist", image: "/Background/8b3f2af524ab4c73b5802ee2d1b5abd2.png" },
 ];
 
 const VALID_THEMES = new Set(THEME_OPTIONS.map((option) => option.value));
